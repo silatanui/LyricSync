@@ -82,8 +82,8 @@ def run_transcription_pipeline(app, project_id: str, job_id: str = None):
         try:
             if job:
                 job.status = "transcribing"
-                job.stage = "Transcribing audio with OpenAI Whisper-1"
-                job.progress = 20
+                job.stage = "Uploading audio to OpenAI Whisper-1"
+                job.progress = 25
                 db.session.commit()
 
             project.status = "transcribing"

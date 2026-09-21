@@ -1140,7 +1140,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         transcribeModalFooter.classList.add('d-none');
         transcribeProgressBar.style.width = '15%';
         transcribeProgressPct.textContent = '15%';
-        transcribeStageText.textContent = 'Connecting to OpenAI Whisper-1 engine...';
+        transcribeStageText.textContent = 'Preparing audio for OpenAI Whisper-1...';
         transcribeModal.show();
 
         let ticker = null;

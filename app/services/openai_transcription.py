@@ -20,8 +20,16 @@ class OpenAITranscriber:
             model = current_app.config.get("OPENAI_TRANSCRIPTION_MODEL")
         self.model = model or Config.OPENAI_TRANSCRIPTION_MODEL or "whisper-1"
 
+        timeout = Config.OPENAI_TIMEOUT_SECONDS
+        retries = Config.OPENAI_TRANSCRIPTION_RETRIES
+        if has_app_context():
+            timeout = current_app.config.get("OPENAI_TIMEOUT_SECONDS", timeout)
+            retries = current_app.config.get("OPENAI_TRANSCRIPTION_RETRIES", retries)
+
+        self.timeout = max(15.0, float(timeout))
+        self.max_retries = max(1, int(retries))
         if self.api_key and self.api_key not in ("mock", "replace-this", ""):
-            self.client = OpenAI(api_key=self.api_key, timeout=60.0)
+            self.client = OpenAI(api_key=self.api_key, timeout=self.timeout)
         else:
             self.client = None
 
@@ -38,7 +46,7 @@ class OpenAITranscriber:
             logger.info("Using mock transcription provider because OPENAI_API_KEY is not configured.")
             return self._mock_transcription(audio_path_resolved)
 
-        max_retries = 2
+        max_retries = self.max_retries
         backoff = 2.0
 
         for attempt in range(1, max_retries + 1):

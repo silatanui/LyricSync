@@ -108,10 +108,15 @@ const LyricSyncAPI = {
         return await response.json();
     },
 
-    pollJob(jobId, intervalMs = 1000) {
+    pollJob(jobId, intervalMs = 1000, timeoutMs = 300000) {
         return new Promise((resolve, reject) => {
+            const startedAt = Date.now();
             const timer = setInterval(async () => {
                 try {
+                    if (Date.now() - startedAt >= timeoutMs) {
+                        clearInterval(timer);
+                        return reject(new Error('Transcription is taking too long. Please check your OpenAI key and try again.'));
+                    }
                     const res = await LyricSyncAPI.getJobStatus(jobId);
                     if (!res.success) {
                         if (res.error?.retryable) return;
