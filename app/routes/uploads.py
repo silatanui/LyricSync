@@ -240,7 +240,7 @@ def create_project():
             "id": project.id,
             "name": project.name,
             "status": project.status,
-            "editor_url": url_for("views.editor_page", project_id=project.id),
+            "editor_url": url_for("views.editor_page", project_id=project.id, auto_transcribe=1),
             "audio": {"duration": audio_dur},
             "video": {"duration": video_dur, "width": project.width, "height": project.height, "fps": project.fps},
             "lyrics_revision": project.current_revision,

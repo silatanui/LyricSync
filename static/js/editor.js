@@ -1211,6 +1211,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    if (new URLSearchParams(window.location.search).get('auto_transcribe') === '1') {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setTimeout(() => transcribeBtn.click(), 250);
+    }
+
     // Save Revision Button
     saveRevisionBtn.addEventListener('click', async () => {
         saveRevisionBtn.disabled = true;

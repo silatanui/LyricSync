@@ -556,9 +556,9 @@
                 setTimeout(() => {
                     progressBar.style.width = '100%';
                     progressText.textContent = '100%';
-                    statusText.textContent = 'Lyrics transcribed & Studio ready!';
+                    statusText.textContent = 'Project ready; opening studio...';
                     const lyricCount = res.project.lyrics_count || 0;
-                    subText.textContent = `Extracted ${lyricCount} lyric lines for "${res.project.name}". Opening studio workspace...`;
+                    subText.textContent = `Opening "${res.project.name}" in the studio. Transcription will start automatically.`;
                     setTimeout(() => {
                         window.location.href = res.project.editor_url || `/editor/${res.project.id}`;
                     }, 400);
