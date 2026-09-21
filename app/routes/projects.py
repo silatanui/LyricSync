@@ -1,7 +1,7 @@
 import shutil
 import time
 from pathlib import Path
-from flask import Blueprint, jsonify, send_file, request, current_app
+from flask import Blueprint, jsonify, send_file, request, current_app, url_for
 from app.extensions import db
 from app.models import Project, MediaAsset, RenderJob
 from app.utils.files import get_project_dir, get_project_output_dir
@@ -233,6 +233,6 @@ def update_project_background(project_id: str):
     return jsonify({
         "success": True,
         "template": template_id,
-        "video_url": f"/api/projects/{project_id}/media/video?t={int(time.time()*1000)}"
+        "video_url": url_for("projects.stream_project_media", project_id=project_id, kind="video", t=int(time.time() * 1000))
     })
 

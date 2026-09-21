@@ -133,16 +133,12 @@ def run_transcription_pipeline(app, project_id: str, job_id: str = None):
             canonical["transcription"]["raw_text"] = tx_result.get("text", "")
             canonical["transcription"]["language"] = tx_result.get("language", "en")
             canonical["lyrics"] = segmented_lines
-            canonical.setdefault("meta", {})["description"] = generate_song_description_from_lyrics(tx_result.get("text", ""))
+            canonical.setdefault("meta", {}).setdefault("description", "Synchronized lyric video project")
 
             # If title was not explicitly given or is generic, generate title from lyrics using OpenAI
             is_auto_title = canonical.get("meta", {}).get("auto_title", False) or project.name.lower() in ("untitled song", "untitled song project", "untitled")
             if is_auto_title and tx_result.get("text"):
-                smart_title = generate_song_title_from_lyrics(tx_result.get("text"), project.name)
-                if smart_title and smart_title != project.name:
-                    logger.info(f"Auto-generated song title from lyrics: '{smart_title}' (was '{project.name}')")
-                    project.name = smart_title
-                    canonical.setdefault("meta", {})["title"] = smart_title
+                canonical.setdefault("meta", {})["title"] = project.name
 
             project.set_canonical_json(canonical)
 
