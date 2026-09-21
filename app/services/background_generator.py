@@ -424,7 +424,7 @@ class BackgroundGenerator:
     ) -> Path:
         """
         Creates a video from the selected template and aspect ratio, muxing the audio track.
-        Uses ultrafast 1fps keyframe encoding for instant 1-2 second generation.
+        Uses a low-frame-rate still-image video so shared-hosting requests finish quickly.
         """
         ffmpeg = get_ffmpeg_binary()
         output_video_path.parent.mkdir(parents=True, exist_ok=True)
@@ -440,12 +440,12 @@ class BackgroundGenerator:
         cmd = [
             ffmpeg, "-y",
             "-loop", "1",
-            "-framerate", "30",
+            "-framerate", "1",
             "-i", str(temp_img_path),
             "-i", str(audio_path),
             "-c:v", "mpeg4",
-            "-r", "30",
-            "-q:v", "5",
+            "-r", "1",
+            "-q:v", "7",
             "-pix_fmt", "yuv420p",
             "-c:a", "aac",
             "-b:a", "192k",

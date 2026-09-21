@@ -27,7 +27,12 @@ const LyricSyncAPI = {
                     const data = JSON.parse(xhr.responseText);
                     resolve(data);
                 } catch (err) {
-                    reject(new Error(`Server response error (${xhr.status})`));
+                    const message = xhr.status === 504
+                        ? 'The server timed out while preparing the background video. Please try again with a shorter audio file.'
+                        : xhr.status >= 500
+                            ? 'The server could not finish preparing this project. Please try again.'
+                            : `Server response error (${xhr.status})`;
+                    reject(new Error(message));
                 }
             };
 

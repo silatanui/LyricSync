@@ -527,8 +527,8 @@
                                 currentPct = 42 + stageElapsed * 5; // 42, 47, 52
                                 progressBar.style.width = currentPct + '%';
                                 progressText.textContent = currentPct + '%';
-                                statusText.textContent = 'Generating canvas background video...';
-                                subText.textContent = `Rendering 1080p ${selectedAspect} canvas video and attaching vocal stream...`;
+                                statusText.textContent = 'Preparing synchronized studio...';
+                                subText.textContent = `Finishing the ${selectedAspect} canvas background. This can take a moment on shared hosting...`;
                             } else {
                                 // Whisper-1 takes 10 to 30s. Smoothly inch up asymptotically towards 88%, NEVER prematurely freeze at 95%!
                                 if (currentPct < 88) {
