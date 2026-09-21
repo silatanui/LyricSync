@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}LyricSync Studio | AI-assisted lyric video making{% endblock %}
+
+{% block content %}
+<div class="home-page">
+    <section class="home-hero">
+        <div class="home-hero-art" aria-hidden="true">
+            <img src="{{ url_for('static', filename='img/templates/deep_nebula.png') }}" alt="">
+        </div>
+        <div class="container home-hero-inner">
+            <div class="home-kicker"><span></span> An AI automation portfolio project by Tanui</div>
+            <div class="row align-items-end g-5">
+                <div class="col-lg-8">
+                    <h1>Turn a song into a lyric video you can actually shape.</h1>
+                    <p class="home-hero-copy">LyricSync Studio helps you upload a song, synchronize lyrics with its audio, style every moment, and export a video ready for sharing.</p>
+                    <div class="d-flex flex-wrap gap-3 mt-4">
+                        <a class="btn btn-home-primary" href="{{ url_for('views.upload_page') }}"><i class="bi bi-cloud-arrow-up me-2"></i>Start with a song</a>
+                        <a class="btn btn-home-quiet" href="#how-it-works"><i class="bi bi-arrow-down me-2"></i>See how it works</a>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="home-hero-note">
+                        <div class="home-note-mark"><i class="bi bi-soundwave"></i></div>
+                        <div><strong>Free while in testing</strong><span>Try the full workflow and help shape what comes next.</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="home-hero-scroll">Scroll to explore <i class="bi bi-arrow-down"></i></div>
+        </div>
+    </section>
+
+    <section class="home-intro-band">
+        <div class="container">
+            <div class="row g-4 align-items-center">
+                <div class="col-lg-7">
+                    <div class="home-section-label">The idea</div>
+                    <h2>A calmer bridge between raw audio and a finished visual.</h2>
+                </div>
+                <div class="col-lg-5">
+                    <p>Most lyric video workflows scatter the work across transcription tools, timing spreadsheets, design software, and export settings. LyricSync brings those decisions into one studio where the song, words, timing, and visual treatment stay together.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {% if public_projects %}
+    <section class="home-public-projects">
+        <div class="container">
+            <div class="home-section-heading"><div><div class="home-section-label">Community shelf</div><h2>Projects people chose to share.</h2></div><span class="home-section-index">{{ public_projects|length }} PUBLIC</span></div>
+            <div class="row g-3">
+                {% for project in public_projects[:4] %}
+                {% set project_data = project.get_canonical_json() %}
+                <div class="col-md-6 col-lg-3"><article class="public-project-card">
+                    <div class="public-project-art"><img src="{{ url_for('static', filename='img/templates/' + project_data.get('meta', {}).get('background_template', 'burgundy_studio') + '.png') }}" alt=""></div>
+                    <div class="public-project-body"><span>{{ project_data.get('meta', {}).get('description', 'Shared lyric video project') }}</span><h3>{{ project.name }}</h3><a href="{{ url_for('views.public_project_page', project_id=project.id) }}">View project <i class="bi bi-arrow-right"></i></a></div>
+                </article></div>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="home-section" id="how-it-works">
+        <div class="container">
+            <div class="home-section-heading"><div><div class="home-section-label">How it works</div><h2>From upload to synchronized canvas.</h2></div><span class="home-section-index">01 / 03</span></div>
+            <div class="row g-0 home-process-grid">
+                <div class="col-md-4 home-process-step"><span>01</span><i class="bi bi-file-earmark-music"></i><h3>Upload the track</h3><p>Bring in an audio file, add your own lyrics or let the transcription workflow create a starting point.</p></div>
+                <div class="col-md-4 home-process-step"><span>02</span><i class="bi bi-magic"></i><h3>Let AI find the timing</h3><p>Word-level transcription and alignment turn a song into editable lyric lines with timing you can inspect and refine.</p></div>
+                <div class="col-md-4 home-process-step"><span>03</span><i class="bi bi-film"></i><h3>Direct the visual</h3><p>Choose backgrounds, type, motion, layout, and export sizing before downloading the finished lyric video.</p></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="home-feature-section">
+        <div class="container">
+            <div class="row g-5 align-items-center">
+                <div class="col-lg-6 order-lg-2">
+                    <div class="home-feature-visual">
+                        <img src="{{ url_for('static', filename='img/templates/retrowave_sunset.png') }}" alt="LyricSync visual canvas preview">
+                        <div class="home-visual-caption"><span class="home-live-dot"></span> Editable timing / visual treatment / export</div>
+                    </div>
+                </div>
+                <div class="col-lg-6 order-lg-1">
+                    <div class="home-section-label">Inside the studio</div>
+                    <h2>AI gives you a strong first pass. You keep the creative say.</h2>
+                    <p>Transcription is not the end of the process. In the studio you can correct words, edit visible lyric blocks, review sync confidence, select motion effects per line, and control how the final composition feels.</p>
+                    <div class="home-feature-list">
+                        <div><i class="bi bi-check2"></i><span>Word-aware synchronization and confidence review</span></div>
+                        <div><i class="bi bi-check2"></i><span>Typography, color, placement, motion, and backgrounds</span></div>
+                        <div><i class="bi bi-check2"></i><span>Landscape, portrait, square, and portrait-feed exports</span></div>
+                    </div>
+                    <a class="home-text-link" href="{{ url_for('views.dashboard') }}">Explore the projects workspace <i class="bi bi-arrow-right"></i></a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="home-roadmap-section">
+        <div class="container">
+            <div class="home-section-heading"><div><div class="home-section-label">In progress</div><h2>What is being built next.</h2></div><span class="home-section-index">02 / 03</span></div>
+            <div class="row g-3">
+                <div class="col-md-4"><article class="home-roadmap-card"><span class="home-roadmap-status">Being explored</span><h3>More language support</h3><p>Better multilingual transcription, language-aware lyric formatting, and alignment for songs beyond English are active areas of research.</p></article></div>
+                <div class="col-md-4"><article class="home-roadmap-card"><span class="home-roadmap-status">Being refined</span><h3>Smarter musical phrasing</h3><p>Lyric breaks should follow the song's phrasing, not arbitrary character limits. The alignment and stanza model is still being improved.</p></article></div>
+                <div class="col-md-4"><article class="home-roadmap-card"><span class="home-roadmap-status">Being tested</span><h3>More expressive visuals</h3><p>Expect richer motion, more backgrounds, stronger previews, and tools for treating each lyric passage as its own visual moment.</p></article></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="home-about-section">
+        <div class="container">
+            <div class="row g-5">
+                <div class="col-lg-7"><div class="home-section-label">A portfolio project with a larger purpose</div><h2>Built by Tanui to explore useful AI automation.</h2><p>LyricSync Studio is part of my portfolio: a practical experiment in making AI feel less like a black box and more like a capable collaborator. I am interested in projects where automation removes repetitive work while people remain responsible for judgment, taste, and direction.</p><p>I am also ready to contribute to a research team or a group that genuinely believes the world should benefit from AI. That means building carefully, acknowledging what is unfinished, and learning from the people who use the work.</p></div>
+                <div class="col-lg-5"><div class="home-quote"><i class="bi bi-quote"></i><p>Good automation should give people more room to think, make, and decide.</p><span>Tanui</span></div></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="home-cta-section">
+        <div class="container"><div class="home-cta-inner"><div><div class="home-section-label">Free to try during testing</div><h2>Bring one song. See what the studio can do.</h2><p>The project is free to use while it is being tested. Your feedback, ideas, and partnership conversations are welcome.</p></div><div class="d-flex flex-wrap gap-3"><a class="btn btn-home-primary" href="{{ url_for('views.upload_page') }}">Upload a song <i class="bi bi-arrow-right ms-2"></i></a><a class="btn btn-home-outline" href="https://tanuisila.dev/contact.php">Talk about a partnership</a></div></div></div>
+    </section>
+
+    <footer class="home-footer"><div class="container d-flex flex-wrap justify-content-between gap-3"><span>LyricSync Studio · An AI automation portfolio project by Tanui</span><span><a href="{{ url_for('views.dashboard') }}">Projects</a><a href="https://tanuisila.dev/contact.php">Contact</a></span></div></footer>
+</div>
+{% endblock %}

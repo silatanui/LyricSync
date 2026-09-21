@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Create Account - LyricSync Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 px-lg-5 py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-5 col-md-7">
+            <div class="studio-box p-4">
+                <div class="d-flex align-items-center gap-3 mb-4 pb-3 border-bottom">
+                    <div class="brand-symbol" style="width: 46px; height: 46px; margin-right: 0.85rem !important;">
+                        <i class="bi bi-person-plus fs-4"></i>
+                    </div>
+                    <div>
+                        <h3 class="fw-bold mb-1 text-dark">Create Account</h3>
+                        <p class="text-secondary mb-0">Save your lyric projects to your own account.</p>
+                    </div>
+                </div>
+
+                <div id="registerAlert" class="alert alert-danger d-none"></div>
+
+                <form id="registerForm">
+                    <div class="mb-3">
+                        <label for="display_name" class="form-label fw-semibold text-dark">Display Name <span class="text-secondary fw-normal small">(optional)</span></label>
+                        <input type="text" class="form-control" id="display_name" name="display_name" autocomplete="nickname">
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label fw-semibold text-dark">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" required autocomplete="email">
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label fw-semibold text-dark">Password</label>
+                        <input type="password" class="form-control" id="password" name="password" required minlength="8" autocomplete="new-password">
+                        <div class="form-text">At least 8 characters.</div>
+                    </div>
+                    <button type="submit" class="btn btn-burgundy w-100">Create Account</button>
+                </form>
+
+                {% if google_auth_enabled %}
+                <div class="d-flex align-items-center gap-3 my-4">
+                    <hr class="flex-grow-1"><span class="text-secondary small">OR</span><hr class="flex-grow-1">
+                </div>
+                <a href="{{ url_for('auth.google_login') }}" class="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-center gap-2">
+                    <i class="bi bi-google"></i> Continue with Google
+                </a>
+                {% endif %}
+
+                <p class="text-secondary text-center mt-4 mb-0">
+                    Already have an account? <a href="{{ url_for('auth.login_page') }}">Sign in</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const alertBox = document.getElementById('registerAlert');
+    alertBox.classList.add('d-none');
+    const payload = {
+        display_name: document.getElementById('display_name').value.trim(),
+        email: document.getElementById('email').value.trim(),
+        password: document.getElementById('password').value
+    };
+    try {
+        const res = await fetch("{{ url_for('auth.register') }}", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+            window.location.href = "{{ url_for('views.dashboard') }}";
+        } else {
+            alertBox.textContent = data.error?.message || "Unable to create account.";
+            alertBox.classList.remove('d-none');
+        }
+    } catch (err) {
+        alertBox.textContent = "Network error. Please try again.";
+        alertBox.classList.remove('d-none');
+    }
+});
+</script>
+{% endblock %}
