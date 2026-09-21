@@ -50,6 +50,16 @@
             <a href="https://tanuisila.dev/contact.php" class="nav-link-studio text-decoration-none">
                 <i class="bi bi-envelope me-1"></i> Contact Us
             </a>
+            {% if current_user.is_authenticated %}
+                <form action="{{ url_for('auth.logout') }}" method="post" class="m-0">
+                    <button type="submit" class="nav-link-studio border-0 bg-transparent">Sign Out</button>
+                </form>
+            {% else %}
+                <a href="{{ url_for('auth.login_page') }}" class="nav-link-studio text-decoration-none">
+                    <i class="bi bi-box-arrow-in-right me-1"></i> Sign In
+                </a>
+                <a href="{{ url_for('auth.register_page') }}" class="btn btn-outline-secondary btn-sm text-decoration-none">Sign Up</a>
+            {% endif %}
             <a href="{{ url_for('views.upload_page') }}" class="btn btn-burgundy text-decoration-none d-flex align-items-center gap-2">
                 <i class="bi bi-plus-lg"></i> New Lyric Project
             </a>

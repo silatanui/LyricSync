@@ -1,7 +1,7 @@
 from flask import Flask, jsonify
 from werkzeug.middleware.proxy_fix import ProxyFix
 from config import Config
-from app.extensions import db
+from app.extensions import db, login_manager, oauth
 
 def create_app(config_class=Config):
     flask_app = Flask(__name__, template_folder="../templates", static_folder="../static")
@@ -14,14 +14,30 @@ def create_app(config_class=Config):
 
     # Initialize extensions
     db.init_app(flask_app)
+    login_manager.init_app(flask_app)
+    oauth.init_app(flask_app)
+    if config_class.GOOGLE_CLIENT_ID and config_class.GOOGLE_CLIENT_SECRET:
+        oauth.register(
+            name="google",
+            client_id=config_class.GOOGLE_CLIENT_ID,
+            client_secret=config_class.GOOGLE_CLIENT_SECRET,
+            server_metadata_url=config_class.GOOGLE_DISCOVERY_URL,
+            client_kwargs={"scope": "openid email profile"},
+        )
+
+    @login_manager.user_loader
+    def load_user(user_id):
+        from app.models import User
+        return db.session.get(User, user_id)
 
     # Register blueprints
-    from app.routes import views_bp, uploads_bp, projects_bp, lyrics_bp, renders_bp
+    from app.routes import views_bp, uploads_bp, projects_bp, lyrics_bp, renders_bp, auth_bp
     flask_app.register_blueprint(views_bp)
     flask_app.register_blueprint(uploads_bp)
     flask_app.register_blueprint(projects_bp)
     flask_app.register_blueprint(lyrics_bp)
     flask_app.register_blueprint(renders_bp)
+    flask_app.register_blueprint(auth_bp)
 
     # Create tables automatically for development
     with flask_app.app_context():
