@@ -1,11 +1,17 @@
 /**
  * LyricSync API Client Module
  */
+const lyricSyncProjectsUrl = document.querySelector('meta[name="lyricsync-api-root"]')?.content || '/api/projects';
+const lyricSyncApiBase = lyricSyncProjectsUrl.endsWith('/projects')
+    ? lyricSyncProjectsUrl.slice(0, -'/projects'.length)
+    : '/api';
+const lyricSyncApiUrl = (path) => `${lyricSyncApiBase}${path}`;
+
 const LyricSyncAPI = {
     createProject(formData, onProgress = null) {
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/api/projects');
+            xhr.open('POST', lyricSyncProjectsUrl);
 
             if (onProgress && xhr.upload) {
                 xhr.upload.onprogress = (e) => {
@@ -33,19 +39,19 @@ const LyricSyncAPI = {
     },
 
     async getProject(projectId) {
-        const response = await fetch(`/api/projects/${projectId}`);
+        const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}`);
         return await response.json();
     },
 
     async deleteProject(projectId) {
-        const response = await fetch(`/api/projects/${projectId}`, {
+        const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}`, {
             method: 'DELETE',
         });
         return await response.json();
     },
 
     async updateProject(projectId, projectData) {
-        const response = await fetch(`/api/projects/${projectId}`, {
+        const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(projectData),
@@ -54,19 +60,19 @@ const LyricSyncAPI = {
     },
 
     async triggerTranscription(projectId) {
-        const response = await fetch(`/api/projects/${projectId}/transcribe`, {
+        const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}/transcribe`, {
             method: 'POST',
         });
         return await response.json();
     },
 
     async getLyrics(projectId) {
-        const response = await fetch(`/api/projects/${projectId}/lyrics`);
+        const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}/lyrics`);
         return await response.json();
     },
 
     async saveLyrics(projectId, lyrics) {
-        const response = await fetch(`/api/projects/${projectId}/lyrics`, {
+        const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}/lyrics`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ lyrics }),
@@ -75,7 +81,7 @@ const LyricSyncAPI = {
     },
 
     async updateStyle(projectId, styleData, renderData) {
-        const response = await fetch(`/api/projects/${projectId}/style`, {
+        const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}/style`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ style: styleData, render: renderData }),
@@ -84,7 +90,7 @@ const LyricSyncAPI = {
     },
 
     async queueRender(projectId, options = {}) {
-        const response = await fetch(`/api/projects/${projectId}/render`, {
+        const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}/render`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(options),
@@ -93,7 +99,7 @@ const LyricSyncAPI = {
     },
 
     async getJobStatus(jobId) {
-        const response = await fetch(`/api/jobs/${jobId}`);
+        const response = await fetch(lyricSyncApiUrl(`/jobs/${jobId}`));
         return await response.json();
     },
 
@@ -125,14 +131,14 @@ const LyricSyncAPI = {
     },
 
     async getBackgroundTemplates() {
-        const response = await fetch('/api/projects/templates');
+        const response = await fetch(`${lyricSyncProjectsUrl}/templates`);
         return await response.json();
     },
 
     async updateBackgroundTemplate(projectId, template, aspectRatio = null) {
         const payload = { template };
         if (aspectRatio) payload.aspect_ratio = aspectRatio;
-        const response = await fetch(`/api/projects/${projectId}/background`, {
+        const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}/background`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -148,7 +154,7 @@ const LyricSyncAPI = {
             options.headers = { 'Content-Type': 'application/json' };
             options.body = JSON.stringify({ lyrics_text: input });
         }
-        const response = await fetch(`/api/projects/${projectId}/lyrics/custom`, options);
+        const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}/lyrics/custom`, options);
         return await response.json();
     }
 };

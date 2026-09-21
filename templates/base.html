@@ -17,6 +17,7 @@
     <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <!-- Custom Style -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <meta name="lyricsync-api-root" content="{{ url_for('projects.list_projects') }}">
     {% block head %}{% endblock %}
 </head>
 <body>
