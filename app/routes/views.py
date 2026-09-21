@@ -56,10 +56,13 @@ def health_check():
     """Health check endpoint (Section 20.3 of specification)."""
     # Check DB
     db_ok = True
+    db_error = None
     try:
         db.session.execute(db.text("SELECT 1"))
-    except Exception:
+    except Exception as error:
         db_ok = False
+        db_error = str(error).splitlines()[0][:200]
+        db.session.rollback()
 
     ffmpeg_path = get_ffmpeg_binary()
     ffmpeg_ok = bool(ffmpeg_path and shutil.which(ffmpeg_path))
@@ -67,6 +70,7 @@ def health_check():
     return {
         "status": "healthy" if db_ok else "unhealthy",
         "database": "connected" if db_ok else "disconnected",
+        "database_error": db_error,
         "ffmpeg": "available" if ffmpeg_ok else "not_found",
         "ffmpeg_binary": ffmpeg_path
     }

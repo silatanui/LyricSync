@@ -9,7 +9,15 @@ lyrics_bp = Blueprint("lyrics", __name__, url_prefix="/api/projects")
 @lyrics_bp.route("/<project_id>/transcribe", methods=["POST"])
 def trigger_transcription(project_id: str):
     """Queue transcription job for a project."""
-    project = db.session.get(Project, project_id)
+    try:
+        project = db.session.get(Project, project_id)
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Database error while loading project for transcription")
+        return jsonify({
+            "success": False,
+            "error": {"code": "DATABASE_UNAVAILABLE", "message": "The project database is unavailable. Please try again after the app restarts.", "retryable": True}
+        }), 503
     if not project:
         return jsonify({
             "success": False,
@@ -35,9 +43,17 @@ def trigger_transcription(project_id: str):
         stage="Connecting to OpenAI Whisper API",
         progress=10,
     )
-    db.session.add(job)
-    project.status = "transcribing"
-    db.session.commit()
+    try:
+        db.session.add(job)
+        project.status = "transcribing"
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Database error while creating transcription job")
+        return jsonify({
+            "success": False,
+            "error": {"code": "JOB_CREATE_FAILED", "message": "The transcription job could not be saved. Check the database connection and try again.", "retryable": True}
+        }), 503
 
     # Launch background task
     app = current_app._get_current_object()

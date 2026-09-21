@@ -34,6 +34,10 @@ class Config:
 
     DATABASE_URL = SQLALCHEMY_DATABASE_URI
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "pool_recycle": 280,
+    }
 
     # Redis & Celery
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
