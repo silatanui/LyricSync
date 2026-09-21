@@ -17,14 +17,20 @@ class Config:
     TEMP_ROOT = Path(os.getenv("TEMP_ROOT", str(BASE_DIR / "data" / "temp")))
 
     # Database
+    MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
+    MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
+    MYSQL_USER = os.getenv("MYSQL_USER", "root")
+    MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
+    MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "lyricsync_studio")
+
     raw_db_url = os.getenv("DATABASE_URL", "")
-    if not raw_db_url or (raw_db_url.startswith("sqlite:///") and not raw_db_url.startswith("sqlite:////") and ":memory:" not in raw_db_url):
-        db_file = (BASE_DIR / "data" / "lyricsync.db").resolve()
-        db_file.parent.mkdir(parents=True, exist_ok=True)
-        # SQLite URL with 3 slashes followed by drive letter on Windows: sqlite:///C:/...
-        SQLALCHEMY_DATABASE_URI = f"sqlite:///{db_file.as_posix()}"
-    else:
+    if raw_db_url:
         SQLALCHEMY_DATABASE_URI = raw_db_url
+    else:
+        SQLALCHEMY_DATABASE_URI = (
+            f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
+            "?charset=utf8mb4"
+        )
 
     DATABASE_URL = SQLALCHEMY_DATABASE_URI
     SQLALCHEMY_TRACK_MODIFICATIONS = False
