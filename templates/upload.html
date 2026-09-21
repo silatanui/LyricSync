@@ -1,0 +1,578 @@
+{% extends "base.html" %}
+
+{% block title %}Create Project - LyricSync Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 px-lg-5 py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10 col-xl-9">
+            <div class="studio-box">
+                <!-- Header with Generous Brand Spacing -->
+                <div class="d-flex align-items-center gap-3 mb-4 pb-3 border-bottom">
+                    <div class="brand-symbol" style="width: 46px; height: 46px; margin-right: 0.85rem !important;">
+                        <i class="bi bi-music-note-beamed fs-4"></i>
+                    </div>
+                    <div>
+                        <h3 class="fw-bold mb-1 text-dark">Create Synchronized Lyric Video</h3>
+                        <p class="text-secondary mb-0">Follow the 3 steps below to ingest your song, select your aesthetic background, and launch into the synchronized studio.</p>
+                    </div>
+                </div>
+
+                <form id="uploadForm">
+                    <!-- ================= STEP 1: AUDIO TRACK ================= -->
+                    <div class="mb-5 p-4 border bg-white shadow-sm position-relative">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-burgundy text-white px-2.5 py-1.5 fs-6 fw-bold" style="background-color: var(--brand-burgundy);">Step 1</span>
+                                <h5 class="fw-bold text-dark mb-0">Upload Audio Song Track <span class="text-danger">*</span></h5>
+                            </div>
+                            <span id="step1Badge" class="badge bg-light text-secondary border px-2.5 py-1">Required</span>
+                        </div>
+                        <p class="text-secondary small mb-3">Upload the master vocal or song file. Word-level timings will be transcribed automatically.</p>
+
+                        <!-- Audio Dropzone -->
+                        <div class="square-dropzone mb-3" id="audioDropzone" style="min-height: 140px;">
+                            <input type="file" id="audioFileInput" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac" class="d-none">
+                            <div class="mb-2" style="color: var(--brand-burgundy);">
+                                <i class="bi bi-cloud-arrow-up fs-1"></i>
+                            </div>
+                            <div id="audioLabel">
+                                <span class="fw-bold text-dark d-block mb-1 fs-6">Click or Drop Audio File Here</span>
+                                <div class="text-secondary small">Supports MP3, WAV, M4A, FLAC, OGG</div>
+                            </div>
+                            <div id="audioFileInfo" class="mt-2 d-none">
+                                <div class="d-flex align-items-center justify-content-center gap-2 text-success fw-bold mb-1 fs-6">
+                                    <i class="bi bi-check-circle-fill" style="color: var(--brand-green-accent);"></i>
+                                    <span id="audioFileName" class="text-dark"></span>
+                                </div>
+                                <div class="text-secondary small font-mono" id="audioFileSize"></div>
+                            </div>
+                        </div>
+
+                        <!-- Optional Song Title -->
+                        <div class="mt-3">
+                            <label for="projectName" class="form-label fw-semibold text-dark mb-1 d-flex align-items-center justify-content-between">
+                                <span>Song Title <span class="text-secondary fw-normal small">(Optional — auto-generated from file or lyrics if blank)</span></span>
+                                <span id="autoTitleHint" class="badge bg-light text-muted border small d-none">Auto-detected from file</span>
+                            </label>
+                            <input type="text" class="form-control" id="projectName" placeholder="e.g. Amazing Grace (or leave empty to auto-generate)">
+                        </div>
+
+                        <!-- Optional Custom Lyrics (Upload file or paste) -->
+                        <div class="mt-4 pt-3 border-top">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label fw-bold text-dark mb-0 d-flex align-items-center gap-1.5 small text-uppercase tracking-wider">
+                                    <i class="bi bi-file-earmark-text" style="color: var(--brand-burgundy);"></i> Custom Lyrics <span class="text-secondary fw-normal text-none" style="text-transform: none;">(Optional)</span>
+                                </label>
+                                <span class="text-muted small">Already have lyrics? Provide them here</span>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label small text-secondary mb-1">Upload .txt or .lrc file</label>
+                                    <input type="file" class="form-control form-control-sm" id="customLyricsFile" accept=".txt,.lrc,text/plain">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small text-secondary mb-1">Or paste lyrics text</label>
+                                    <textarea class="form-control studio-input font-mono" id="customLyricsText" rows="2" placeholder="Paste custom song lyrics..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ================= STEP 2: CANVAS RATIO & AESTHETIC BACKGROUND ================= -->
+                    <div class="mb-5 p-4 border bg-white shadow-sm position-relative">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-burgundy text-white px-2.5 py-1.5 fs-6 fw-bold" style="background-color: var(--brand-burgundy);">Step 2</span>
+                                <h5 class="fw-bold text-dark mb-0">Select Canvas Aspect Ratio &amp; Background Template</h5>
+                            </div>
+                            <span class="badge badge-studio-green px-2.5 py-1"><i class="bi bi-check2 me-1"></i> Ready</span>
+                        </div>
+
+                        <!-- Canvas Aspect Ratio Selection (NO dark gray cards) -->
+                        <label class="form-label fw-bold text-dark mb-2 d-flex align-items-center gap-2 small text-uppercase tracking-wider">
+                            <i class="bi bi-aspect-ratio" style="color: var(--brand-burgundy);"></i> 2A. Canvas Aspect Ratio
+                        </label>
+                        <div class="row g-3 mb-4" id="aspectRatioPills">
+                            <div class="col-md-3 col-6">
+                                <input type="radio" class="btn-check" name="aspectRadio" id="ar169" value="16:9" checked>
+                                <label class="aspect-ratio-card" for="ar169">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <div class="fw-bold ratio-title text-dark">16:9 Landscape</div>
+                                        <i class="bi bi-check-circle-fill ratio-check"></i>
+                                    </div>
+                                    <small class="text-muted d-block" style="font-size: 0.76rem;">YouTube &amp; Desktop</small>
+                                </label>
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <input type="radio" class="btn-check" name="aspectRadio" id="ar916" value="9:16">
+                                <label class="aspect-ratio-card" for="ar916">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <div class="fw-bold ratio-title text-dark">9:16 Vertical</div>
+                                        <i class="bi bi-check-circle-fill ratio-check"></i>
+                                    </div>
+                                    <small class="text-muted d-block" style="font-size: 0.76rem;">TikTok, Shorts &amp; Reels</small>
+                                </label>
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <input type="radio" class="btn-check" name="aspectRadio" id="ar11" value="1:1">
+                                <label class="aspect-ratio-card" for="ar11">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <div class="fw-bold ratio-title text-dark">1:1 Square</div>
+                                        <i class="bi bi-check-circle-fill ratio-check"></i>
+                                    </div>
+                                    <small class="text-muted d-block" style="font-size: 0.76rem;">Instagram Feed</small>
+                                </label>
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <input type="radio" class="btn-check" name="aspectRadio" id="ar45" value="4:5">
+                                <label class="aspect-ratio-card" for="ar45">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <div class="fw-bold ratio-title text-dark">4:5 Portrait</div>
+                                        <i class="bi bi-check-circle-fill ratio-check"></i>
+                                    </div>
+                                    <small class="text-muted d-block" style="font-size: 0.76rem;">Social Media Feed</small>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- 10 Aesthetic Background Templates with Generous Padding -->
+                        <label class="form-label fw-bold text-dark mb-2 d-flex align-items-center gap-2 small text-uppercase tracking-wider">
+                            <i class="bi bi-palette" style="color: var(--brand-burgundy);"></i> 2B. Choose Studio Aesthetic Background
+                        </label>
+                        <p class="text-secondary small mb-3">1080p high contrast studio themes optimized for lyric visibility and mood:</p>
+
+                        <div class="row g-3" id="templateCards">
+                            <div class="col-md-4 col-sm-6">
+                                <div class="template-visual-card active" data-template="burgundy_studio">
+                                    <div class="template-thumb-box">
+                                        <img src="{{ url_for('static', filename='img/templates/burgundy_studio.png') }}" alt="Burgundy Studio">
+                                    </div>
+                                    <div class="template-card-body">
+                                        <div class="d-flex align-items-center justify-content-between mb-1">
+                                            <strong class="text-dark small">Burgundy Studio</strong>
+                                            <span class="badge badge-studio-green"><i class="bi bi-check2"></i></span>
+                                        </div>
+                                        <span class="text-muted d-block" style="font-size: 0.76rem;">Acoustic spotlight vignette</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 col-sm-6">
+                                <div class="template-visual-card" data-template="deep_nebula">
+                                    <div class="template-thumb-box">
+                                        <img src="{{ url_for('static', filename='img/templates/deep_nebula.png') }}" alt="Deep Nebula">
+                                    </div>
+                                    <div class="template-card-body">
+                                        <strong class="text-dark small d-block mb-1">Deep Nebula</strong>
+                                        <span class="text-muted d-block" style="font-size: 0.76rem;">Indigo celestial galaxy</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 col-sm-6">
+                                <div class="template-visual-card" data-template="retrowave_sunset">
+                                    <div class="template-thumb-box">
+                                        <img src="{{ url_for('static', filename='img/templates/retrowave_sunset.png') }}" alt="Retrowave Dusk">
+                                    </div>
+                                    <div class="template-card-body">
+                                        <strong class="text-dark small d-block mb-1">Retrowave Dusk</strong>
+                                        <span class="text-muted d-block" style="font-size: 0.76rem;">80s synth sunset &amp; grid</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 col-sm-6">
+                                <div class="template-visual-card" data-template="midnight_acoustic">
+                                    <div class="template-thumb-box">
+                                        <img src="{{ url_for('static', filename='img/templates/midnight_acoustic.png') }}" alt="Midnight Acoustic">
+                                    </div>
+                                    <div class="template-card-body">
+                                        <strong class="text-dark small d-block mb-1">Midnight Acoustic</strong>
+                                        <span class="text-muted d-block" style="font-size: 0.76rem;">Studio wood slats &amp; vinyl</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 col-sm-6">
+                                <div class="template-visual-card" data-template="abstract_aurora">
+                                    <div class="template-thumb-box">
+                                        <img src="{{ url_for('static', filename='img/templates/abstract_aurora.png') }}" alt="Abstract Aurora">
+                                    </div>
+                                    <div class="template-card-body">
+                                        <strong class="text-dark small d-block mb-1">Abstract Aurora</strong>
+                                        <span class="text-muted d-block" style="font-size: 0.76rem;">Emerald harmonic waves</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 col-sm-6">
+                                <div class="template-visual-card" data-template="minimal_dark">
+                                    <div class="template-thumb-box">
+                                        <img src="{{ url_for('static', filename='img/templates/minimal_dark.png') }}" alt="Minimal Graphite">
+                                    </div>
+                                    <div class="template-card-body">
+                                        <strong class="text-dark small d-block mb-1">Minimal Graphite</strong>
+                                        <span class="text-muted d-block" style="font-size: 0.76rem;">Clean carbon vignette</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 col-sm-6">
+                                <div class="template-visual-card" data-template="cyberpunk_neon">
+                                    <div class="template-thumb-box">
+                                        <img src="{{ url_for('static', filename='img/templates/cyberpunk_neon.png') }}" alt="Cyberpunk Neon">
+                                    </div>
+                                    <div class="template-card-body">
+                                        <strong class="text-dark small d-block mb-1">Cyberpunk Neon</strong>
+                                        <span class="text-muted d-block" style="font-size: 0.76rem;">Cyan &amp; magenta laser glow</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 col-sm-6">
+                                <div class="template-visual-card" data-template="golden_hour">
+                                    <div class="template-thumb-box">
+                                        <img src="{{ url_for('static', filename='img/templates/golden_hour.png') }}" alt="Golden Hour">
+                                    </div>
+                                    <div class="template-card-body">
+                                        <strong class="text-dark small d-block mb-1">Golden Hour</strong>
+                                        <span class="text-muted d-block" style="font-size: 0.76rem;">Sunset warmth &amp; gold bokeh</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 col-sm-6">
+                                <div class="template-visual-card" data-template="velvet_lounge">
+                                    <div class="template-thumb-box">
+                                        <img src="{{ url_for('static', filename='img/templates/velvet_lounge.png') }}" alt="Velvet Lounge">
+                                    </div>
+                                    <div class="template-card-body">
+                                        <strong class="text-dark small d-block mb-1">Velvet Lounge</strong>
+                                        <span class="text-muted d-block" style="font-size: 0.76rem;">Moody royal crimson haze</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 col-sm-6">
+                                <div class="template-visual-card" data-template="lofi_chill">
+                                    <div class="template-thumb-box">
+                                        <img src="{{ url_for('static', filename='img/templates/lofi_chill.png') }}" alt="Lo-Fi Chill">
+                                    </div>
+                                    <div class="template-card-body">
+                                        <strong class="text-dark small d-block mb-1">Lo-Fi Chill</strong>
+                                        <span class="text-muted d-block" style="font-size: 0.76rem;">Lavender pastel tape warmth</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="selectedTemplateInput" value="burgundy_studio">
+                    </div>
+
+                    <!-- ================= STEP 3 (OPTIONAL): CUSTOM VIDEO BACKGROUND ================= -->
+                    <div class="mb-5 p-4 border bg-white shadow-sm position-relative">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-secondary text-white px-2.5 py-1.5 fs-6 fw-bold">Step 3</span>
+                                <h5 class="fw-bold text-dark mb-0">Upload Custom Video Background <span class="text-secondary fw-normal small">(Optional)</span></h5>
+                            </div>
+                            <span class="badge bg-light text-secondary border px-2.5 py-1">Optional</span>
+                        </div>
+                        <p class="text-secondary small mb-3">If you prefer your own video footage instead of an aesthetic template, drop it here. It will override the template background.</p>
+
+                        <div class="square-dropzone p-3" id="videoDropzone" style="min-height: 120px;">
+                            <input type="file" id="videoFileInput" accept="video/*,.mp4,.mov,.webm,.mkv" class="d-none">
+                            <div class="mb-2" style="color: var(--brand-green-accent);">
+                                <i class="bi bi-camera-video fs-1"></i>
+                            </div>
+                            <div id="videoLabel">
+                                <span class="fw-bold text-dark d-block mb-1 small">Click or Drop Custom Video File</span>
+                                <div class="text-secondary small" style="font-size: 0.75rem;">MP4, MOV, WEBM (Overrides chosen aesthetic template)</div>
+                            </div>
+                            <div id="videoFileInfo" class="mt-2 d-none">
+                                <div class="d-flex align-items-center justify-content-center gap-2 text-success fw-bold mb-1 fs-6">
+                                    <i class="bi bi-check-circle-fill" style="color: var(--brand-green-accent);"></i>
+                                    <span id="videoFileName" class="text-dark"></span>
+                                </div>
+                                <div class="text-secondary small font-mono mb-2" id="videoFileSize"></div>
+                                <button type="button" id="removeVideoBtn" class="btn btn-outline-secondary btn-sm px-2 py-0.5" style="font-size: 0.75rem;">
+                                    <i class="bi bi-x-circle me-1"></i> Remove custom video (use template instead)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Realistic Ingestion & Pre-Studio Transcription Progress (Never Stalls at 95%) -->
+                    <div id="uploadProgressContainer" class="mb-4 d-none p-4 border bg-white shadow-sm">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span id="uploadStatusText" class="fw-bold text-dark fs-6">Uploading audio track...</span>
+                            <span id="uploadPercentage" class="fw-bold font-mono fs-6" style="color: var(--brand-green-accent);">0%</span>
+                        </div>
+                        <div class="progress mb-3" style="height: 10px; border-radius: 0;">
+                            <div id="uploadProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="background-color: var(--brand-green-accent); width: 0%;"></div>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center small text-muted">
+                            <span id="uploadSubText" class="font-mono">Uploading song track to studio server...</span>
+                            <span id="uploadTimerText" class="font-mono text-secondary">0s elapsed</span>
+                        </div>
+                    </div>
+
+                    <!-- Error Alert -->
+                    <div id="uploadAlert" class="alert alert-danger d-none mb-4" role="alert"></div>
+
+                    <!-- Submit Action -->
+                    <div class="d-grid pt-1">
+                        <button type="submit" id="submitUploadBtn" class="btn btn-burgundy py-3 d-flex align-items-center justify-content-center gap-2 fs-6 fw-bold">
+                            <i class="bi bi-stars"></i> Ingest Audio, Transcribe &amp; Open Studio
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const audioInput = document.getElementById('audioFileInput');
+    const videoInput = document.getElementById('videoFileInput');
+    const audioDropzone = document.getElementById('audioDropzone');
+    const videoDropzone = document.getElementById('videoDropzone');
+    const uploadForm = document.getElementById('uploadForm');
+    const submitBtn = document.getElementById('submitUploadBtn');
+    const progressContainer = document.getElementById('uploadProgressContainer');
+    const progressBar = document.getElementById('uploadProgressBar');
+    const progressText = document.getElementById('uploadPercentage');
+    const statusText = document.getElementById('uploadStatusText');
+    const subText = document.getElementById('uploadSubText');
+    const timerText = document.getElementById('uploadTimerText');
+    const alertBox = document.getElementById('uploadAlert');
+    const projectNameInput = document.getElementById('projectName');
+    const autoTitleHint = document.getElementById('autoTitleHint');
+    const step1Badge = document.getElementById('step1Badge');
+    const removeVideoBtn = document.getElementById('removeVideoBtn');
+
+    let audioFile = null;
+    let videoFile = null;
+    let selectedTemplate = 'burgundy_studio';
+
+    // Helper: Clean title from audio filename
+    function cleanTitleFromFilename(name) {
+        if (!name) return "";
+        let base = name.replace(/\.[^/.]+$/, ""); // strip extension
+        base = base.replace(/^\s*\d{1,3}\s*[-._]\s*/, ""); // strip track prefix 01 -
+        base = base.replace(/[\(\[\{].*?[\)\]\}]/g, ""); // strip (Official Audio)
+        base = base.replace(/[-_]+/g, " "); // replace dashes & underscores
+        base = base.replace(/\s+/g, " ").trim();
+        if (!base) return "";
+        return base.replace(/\w\S*/g, (w) => (w.charAt(0).toUpperCase() + w.substr(1).toLowerCase()));
+    }
+
+    // Handle template card clicks
+    const templateCards = document.querySelectorAll('.template-visual-card');
+    const selectedTemplateInput = document.getElementById('selectedTemplateInput');
+    templateCards.forEach(card => {
+        card.addEventListener('click', () => {
+            templateCards.forEach(c => {
+                c.classList.remove('active');
+                const b = c.querySelector('.badge-studio-green');
+                if (b) b.remove();
+            });
+            card.classList.add('active');
+            const cardBody = card.querySelector('.template-card-body');
+            if (cardBody && !cardBody.querySelector('.badge-studio-green')) {
+                const headerRow = cardBody.querySelector('strong');
+                if (headerRow) {
+                    const badge = document.createElement('span');
+                    badge.className = 'badge badge-studio-green float-end';
+                    badge.innerHTML = '<i class="bi bi-check2"></i>';
+                    headerRow.after(badge);
+                }
+            }
+            selectedTemplate = card.dataset.template;
+            selectedTemplateInput.value = selectedTemplate;
+        });
+    });
+
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    audioDropzone.addEventListener('click', () => audioInput.click());
+    audioInput.addEventListener('change', (e) => handleAudio(e.target.files[0]));
+    setupDragDrop(audioDropzone, handleAudio);
+
+    videoDropzone.addEventListener('click', (e) => {
+        if (e.target !== removeVideoBtn && !removeVideoBtn.contains(e.target)) {
+            videoInput.click();
+        }
+    });
+    videoInput.addEventListener('change', (e) => handleVideo(e.target.files[0]));
+    setupDragDrop(videoDropzone, handleVideo);
+
+    if (removeVideoBtn) {
+        removeVideoBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            videoFile = null;
+            videoInput.value = '';
+            document.getElementById('videoLabel').classList.remove('d-none');
+            document.getElementById('videoFileInfo').classList.add('d-none');
+        });
+    }
+
+    function setupDragDrop(zone, handler) {
+        zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.style.borderColor = 'var(--brand-burgundy)'; });
+        zone.addEventListener('dragleave', () => { zone.style.borderColor = ''; });
+        zone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            zone.style.borderColor = '';
+            if (e.dataTransfer.files.length > 0) handler(e.dataTransfer.files[0]);
+        });
+    }
+
+    function handleAudio(file) {
+        if (!file) return;
+        audioFile = file;
+        document.getElementById('audioLabel').classList.add('d-none');
+        document.getElementById('audioFileInfo').classList.remove('d-none');
+        document.getElementById('audioFileName').textContent = file.name;
+        document.getElementById('audioFileSize').textContent = formatBytes(file.size);
+
+        if (step1Badge) {
+            step1Badge.className = 'badge badge-studio-green px-2.5 py-1';
+            step1Badge.innerHTML = '<i class="bi bi-check2 me-1"></i> Audio Loaded';
+        }
+
+        // Auto-populate song title if blank
+        const cleanName = cleanTitleFromFilename(file.name);
+        if (cleanName && (!projectNameInput.value || projectNameInput.value.trim() === '')) {
+            projectNameInput.value = cleanName;
+            if (autoTitleHint) autoTitleHint.classList.remove('d-none');
+        }
+    }
+
+    function handleVideo(file) {
+        if (!file) return;
+        videoFile = file;
+        document.getElementById('videoLabel').classList.add('d-none');
+        document.getElementById('videoFileInfo').classList.remove('d-none');
+        document.getElementById('videoFileName').textContent = file.name;
+        document.getElementById('videoFileSize').textContent = formatBytes(file.size);
+    }
+
+    let processInterval = null;
+
+    uploadForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        alertBox.classList.add('d-none');
+
+        if (!audioFile) {
+            alertBox.textContent = "Please select an audio file for the song.";
+            alertBox.classList.remove('d-none');
+            audioDropzone.scrollIntoView({ behavior: 'smooth' });
+            return;
+        }
+
+        const projectName = projectNameInput.value.trim();
+        const selectedAspect = document.querySelector('input[name="aspectRadio"]:checked')?.value || '16:9';
+
+        submitBtn.disabled = true;
+        progressContainer.classList.remove('d-none');
+        progressBar.style.width = '5%';
+        progressText.textContent = '5%';
+        statusText.textContent = 'Uploading song track...';
+        subText.textContent = 'Sending audio file to server...';
+        if (timerText) timerText.textContent = '0s elapsed';
+
+        const formData = new FormData();
+        formData.append('name', projectName);
+        formData.append('audio', audioFile);
+        formData.append('template', selectedTemplate);
+        formData.append('aspect_ratio', selectedAspect);
+        if (videoFile) {
+            formData.append('video', videoFile);
+        }
+
+        const customLyricsFileInput = document.getElementById('customLyricsFile');
+        const customLyricsTextInput = document.getElementById('customLyricsText');
+        if (customLyricsFileInput && customLyricsFileInput.files && customLyricsFileInput.files[0]) {
+            formData.append('lyrics_file', customLyricsFileInput.files[0]);
+        }
+        if (customLyricsTextInput && customLyricsTextInput.value.trim()) {
+            formData.append('lyrics_text', customLyricsTextInput.value.trim());
+        }
+
+        const uploadStartTime = Date.now();
+
+        try {
+            const res = await LyricSyncAPI.createProject(formData, (pct, loaded, total) => {
+                const elapsedSec = Math.floor((Date.now() - uploadStartTime) / 1000);
+                if (timerText) timerText.textContent = `${elapsedSec}s elapsed`;
+
+                if (pct < 100) {
+                    const mapped = 5 + Math.round((pct / 100) * 35); // 5% to 40%
+                    progressBar.style.width = mapped + '%';
+                    progressText.textContent = mapped + '%';
+                    statusText.textContent = `Uploading audio (${formatBytes(loaded)} / ${formatBytes(total)})...`;
+                    subText.textContent = 'Sending master audio track to studio...';
+                } else {
+                    // Upload completed! Now server generates background & runs OpenAI Whisper-1
+                    if (!processInterval) {
+                        let stageElapsed = 0;
+                        let currentPct = 42;
+                        const processingStart = Date.now();
+
+                        processInterval = setInterval(() => {
+                            stageElapsed = Math.floor((Date.now() - processingStart) / 1000);
+                            const totalElapsed = Math.floor((Date.now() - uploadStartTime) / 1000);
+                            if (timerText) timerText.textContent = `${totalElapsed}s elapsed`;
+
+                            if (stageElapsed < 3) {
+                                currentPct = 42 + stageElapsed * 5; // 42, 47, 52
+                                progressBar.style.width = currentPct + '%';
+                                progressText.textContent = currentPct + '%';
+                                statusText.textContent = 'Generating canvas background video...';
+                                subText.textContent = `Rendering 1080p ${selectedAspect} canvas video and attaching vocal stream...`;
+                            } else {
+                                // Whisper-1 takes 10 to 30s. Smoothly inch up asymptotically towards 88%, NEVER prematurely freeze at 95%!
+                                if (currentPct < 88) {
+                                    currentPct = Math.min(88, 55 + Math.floor((stageElapsed - 3) * 1.3));
+                                    progressBar.style.width = currentPct + '%';
+                                    progressText.textContent = currentPct + '%';
+                                }
+                                statusText.textContent = 'Transcribing vocals with OpenAI Whisper-1...';
+                                subText.textContent = `Analyzing vocal phonemes & calculating word timestamps (${stageElapsed}s)...`;
+                            }
+                        }, 750);
+                    }
+                }
+            });
+
+            if (processInterval) clearInterval(processInterval);
+
+            if (res.success && res.project) {
+                // Smooth finalization step
+                progressBar.style.width = '94%';
+                progressText.textContent = '94%';
+                statusText.textContent = 'Aligning lyric verses & syllables...';
+                subText.textContent = 'Structuring synchronized verses...';
+
+                setTimeout(() => {
+                    progressBar.style.width = '100%';
+                    progressText.textContent = '100%';
+                    statusText.textContent = 'Lyrics transcribed & Studio ready!';
+                    const lyricCount = res.project.lyrics_count || 0;
+                    subText.textContent = `Extracted ${lyricCount} lyric lines for "${res.project.name}". Opening studio workspace...`;
+                    setTimeout(() => {
+                        window.location.href = `/editor/${res.project.id}`;
+                    }, 400);
+                }, 350);
+            } else {
+                throw new Error(res.error?.message || "Failed to create project.");
+            }
+        } catch (err) {
+            if (processInterval) clearInterval(processInterval);
+            submitBtn.disabled = false;
+            progressContainer.classList.add('d-none');
+            alertBox.textContent = err.message || "An error occurred while creating project.";
+            alertBox.classList.remove('d-none');
+        }
+    });
+</script>
+{% endblock %}

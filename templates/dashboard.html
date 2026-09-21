@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+
+{% block title %}Projects - LyricSync Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 px-lg-5 py-4 py-lg-5">
+    <!-- Header Title & Quick Actions -->
+    <div class="d-flex flex-wrap justify-content-between align-items-end mb-4 pb-3 border-bottom gap-3">
+        <div>
+            <h2 class="fw-bold mb-1 text-dark">Studio Projects</h2>
+            <p class="text-secondary mb-0">Create, synchronize lyrics with OpenAI Whisper, and export 16:9 video.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('views.upload_page') }}" class="btn btn-burgundy text-decoration-none d-flex align-items-center gap-2">
+                <i class="bi bi-plus-lg"></i> Create Project
+            </a>
+        </div>
+    </div>
+
+    <!-- Metric Overview Cards (Spacious, Square, No Badges) -->
+    <div class="row g-4 mb-4">
+        <div class="col-sm-6 col-xl-3">
+            <div class="studio-stat-card">
+                <div class="text-secondary small fw-semibold text-uppercase tracking-wider mb-1">Total Projects</div>
+                <div class="h3 fw-bold mb-0 text-dark">{{ projects|length }}</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="studio-stat-card">
+                <div class="text-secondary small fw-semibold text-uppercase tracking-wider mb-1">Canvas Aspect Ratio</div>
+                <div class="h3 fw-bold mb-0 text-dark">16:9 Widescreen</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="studio-stat-card">
+                <div class="text-secondary small fw-semibold text-uppercase tracking-wider mb-1">Speech Recognition</div>
+                <div class="h3 fw-bold mb-0 text-dark">OpenAI Whisper-1</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="studio-stat-card">
+                <div class="text-secondary small fw-semibold text-uppercase tracking-wider mb-1">Rendering Engine</div>
+                <div class="h3 fw-bold mb-0 text-dark">FFmpeg + libass</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search / Filter Bar -->
+    <div class="studio-box p-3 mb-4">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-6 col-lg-5">
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0 text-secondary">
+                        <i class="bi bi-search"></i>
+                    </span>
+                    <input type="text" id="projectSearch" class="form-control border-start-0 ps-0" placeholder="Search projects by title...">
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-7 text-md-end text-secondary small pe-2">
+                <span>Total: <strong class="text-dark">{{ projects|length }}</strong> project(s)</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Projects Grid -->
+    {% if projects %}
+    <div class="row g-4" id="projectGrid">
+        {% for p in projects %}
+        {% set project_canonical = p.get_canonical_json() %}
+        <div class="col-md-6 col-lg-3 project-item" data-title="{{ p.name|lower }}" data-background="{{ project_canonical.get('meta', {}).get('background_template', 'burgundy_studio') }}">
+            <div class="project-card">
+                <div class="project-preview">
+                    <video muted loop preload="metadata" poster="{{ url_for('static', filename='img/templates/burgundy_studio.png') }}">
+                        <source src="{{ url_for('projects.stream_project_media', project_id=p.id, kind='video') }}" type="video/mp4">
+                    </video>
+                    <div class="project-preview-overlay"><i class="bi bi-play-circle"></i> Studio preview</div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-3 text-secondary small">
+                    <span class="fw-semibold text-uppercase text-dark">{{ p.status }}</span>
+                    <span class="font-mono text-muted">{{ p.created_at.strftime('%Y-%m-%d') }}</span>
+                </div>
+
+                <h4 class="fw-bold text-dark mb-3 text-truncate" title="{{ p.name }}">
+                    {{ p.name }}
+                </h4>
+
+                <p class="project-description text-secondary small mb-3">{{ project_canonical.get('meta', {}).get('description', '') or 'Synchronized lyric video project' }}</p>
+
+                <div class="bg-light p-3 mb-4 border small">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-secondary">Audio Duration</span>
+                        <span class="fw-bold text-dark font-mono">{{ "%.1f"|format(p.audio_duration or 0) }}s</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-secondary">Canvas Resolution</span>
+                        <span class="fw-bold text-dark font-mono">16:9 ({{ p.width }}x{{ p.height }})</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="text-secondary">Revision</span>
+                        <span class="fw-bold font-mono" style="color: var(--brand-burgundy);">Revision {{ p.current_revision }}</span>
+                    </div>
+                </div>
+
+                <div class="mt-auto d-flex gap-2 pt-2 border-top">
+                    <a href="{{ url_for('views.editor_page', project_id=p.id) }}" class="btn btn-burgundy flex-grow-1 text-center text-decoration-none d-flex align-items-center justify-content-center gap-2">
+                        <i class="bi bi-sliders2"></i> Open Studio
+                    </a>
+                    <a href="{{ url_for('projects.download_project_render', project_id=p.id) }}" class="btn btn-outline-green text-decoration-none px-3" title="Download Rendered MP4">
+                        <i class="bi bi-download"></i>
+                    </a>
+                    <button class="btn btn-outline-secondary px-3 delete-btn" data-id="{{ p.id }}" data-name="{{ p.name }}" title="Delete project">
+                        <i class="bi bi-trash3"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="project-pagination d-flex justify-content-center align-items-center gap-3 mt-4" id="projectPagination">
+        <button class="btn btn-outline-secondary btn-sm" id="previousProjects" type="button">Previous</button>
+        <span class="small text-secondary" id="projectPageLabel"></span>
+        <button class="btn btn-outline-secondary btn-sm" id="nextProjects" type="button">Next</button>
+    </div>
+    {% else %}
+    <!-- Empty State -->
+    <div class="studio-box text-center py-5 my-4">
+        <div class="mb-3 text-secondary">
+            <i class="bi bi-soundwave display-4" style="color: var(--brand-burgundy);"></i>
+        </div>
+        <h4 class="fw-bold text-dark mb-2">No Projects Created Yet</h4>
+        <p class="text-secondary mb-4 mx-auto" style="max-width: 480px;">Upload an audio song track. A 16:9 pattern background will be created automatically, or you can provide your own background video.</p>
+        <a href="{{ url_for('views.upload_page') }}" class="btn btn-burgundy text-decoration-none d-inline-flex align-items-center gap-2">
+            <i class="bi bi-plus-lg"></i> Create First Project
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Delete Confirmation Modal (Square) -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content studio-box p-4 border">
+            <div class="modal-header border-bottom pb-3">
+                <h5 class="modal-title text-danger fw-bold d-flex align-items-center gap-2 mb-0">
+                    <i class="bi bi-exclamation-triangle"></i> Delete Project
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body py-4">
+                <p class="mb-0 text-secondary">Are you sure you want to delete <strong id="deleteProjectName" class="text-dark"></strong>? All media, sync records, and rendered videos will be permanently removed.</p>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" id="confirmDeleteBtn" class="btn btn-danger px-4">Delete Permanently</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const searchInput = document.getElementById('projectSearch');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            const val = e.target.value.toLowerCase().trim();
+            document.querySelectorAll('.project-item').forEach(el => el.dataset.matches = el.getAttribute('data-title').includes(val) ? 'true' : 'false');
+            renderProjectPage(0);
+        });
+    }
+
+    const projectItems = Array.from(document.querySelectorAll('.project-item'));
+    const posterMap = {
+        burgundy_studio: '/static/img/templates/burgundy_studio.png', deep_nebula: '/static/img/templates/deep_nebula.png',
+        retrowave_sunset: '/static/img/templates/retrowave_sunset.png', midnight_acoustic: '/static/img/templates/midnight_acoustic.png',
+        abstract_aurora: '/static/img/templates/abstract_aurora.png', minimal_dark: '/static/img/templates/minimal_dark.png',
+        cyberpunk_neon: '/static/img/templates/cyberpunk_neon.png', golden_hour: '/static/img/templates/golden_hour.png',
+        velvet_lounge: '/static/img/templates/velvet_lounge.png', lofi_chill: '/static/img/templates/lofi_chill.png',
+        emerald_stage: '/static/img/templates/abstract_aurora.png', rose_film: '/static/img/templates/retrowave_sunset.png',
+        ocean_pulse: '/static/img/templates/cyberpunk_neon.png', paper_moon: '/static/img/templates/golden_hour.png'
+    };
+    projectItems.forEach(item => {
+        const video = item.querySelector('video');
+        video.poster = posterMap[item.dataset.background] || posterMap.burgundy_studio;
+        video.addEventListener('mouseenter', () => video.play().catch(() => {}));
+        video.addEventListener('mouseleave', () => { video.pause(); video.currentTime = 0; });
+    });
+    let projectPage = 0;
+    function renderProjectPage(page) {
+        const matches = projectItems.filter(item => item.dataset.matches !== 'false');
+        const pageCount = Math.max(1, Math.ceil(matches.length / 4));
+        projectPage = Math.max(0, Math.min(page, pageCount - 1));
+        projectItems.forEach(item => item.style.display = 'none');
+        matches.slice(projectPage * 4, projectPage * 4 + 4).forEach(item => item.style.display = '');
+        document.getElementById('projectPageLabel').textContent = `Page ${projectPage + 1} of ${pageCount}`;
+        document.getElementById('previousProjects').disabled = projectPage === 0;
+        document.getElementById('nextProjects').disabled = projectPage >= pageCount - 1;
+    }
+    document.getElementById('previousProjects')?.addEventListener('click', () => renderProjectPage(projectPage - 1));
+    document.getElementById('nextProjects')?.addEventListener('click', () => renderProjectPage(projectPage + 1));
+    projectItems.forEach(item => { item.dataset.matches = 'true'; });
+    renderProjectPage(0);
+
+    let projectToDelete = null;
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            projectToDelete = btn.getAttribute('data-id');
+            document.getElementById('deleteProjectName').textContent = btn.getAttribute('data-name');
+            deleteModal.show();
+        });
+    });
+
+    document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+        if (!projectToDelete) return;
+        try {
+            const res = await LyricSyncAPI.deleteProject(projectToDelete);
+            if (res.success) {
+                window.location.reload();
+            } else {
+                alert(res.error?.message || 'Failed to delete project');
+            }
+        } catch (err) {
+            alert('Error deleting project: ' + err.message);
+        }
+    });
+</script>
+{% endblock %}
