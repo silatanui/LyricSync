@@ -138,13 +138,24 @@ def create_project():
     else:
         # Generate studio pattern background video with chosen aspect ratio
         video_saved_path = proj_dir / "background_video.mp4"
-        BackgroundGenerator.generate_background_video(
-            audio_path=audio_saved_path,
-            output_video_path=video_saved_path,
-            duration=audio_dur,
-            pattern_type=selected_template,
-            aspect_ratio=aspect_ratio
-        )
+        try:
+            BackgroundGenerator.generate_background_video(
+                audio_path=audio_saved_path,
+                output_video_path=video_saved_path,
+                duration=audio_dur,
+                pattern_type=selected_template,
+                aspect_ratio=aspect_ratio
+            )
+        except Exception as error:
+            current_app.logger.exception("Background generation failed during project ingestion")
+            return jsonify({
+                "success": False,
+                "error": {
+                    "code": "BACKGROUND_GENERATION_FAILED",
+                    "message": f"The background video could not be generated: {error}",
+                    "retryable": True
+                }
+            }), 503
         v_probe = {"duration": audio_dur, "width": t_width, "height": t_height, "fps": 30.0}
         video_bytes = video_saved_path.read_bytes()
 
@@ -205,7 +216,19 @@ def create_project():
     canonical.setdefault("style", {})["aspectRatio"] = aspect_ratio
     project.set_canonical_json(canonical)
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as error:
+        db.session.rollback()
+        current_app.logger.exception("Database commit failed during project ingestion")
+        return jsonify({
+            "success": False,
+            "error": {
+                "code": "PROJECT_SAVE_FAILED",
+                "message": f"The project could not be saved to the database: {error}",
+                "retryable": True
+            }
+        }), 503
 
     # Check for optional custom lyrics upload/paste
     custom_lyrics_text = ""

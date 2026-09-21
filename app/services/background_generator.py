@@ -458,7 +458,10 @@ class BackgroundGenerator:
             str(output_video_path)
         ]
 
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        if result.returncode != 0:
+            detail = (result.stderr or "FFmpeg exited without diagnostic output").strip()
+            raise RuntimeError(f"FFmpeg exited with code {result.returncode}: {detail[-1200:]}")
 
         try:
             if temp_img_path.exists():
