@@ -512,7 +512,7 @@
                     statusText.textContent = `Uploading audio (${formatBytes(loaded)} / ${formatBytes(total)})...`;
                     subText.textContent = 'Sending master audio track to studio...';
                 } else {
-                    // Upload completed! Now server generates background & runs OpenAI Whisper-1
+                    // Upload completed; the editor starts transcription after it opens.
                     if (!processInterval) {
                         let stageElapsed = 0;
                         let currentPct = 42;
@@ -536,8 +536,8 @@
                                     progressBar.style.width = currentPct + '%';
                                     progressText.textContent = currentPct + '%';
                                 }
-                                statusText.textContent = 'Transcribing vocals with OpenAI Whisper-1...';
-                                subText.textContent = `Analyzing vocal phonemes & calculating word timestamps (${stageElapsed}s)...`;
+                                statusText.textContent = 'Finalizing project...';
+                                subText.textContent = 'Preparing the synchronized studio editor...';
                             }
                         }, 750);
                     }
@@ -560,7 +560,7 @@
                     const lyricCount = res.project.lyrics_count || 0;
                     subText.textContent = `Extracted ${lyricCount} lyric lines for "${res.project.name}". Opening studio workspace...`;
                     setTimeout(() => {
-                        window.location.href = `/editor/${res.project.id}`;
+                        window.location.href = res.project.editor_url || `/editor/${res.project.id}`;
                     }, 400);
                 }, 350);
             } else {

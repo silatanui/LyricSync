@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, url_for
 from werkzeug.utils import secure_filename
 from app.extensions import db
 from app.models import Project, MediaAsset
@@ -229,22 +229,10 @@ def create_project():
             db.session.commit()
         except Exception as e:
             current_app.logger.warning(f"Failed to import custom lyrics on upload: {e}")
-            try:
-                run_transcription_pipeline(current_app._get_current_object(), proj_id)
-                db.session.refresh(project)
-            except Exception as te:
-                current_app.logger.error(f"Post-ingestion transcription warning: {te}")
-                project.status = "ready"
-                db.session.commit()
-    else:
-        # Automatic Post-Ingestion Transcription Pipeline (runs before opening studio)
-        try:
-            run_transcription_pipeline(current_app._get_current_object(), proj_id)
-            db.session.refresh(project)
-        except Exception as e:
-            current_app.logger.error(f"Post-ingestion transcription warning: {e}")
             project.status = "ready"
             db.session.commit()
+
+    # Transcription is started by the editor button so upload requests stay reliable on shared hosting.
 
     return jsonify({
         "success": True,
@@ -252,6 +240,7 @@ def create_project():
             "id": project.id,
             "name": project.name,
             "status": project.status,
+            "editor_url": url_for("views.editor_page", project_id=project.id),
             "audio": {"duration": audio_dur},
             "video": {"duration": video_dur, "width": project.width, "height": project.height, "fps": project.fps},
             "lyrics_revision": project.current_revision,
