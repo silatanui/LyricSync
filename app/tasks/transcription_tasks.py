@@ -95,6 +95,13 @@ def run_transcription_pipeline(app, project_id: str, job_id: str = None):
             transcriber = OpenAITranscriber()
             tx_result = transcriber.transcribe_word_timestamps(audio_path)
 
+            # Whisper can take longer than cPanel's MySQL idle timeout; reload ORM state before writing.
+            db.session.remove()
+            project = db.session.get(Project, project_id)
+            job = db.session.get(RenderJob, job_id) if job_id else None
+            if not project:
+                raise RuntimeError("Project disappeared while transcription was running")
+
             if job:
                 job.status = "aligning"
                 job.stage = "Aligning words and generating lyric lines"

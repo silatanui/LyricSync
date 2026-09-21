@@ -114,6 +114,7 @@ const LyricSyncAPI = {
                 try {
                     const res = await LyricSyncAPI.getJobStatus(jobId);
                     if (!res.success) {
+                        if (res.error?.retryable) return;
                         clearInterval(timer);
                         return reject(new Error(res.error?.message || "Failed to poll job status"));
                     }
@@ -128,8 +129,11 @@ const LyricSyncAPI = {
                         reject(new Error(job.error_message || "Job execution failed"));
                     }
                 } catch (err) {
-                    clearInterval(timer);
-                    reject(err);
+                    // A recycled cPanel connection is transient while the worker continues.
+                    if (!err.message?.includes('fetch')) {
+                        clearInterval(timer);
+                        reject(err);
+                    }
                 }
             }, intervalMs);
         });

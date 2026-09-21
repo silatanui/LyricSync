@@ -59,7 +59,15 @@ def queue_render(project_id: str):
 @renders_bp.route("/jobs/<job_id>", methods=["GET"])
 def get_job_status(job_id: str):
     """Return status, stage, and progress percentage for a background job."""
-    job = db.session.get(RenderJob, job_id)
+    try:
+        job = db.session.get(RenderJob, job_id)
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Database error while polling job status")
+        return jsonify({
+            "success": False,
+            "error": {"code": "DATABASE temporarily unavailable", "message": "The job database connection is refreshing. Please retry.", "retryable": True}
+        }), 503
     if not job:
         return jsonify({
             "success": False,
