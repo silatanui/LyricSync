@@ -97,10 +97,9 @@ class FFmpegRenderer:
 
         # Codecs & Encoding settings with lockstep sync
         cmd.extend([
-            "-c:v", "libx264",
+            "-c:v", "mpeg4",
             "-r", "30",
-            "-preset", "medium",
-            "-crf", "20",
+            "-q:v", "4",
             "-pix_fmt", "yuv420p",
             "-c:a", "aac",
             "-b:a", "192k",
