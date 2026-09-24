@@ -48,22 +48,127 @@
         </div>
 
         <div class="d-flex align-items-center gap-3">
-            <a href="https://tanuisila.dev/contact.php" class="nav-link-studio text-decoration-none">
+            <a href="https://tanuisila.dev/contact.php" class="nav-link-studio text-decoration-none d-none d-sm-inline-flex">
                 <i class="bi bi-envelope me-1"></i> Contact Us
             </a>
+
             {% if current_user.is_authenticated %}
-                <form action="{{ url_for('auth.logout') }}" method="post" class="m-0">
-                    <button type="submit" class="nav-link-studio border-0 bg-transparent">Sign Out</button>
-                </form>
+                <a href="{{ url_for('views.upload_page') }}" class="btn btn-burgundy text-decoration-none d-flex align-items-center gap-2">
+                    <i class="bi bi-plus-lg"></i> <span class="d-none d-md-inline">New Lyric Project</span>
+                </a>
+
+                <!-- Far-Right User Profile Avatar & Dropdown -->
+                <div class="dropdown user-nav-dropdown ms-1">
+                    <button class="user-avatar-btn d-flex align-items-center gap-2 p-0 border-0 bg-transparent text-decoration-none" 
+                            type="button" 
+                            id="userNavbarDropdown" 
+                            data-bs-toggle="dropdown" 
+                            aria-expanded="false" 
+                            title="{{ current_user.display_name or current_user.email }}">
+                        <div class="user-avatar-wrapper position-relative">
+                            {% if current_user.avatar_url %}
+                                <img src="{{ current_user.avatar_url }}" alt="{{ current_user.initials }}" class="user-avatar-img rounded-circle" width="38" height="38">
+                            {% else %}
+                                <div class="user-avatar-initials rounded-circle d-flex align-items-center justify-content-center fw-bold">
+                                    {{ current_user.initials }}
+                                </div>
+                            {% endif %}
+                            <span class="user-status-dot position-absolute" title="Signed In"></span>
+                        </div>
+                        <i class="bi bi-chevron-down user-avatar-arrow" style="font-size: 0.72rem; color: #B7F7DF;"></i>
+                    </button>
+
+                    <div class="dropdown-menu dropdown-menu-end user-dropdown-menu shadow-lg border p-0 mt-2" aria-labelledby="userNavbarDropdown">
+                        <!-- User Card Header -->
+                        <div class="user-dropdown-header p-3 border-bottom d-flex align-items-center gap-3">
+                            <div class="user-avatar-wrapper-lg flex-shrink-0">
+                                {% if current_user.avatar_url %}
+                                    <img src="{{ current_user.avatar_url }}" alt="{{ current_user.initials }}" class="rounded-circle shadow-sm" width="46" height="46">
+                                {% else %}
+                                    <div class="user-avatar-initials-lg rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm">
+                                        {{ current_user.initials }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="d-flex flex-column overflow-hidden flex-grow-1">
+                                <span class="fw-bold text-dark text-truncate" style="font-size: 0.95rem;">
+                                    {{ current_user.display_name or current_user.email.split('@')[0] }}
+                                </span>
+                                <span class="text-secondary small text-truncate font-mono" style="font-size: 0.75rem;">
+                                    {{ current_user.email }}
+                                </span>
+                                <div class="d-flex align-items-center gap-1.5 mt-1">
+                                    <span class="badge bg-burgundy-subtle text-burgundy border border-burgundy-subtle fw-semibold" style="font-size: 0.65rem; padding: 2px 6px;">
+                                        <i class="bi bi-stars me-0.5"></i> Studio Creator
+                                    </span>
+                                    <span class="text-muted" style="font-size: 0.68rem;">• Pro Sync</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Dropdown Section 1: Projects & Studio -->
+                        <div class="p-2 border-bottom">
+                            <span class="dropdown-section-title px-2 py-1 text-uppercase text-secondary fw-bold d-block" style="font-size: 0.68rem; letter-spacing: 0.05em;">Projects &amp; Studio</span>
+                            <a class="dropdown-item rounded-2 py-2 px-2.5 d-flex align-items-center gap-2.5" href="{{ url_for('views.upload_page') }}">
+                                <div class="menu-icon-box bg-burgundy-subtle text-burgundy"><i class="bi bi-plus-circle-fill" style="color: var(--brand-burgundy);"></i></div>
+                                <div>
+                                    <span class="d-block fw-semibold text-dark" style="font-size: 0.85rem;">New Lyric Project</span>
+                                    <small class="text-secondary d-block" style="font-size: 0.72rem;">Upload song &amp; auto-sync</small>
+                                </div>
+                            </a>
+                            <a class="dropdown-item rounded-2 py-2 px-2.5 d-flex align-items-center gap-2.5" href="{{ url_for('views.dashboard') }}">
+                                <div class="menu-icon-box bg-primary-subtle text-primary"><i class="bi bi-folder2-open text-primary"></i></div>
+                                <div>
+                                    <span class="d-block fw-semibold text-dark" style="font-size: 0.85rem;">My Projects</span>
+                                    <small class="text-secondary d-block" style="font-size: 0.72rem;">Browse revisions &amp; videos</small>
+                                </div>
+                            </a>
+                            <a class="dropdown-item rounded-2 py-2 px-2.5 d-flex align-items-center gap-2.5" href="{{ url_for('views.upload_page') }}?quick=1">
+                                <div class="menu-icon-box bg-success-subtle text-success"><i class="bi bi-magic text-success"></i></div>
+                                <div>
+                                    <span class="d-block fw-semibold text-dark" style="font-size: 0.85rem;">AI Quick Sync</span>
+                                    <small class="text-secondary d-block" style="font-size: 0.72rem;">One-click transcription draft</small>
+                                </div>
+                            </a>
+                        </div>
+
+                        <!-- Dropdown Section 2: Account & System -->
+                        <div class="p-2 border-bottom">
+                            <span class="dropdown-section-title px-2 py-1 text-uppercase text-secondary fw-bold d-block" style="font-size: 0.68rem; letter-spacing: 0.05em;">Account &amp; System</span>
+                            <button class="dropdown-item rounded-2 py-1.5 px-2.5 d-flex align-items-center justify-content-between text-start w-100 border-0 bg-transparent" type="button" data-bs-toggle="modal" data-bs-target="#userProfileModal">
+                                <span class="d-flex align-items-center gap-2 small text-dark">
+                                    <i class="bi bi-person-badge text-secondary"></i> Account Profile
+                                </span>
+                                <i class="bi bi-chevron-right text-muted" style="font-size: 0.7rem;"></i>
+                            </button>
+                            <a class="dropdown-item rounded-2 py-1.5 px-2.5 d-flex align-items-center justify-content-between" href="{{ url_for('views.health_check') }}" target="_blank">
+                                <span class="d-flex align-items-center gap-2 small text-dark">
+                                    <i class="bi bi-activity text-success"></i> System Health &amp; Storage
+                                </span>
+                                <span class="badge bg-success-subtle text-success small font-mono" style="font-size: 0.65rem;">Online</span>
+                            </a>
+                            <a class="dropdown-item rounded-2 py-1.5 px-2.5 d-flex align-items-center gap-2 small text-dark" href="https://tanuisila.dev/contact.php" target="_blank">
+                                <i class="bi bi-question-circle text-secondary"></i> Help &amp; Support
+                            </a>
+                        </div>
+
+                        <!-- Sign Out -->
+                        <div class="p-2 bg-light rounded-bottom">
+                            <a href="{{ url_for('auth.logout') }}" class="dropdown-item rounded-2 py-2 px-2.5 d-flex align-items-center gap-2 text-danger fw-semibold" style="font-size: 0.85rem;">
+                                <i class="bi bi-box-arrow-right fs-6"></i> Sign Out
+                            </a>
+                        </div>
+                    </div>
+                </div>
             {% else %}
                 <a href="{{ url_for('auth.login_page') }}" class="nav-link-studio text-decoration-none">
                     <i class="bi bi-box-arrow-in-right me-1"></i> Sign In
                 </a>
                 <a href="{{ url_for('auth.register_page') }}" class="btn btn-outline-secondary btn-sm text-decoration-none">Sign Up</a>
+                <a href="{{ url_for('views.upload_page') }}" class="btn btn-burgundy text-decoration-none d-flex align-items-center gap-2">
+                    <i class="bi bi-plus-lg"></i> New Lyric Project
+                </a>
             {% endif %}
-            <a href="{{ url_for('views.upload_page') }}" class="btn btn-burgundy text-decoration-none d-flex align-items-center gap-2">
-                <i class="bi bi-plus-lg"></i> New Lyric Project
-            </a>
         </div>
     </header>
 
@@ -82,6 +187,82 @@
         <a href="{{ url_for('views.terms_page') }}">Terms</a>
         <button type="button" id="cookieSettingsBtn">Cookie settings</button>
     </footer>
+
+    {% if current_user.is_authenticated %}
+    <!-- Account Profile Modal -->
+    <div class="modal fade" id="userProfileModal" tabindex="-1" aria-labelledby="userProfileModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg" style="border-top: 4px solid var(--brand-burgundy) !important; border-radius: 8px !important;">
+                <div class="modal-header border-bottom py-3">
+                    <h5 class="modal-title fw-bold text-dark d-flex align-items-center gap-2" id="userProfileModalLabel" style="font-size: 1.05rem;">
+                        <i class="bi bi-person-circle text-burgundy"></i> Creator Profile
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="d-flex align-items-center gap-3 mb-4">
+                        <div class="user-avatar-wrapper-lg flex-shrink-0">
+                            {% if current_user.avatar_url %}
+                                <img src="{{ current_user.avatar_url }}" alt="{{ current_user.initials }}" class="rounded-circle shadow-sm" width="56" height="56">
+                            {% else %}
+                                <div class="user-avatar-initials-lg rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm" style="width: 56px; height: 56px; font-size: 1.3rem;">
+                                    {{ current_user.initials }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="overflow-hidden">
+                            <h6 class="fw-bold mb-0 text-dark">{{ current_user.display_name or current_user.email.split('@')[0] }}</h6>
+                            <span class="text-secondary small font-mono">{{ current_user.email }}</span>
+                            <div class="mt-1">
+                                <span class="badge bg-success-subtle text-success border border-success-subtle fw-semibold" style="font-size: 0.7rem;">
+                                    <i class="bi bi-check-circle-fill me-1"></i> Active Member
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <div class="p-3 bg-light border text-center">
+                                <span class="text-secondary small d-block">Projects Created</span>
+                                <span class="fs-4 fw-bold text-dark">{{ current_user.projects|length }}</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-3 bg-light border text-center">
+                                <span class="text-secondary small d-block">Plan &amp; Tier</span>
+                                <span class="fs-6 fw-bold text-burgundy d-block mt-1">Studio Pro</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-3 bg-light border small text-secondary">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>Account ID:</span>
+                            <span class="font-mono text-dark">{{ current_user.id[:16] }}...</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>Authentication:</span>
+                            <span class="text-dark">{% if current_user.google_id %}Google OAuth{% else %}Email &amp; Password{% endif %}</span>
+                        </div>
+                        {% if current_user.created_at %}
+                        <div class="d-flex justify-content-between">
+                            <span>Member Since:</span>
+                            <span class="text-dark">{{ current_user.created_at.strftime('%B %d, %Y') }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="modal-footer border-top py-2 px-3 d-flex justify-content-between">
+                    <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-danger btn-sm">
+                        <i class="bi bi-box-arrow-right me-1"></i> Sign Out
+                    </a>
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Bootstrap JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

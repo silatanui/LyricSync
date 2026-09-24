@@ -25,11 +25,28 @@ class User(db.Model, UserMixin):
     def check_password(self, raw_password: str) -> bool:
         return bool(self.password_hash and check_password_hash(self.password_hash, raw_password))
 
+    @property
+    def initials(self) -> str:
+        """Derive 1 or 2 uppercase letters (e.g. 'SK') for avatar monograms."""
+        name = (self.display_name or "").strip()
+        if name:
+            parts = [p for p in name.split() if p]
+            if len(parts) >= 2:
+                return f"{parts[0][0]}{parts[1][0]}".upper()
+            elif parts:
+                return parts[0][:2].upper()
+        email_prefix = self.email.split("@")[0].strip() if self.email else "U"
+        parts = [p for p in email_prefix.replace(".", " ").replace("_", " ").replace("-", " ").split() if p]
+        if len(parts) >= 2:
+            return f"{parts[0][0]}{parts[1][0]}".upper()
+        return email_prefix[:2].upper()
+
     def to_dict(self):
         return {
             "id": self.id,
             "email": self.email,
-            "display_name": self.display_name or self.email.split("@")[0],
+            "display_name": self.display_name or (self.email.split("@")[0] if self.email else ""),
+            "initials": self.initials,
             "avatar_url": self.avatar_url,
-            "created_at": self.created_at.isoformat()
+            "created_at": self.created_at.isoformat() if self.created_at else None
         }

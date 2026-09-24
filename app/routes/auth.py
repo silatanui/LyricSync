@@ -10,7 +10,7 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def _wants_json() -> bool:
-    return request.is_json or request.accept_mimetypes.best == "application/json"
+    return request.is_json or request.path.startswith("/api/") or request.accept_mimetypes.best == "application/json"
 
 
 def _google_enabled() -> bool:
@@ -98,10 +98,11 @@ def login():
     return redirect(url_for("views.dashboard"))
 
 
+@auth_bp.route("/logout", methods=["GET", "POST"])
 @auth_bp.route("/api/auth/logout", methods=["POST"])
-@login_required
 def logout():
-    logout_user()
+    if current_user.is_authenticated:
+        logout_user()
     if _wants_json():
         return jsonify({"success": True})
     return redirect(url_for("views.home"))
