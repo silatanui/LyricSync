@@ -50,3 +50,7 @@ def test_api_switch_background(client, test_media_dir, app):
         assert data["success"] is True
         assert data["template"] == "deep_nebula"
         assert "video_url" in data
+        assert data["is_image"] is True
+
+        updated_proj = db.session.get(Project, "test_tmpl_proj")
+        assert updated_proj.is_video_background is False

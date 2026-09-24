@@ -1,4 +1,5 @@
-from flask import Blueprint, render_template, abort
+from flask import Blueprint, render_template, abort, current_app
+from pathlib import Path
 from app.extensions import db
 from app.models import Project
 from app.services.media_probe import get_ffmpeg_binary, get_ffprobe_binary
@@ -65,12 +66,39 @@ def health_check():
         db.session.rollback()
 
     ffmpeg_path = get_ffmpeg_binary()
-    ffmpeg_ok = bool(ffmpeg_path and shutil.which(ffmpeg_path))
+    ffmpeg_ok = bool(ffmpeg_path and (shutil.which(ffmpeg_path) or Path(ffmpeg_path).is_file()))
+
+    # Check storage directory writability
+    storage_ok = True
+    storage_error = None
+    try:
+        media_root = Path(current_app.config.get("MEDIA_ROOT", "data/media"))
+        media_root.mkdir(parents=True, exist_ok=True)
+        test_file = media_root / ".health_check"
+        test_file.write_text("ok", encoding="utf-8")
+        test_file.unlink(missing_ok=True)
+    except Exception as se:
+        storage_ok = False
+        storage_error = str(se)
+
+    # Check database tables
+    tables = []
+    try:
+        inspector = db.inspect(db.engine)
+        tables = inspector.get_table_names()
+    except Exception:
+        pass
+
+    all_ok = db_ok and storage_ok
 
     return {
-        "status": "healthy" if db_ok else "unhealthy",
+        "status": "healthy" if all_ok else "unhealthy",
         "database": "connected" if db_ok else "disconnected",
         "database_error": db_error,
+        "database_tables": tables,
+        "storage": "writable" if storage_ok else "error",
+        "storage_error": storage_error,
+        "storage_path": str(current_app.config.get("MEDIA_ROOT")),
         "ffmpeg": "available" if ffmpeg_ok else "not_found",
         "ffmpeg_binary": ffmpeg_path
     }

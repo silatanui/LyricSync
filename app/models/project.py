@@ -114,3 +114,10 @@ class Project(db.Model):
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
+
+    @property
+    def is_video_background(self) -> bool:
+        if not self.video_path:
+            return False
+        ext = self.video_path.lower().rsplit(".", 1)[-1] if "." in self.video_path else ""
+        return ext in ["mp4", "webm", "mov", "mkv", "avi"]

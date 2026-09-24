@@ -156,6 +156,34 @@ class BackgroundGenerator:
         gen_func = generators.get(pattern_type, cls._render_burgundy_studio)
         return gen_func(width, height)
 
+    @classmethod
+    def generate_template_asset(
+        cls,
+        pattern_type: str = "burgundy_studio",
+        output_path: Optional[Path] = None,
+        width: int = 1920,
+        height: int = 1080,
+        fmt: str = "WEBP"
+    ) -> Path:
+        """
+        Generates and saves a lightweight template image (WebP or PNG).
+        WebP is 70-85% smaller than PNG/video, ideal for instant loading on low-bandwidth connections.
+        """
+        img = cls.generate_pattern_image(pattern_type, width=width, height=height)
+        if output_path is None:
+            output_path = Path(f"template_{pattern_type}.webp" if fmt.upper() == "WEBP" else f"template_{pattern_type}.png")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            if fmt.upper() == "WEBP":
+                img.save(output_path, "WEBP", quality=82, method=6)
+            else:
+                img.save(output_path, "PNG", optimize=True)
+        except Exception:
+            # Fallback to standard PNG if WEBP encoder is not built into PIL
+            img.save(output_path, "PNG")
+        return output_path
+
     @staticmethod
     def _render_burgundy_studio(width: int, height: int) -> Image.Image:
         img = Image.new("RGB", (width, height), color=(24, 6, 14))

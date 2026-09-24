@@ -69,11 +69,20 @@ def create_app(config_class=Config):
 
     @flask_app.errorhandler(500)
     def internal_server_error(e):
+        import traceback
+        import logging
+        logger = logging.getLogger("lyric_sync")
+        tb = traceback.format_exc()
+        logger.error(f"Internal server error: {e}\n{tb}")
+
+        orig_err = getattr(e, "original_exception", e)
+        # In debug mode or if message is available, provide more specific error detail
+        message = str(orig_err) if (flask_app.debug or getattr(flask_app.config, "ENV", "") == "development") else "An unexpected server error occurred."
         return jsonify({
             "success": False,
             "error": {
                 "code": "INTERNAL_SERVER_ERROR",
-                "message": "An unexpected server error occurred.",
+                "message": message,
                 "retryable": True
             }
         }), 500

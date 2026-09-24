@@ -10,11 +10,18 @@ class Config:
     ENV = os.getenv("FLASK_ENV", "development")
     DEBUG = os.getenv("FLASK_DEBUG", "True").lower() in ("true", "1", "yes")
 
-    # Data and media storage roots
-    DATA_ROOT = Path(os.getenv("DATA_ROOT", str(BASE_DIR / "data")))
-    MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", str(BASE_DIR / "data" / "media")))
-    OUTPUT_ROOT = Path(os.getenv("OUTPUT_ROOT", str(BASE_DIR / "data" / "outputs")))
-    TEMP_ROOT = Path(os.getenv("TEMP_ROOT", str(BASE_DIR / "data" / "temp")))
+    # Data and media storage roots (always absolute to prevent cwd issues on shared hosting)
+    _data_root = os.getenv("DATA_ROOT", "data")
+    DATA_ROOT = Path(_data_root) if Path(_data_root).is_absolute() else (BASE_DIR / _data_root).resolve()
+
+    _media_root = os.getenv("MEDIA_ROOT", "data/media")
+    MEDIA_ROOT = Path(_media_root) if Path(_media_root).is_absolute() else (BASE_DIR / _media_root).resolve()
+
+    _output_root = os.getenv("OUTPUT_ROOT", "data/outputs")
+    OUTPUT_ROOT = Path(_output_root) if Path(_output_root).is_absolute() else (BASE_DIR / _output_root).resolve()
+
+    _temp_root = os.getenv("TEMP_ROOT", "data/temp")
+    TEMP_ROOT = Path(_temp_root) if Path(_temp_root).is_absolute() else (BASE_DIR / _temp_root).resolve()
 
     # Database
     MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")

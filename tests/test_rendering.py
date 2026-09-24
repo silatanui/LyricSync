@@ -72,3 +72,56 @@ def test_ffmpeg_render_end_to_end(test_media_dir, tmp_path):
     assert probe["has_video"] is True
     assert probe["has_audio"] is True
     assert probe["duration"] >= 2.5
+
+def test_ffmpeg_render_image_background_720p(test_media_dir, tmp_path):
+    from PIL import Image
+    audio_path = test_media_dir["audio"]
+    img_path = tmp_path / "bg_test.png"
+    img = Image.new("RGB", (1280, 720), color=(100, 20, 40))
+    img.save(img_path)
+
+    canonical = {
+        "media": {"width": 1280, "height": 720},
+        "style": {
+            "mode": "karaoke",
+            "font": "Arial",
+            "font_size": 24,
+            "primary_color": "#FFFFFF",
+            "highlight_color": "#FFE66D",
+            "position": "bottom"
+        },
+        "lyrics": [
+            {
+                "id": 1,
+                "text": "Image loop test",
+                "start": 0.5,
+                "end": 2.0,
+                "words": [{"text": "Image", "start": 0.5, "end": 1.0}, {"text": "test", "start": 1.1, "end": 2.0}]
+            }
+        ]
+    }
+    ass_path = tmp_path / "test_img.ass"
+    SubtitleGenerator.generate_ass(canonical, ass_path)
+
+    output_path = tmp_path / "rendered_from_image_720p.mp4"
+    renderer = FFmpegRenderer()
+
+    final_mp4 = renderer.render(
+        video_path=img_path,
+        audio_path=audio_path,
+        ass_path=ass_path,
+        output_path=output_path,
+        aspect_ratio="16:9",
+        resolution="720",
+        video_policy="loop",
+        audio_policy="replace"
+    )
+
+    assert final_mp4.exists()
+    assert final_mp4.stat().st_size > 0
+    probe = MediaProbe.probe(final_mp4)
+    assert probe["has_video"] is True
+    assert probe["has_audio"] is True
+    assert probe["width"] == 1280
+    assert probe["height"] == 720
+

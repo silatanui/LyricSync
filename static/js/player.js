@@ -1,20 +1,30 @@
 /**
- * LyricSync Synchronized Video Player Engine
- * Canva-like clean rendering, font family selector, audio sync, and zero illuminations.
+ * LyricSync Synchronized Video & Audio Player Engine
+ * Canva-like clean rendering, font family selector, audio sync, draft/master quality scaling, and zero illuminations.
  */
 class SynchronizedPlayer {
-    constructor(videoEl, audioEl, overlayEl) {
+    constructor(videoEl, audioEl, overlayEl, options = {}) {
         this.video = videoEl;
         this.audio = audioEl;
         this.overlay = overlayEl;
+        this.bgImage = options.bgImageEl || document.getElementById('mainBgImage');
         this.activeLineContainer = document.getElementById('activeLineContainer');
         this.displayActiveText = document.getElementById('displayActiveText');
+
+        // Check data-has-video attribute on videoContainer
+        const container = document.getElementById('videoContainer');
+        if (container && container.getAttribute('data-has-video') !== null) {
+            this.hasVideo = container.getAttribute('data-has-video') === 'true';
+        } else {
+            this.hasVideo = !!(this.video && !this.video.classList.contains('d-none') && (this.video.currentSrc || this.video.querySelector('source')));
+        }
 
         this.lines = [];
         this.allWords = [];
         this.currentWordIndex = 0;
         this.activeLineIndex = -1;
         this.animationFrameId = null;
+        this.quality = '720';
 
         // Visual styling configuration kept compact for dense lyric layouts.
         this.style = {
@@ -34,6 +44,79 @@ class SynchronizedPlayer {
         this._setupListeners();
     }
 
+    get clockElement() {
+        if (this.hasVideo && this.video) {
+            return this.video;
+        }
+        return this.audio || this.video;
+    }
+
+    get currentTime() {
+        const clock = this.clockElement;
+        return clock ? (clock.currentTime || 0) : 0;
+    }
+
+    get duration() {
+        const audioDur = this.audio ? (this.audio.duration || 0) : 0;
+        const videoDur = (this.hasVideo && this.video) ? (this.video.duration || 0) : 0;
+        return Math.max(audioDur, videoDur);
+    }
+
+    get isPaused() {
+        const clock = this.clockElement;
+        return clock ? clock.paused : true;
+    }
+
+    get isPlaying() {
+        const clock = this.clockElement;
+        return clock ? (!clock.paused && !clock.ended) : false;
+    }
+
+    setQuality(quality) {
+        this.quality = quality; // '720' | '1080'
+        const container = document.getElementById('videoContainer');
+        if (container) {
+            if (quality === '720') {
+                container.classList.remove('quality-master');
+                container.classList.add('quality-draft');
+            } else {
+                container.classList.remove('quality-draft');
+                container.classList.add('quality-master');
+            }
+        }
+        this.renderActiveFrame(this.currentTime);
+    }
+
+    setMediaMode({ hasVideo, videoSrc, imageSrc }) {
+        this.hasVideo = !!hasVideo;
+        const container = document.getElementById('videoContainer');
+        if (container) {
+            container.setAttribute('data-has-video', this.hasVideo ? 'true' : 'false');
+        }
+
+        if (this.hasVideo) {
+            if (this.bgImage) this.bgImage.classList.add('d-none');
+            if (this.video) {
+                this.video.classList.remove('d-none');
+                if (videoSrc) {
+                    this.video.src = videoSrc;
+                    this.video.load();
+                }
+            }
+        } else {
+            if (this.video) {
+                this.video.pause();
+                this.video.classList.add('d-none');
+            }
+            if (this.bgImage) {
+                this.bgImage.classList.remove('d-none');
+                if (imageSrc) {
+                    this.bgImage.src = imageSrc;
+                }
+            }
+        }
+    }
+
     setLyrics(lines) {
         this.lines = lines || [];
         this.allWords = [];
@@ -50,14 +133,14 @@ class SynchronizedPlayer {
         });
 
         this.allWords.sort((a, b) => a.start - b.start);
-        this.seekToWordIndex(this.video.currentTime);
-        this.renderActiveFrame(this.video.currentTime);
+        this.seekToWordIndex(this.currentTime);
+        this.renderActiveFrame(this.currentTime);
     }
 
     setStyle(styleConfig) {
         this.style = { ...this.style, ...styleConfig };
         this.applyStyleToDOM();
-        this.renderActiveFrame(this.video.currentTime);
+        this.renderActiveFrame(this.currentTime);
     }
 
     applyStyleToDOM() {
@@ -113,46 +196,78 @@ class SynchronizedPlayer {
     }
 
     _setupListeners() {
-        // Video click to toggle play
-        this.video.addEventListener('click', () => this.togglePlay());
+        // Click stage to toggle play
+        if (this.video) this.video.addEventListener('click', () => this.togglePlay());
+        if (this.bgImage) this.bgImage.addEventListener('click', () => this.togglePlay());
 
-        this.video.addEventListener('play', () => {
+        const notifyPlay = () => {
             this._startRenderLoop();
-        });
+            window.dispatchEvent(new CustomEvent('player-play'));
+        };
 
-        this.video.addEventListener('pause', () => {
-            if (this.audio) this.audio.pause();
+        const notifyPause = () => {
+            if (this.hasVideo && this.video && this.audio && !this.video.paused) return;
             this._stopRenderLoop();
-            this.renderActiveFrame(this.video.currentTime);
-        });
+            this.renderActiveFrame(this.currentTime);
+            window.dispatchEvent(new CustomEvent('player-pause'));
+        };
 
-        this.video.addEventListener('seeking', () => {
-            const t = this.video.currentTime;
-            if (this.audio) this.audio.currentTime = t;
-            this.seekToWordIndex(t);
-            this.renderActiveFrame(t);
-        });
-
-        this.video.addEventListener('timeupdate', () => {
-            // Keep audio strictly in lockstep with video
-            if (this.audio && !this.video.paused) {
+        const notifyTimeUpdate = () => {
+            const t = this.currentTime;
+            // When playing video with separate master audio, keep them in sync
+            if (this.hasVideo && this.video && this.audio && !this.video.paused) {
                 if (Math.abs(this.audio.currentTime - this.video.currentTime) > 0.25) {
                     this.audio.currentTime = this.video.currentTime;
                 }
             }
-            if (this.video.paused) {
-                this.seekToWordIndex(this.video.currentTime);
-                this.renderActiveFrame(this.video.currentTime);
+            if (this.isPaused) {
+                this.seekToWordIndex(t);
+                this.renderActiveFrame(t);
             }
-        });
+            window.dispatchEvent(new CustomEvent('player-timeupdate', {
+                detail: { currentTime: t, duration: this.duration }
+            }));
+        };
+
+        if (this.video) {
+            this.video.addEventListener('play', notifyPlay);
+            this.video.addEventListener('pause', notifyPause);
+            this.video.addEventListener('timeupdate', notifyTimeUpdate);
+            this.video.addEventListener('seeking', () => {
+                const t = this.currentTime;
+                if (this.audio) this.audio.currentTime = t;
+                this.seekToWordIndex(t);
+                this.renderActiveFrame(t);
+            });
+        }
+
+        if (this.audio) {
+            this.audio.addEventListener('play', () => {
+                if (!this.hasVideo) notifyPlay();
+            });
+            this.audio.addEventListener('pause', () => {
+                if (!this.hasVideo) notifyPause();
+            });
+            this.audio.addEventListener('timeupdate', () => {
+                if (!this.hasVideo) notifyTimeUpdate();
+            });
+            this.audio.addEventListener('seeking', () => {
+                if (!this.hasVideo) {
+                    const t = this.audio.currentTime;
+                    this.seekToWordIndex(t);
+                    this.renderActiveFrame(t);
+                }
+            });
+        }
     }
 
     _startRenderLoop() {
         if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
 
         const loop = () => {
-            if (!this.video.paused && !this.video.ended) {
-                const t = this.video.currentTime;
+            const clock = this.clockElement;
+            if (clock && !clock.paused && !clock.ended) {
+                const t = clock.currentTime;
                 this.update(t);
                 this.animationFrameId = requestAnimationFrame(loop);
             }
@@ -318,42 +433,43 @@ class SynchronizedPlayer {
     }
 
     seekTo(seconds) {
-        this.video.currentTime = seconds;
         if (this.audio) this.audio.currentTime = seconds;
+        if (this.hasVideo && this.video) this.video.currentTime = seconds;
         this.seekToWordIndex(seconds);
         this.renderActiveFrame(seconds);
     }
 
     play() {
-        // Visual canvas plays muted to prevent browser autoplay blocking and eliminate double-audio echo
-        this.video.muted = true;
-        const vPromise = this.video.play();
-        if (vPromise) vPromise.catch(e => console.warn("Video play note:", e));
+        if (this.hasVideo && this.video) {
+            this.video.muted = true;
+            this.video.play().catch(e => console.warn("Video play note:", e));
+        }
 
-        // Master vocal audio track plays unmuted at full volume
         if (this.audio) {
             this.audio.muted = false;
             this.audio.volume = 1.0;
-            this.audio.currentTime = this.video.currentTime;
-            const aPromise = this.audio.play();
-            if (aPromise) {
-                aPromise.catch(err => {
-                    console.warn("Audio element could not start; keeping the preview video muted:", err);
-                });
+            if (this.hasVideo && this.video) {
+                this.audio.currentTime = this.video.currentTime;
             }
-        } else {
+            this.audio.play().catch(err => {
+                console.warn("Audio play note:", err);
+            });
+        } else if (this.video) {
             this.video.muted = false;
             this.video.volume = 1.0;
         }
+        this._startRenderLoop();
     }
 
     pause() {
-        this.video.pause();
+        if (this.hasVideo && this.video) this.video.pause();
         if (this.audio) this.audio.pause();
+        this._stopRenderLoop();
+        this.renderActiveFrame(this.currentTime);
     }
 
     togglePlay() {
-        if (this.video.paused) {
+        if (this.isPaused) {
             this.play();
         } else {
             this.pause();

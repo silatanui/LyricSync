@@ -36,4 +36,10 @@ def detect_mime_type(file_path: Path) -> str:
         return "video/mp4"
     elif suffix in (".webm",):
         return "video/webm"
+    elif suffix in (".webp",):
+        return "image/webp"
+    elif suffix in (".png",):
+        return "image/png"
+    elif suffix in (".jpg", ".jpeg"):
+        return "image/jpeg"
     return "application/octet-stream"

@@ -108,6 +108,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Export Modal Elements
     const exportModalEl = document.getElementById('exportModal');
     const exportModal = new bootstrap.Modal(exportModalEl);
+    const exportSelectView = document.getElementById('exportSelectView');
+    const exportProgressView = document.getElementById('exportProgressView');
+    const startExportActionBtn = document.getElementById('startExportActionBtn');
+    const exportQualityBadgeText = document.getElementById('exportQualityBadgeText');
+    const exportTierLabel720 = document.getElementById('exportTierLabel720');
+    const exportTierLabel1080 = document.getElementById('exportTierLabel1080');
     const exportStageText = document.getElementById('exportStageText');
     const exportProgressBar = document.getElementById('exportProgressBar');
     const exportProgressPct = document.getElementById('exportProgressPct');
@@ -115,9 +121,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     const exportErrorBox = document.getElementById('exportErrorBox');
     const downloadFinalVideoBtn = document.getElementById('downloadFinalVideoBtn');
 
+    // Preview Quality Switcher Elements
+    const previewQualityDropdown = document.getElementById('previewQualityDropdown');
+    const previewQualityLabel = document.getElementById('previewQualityLabel');
+    const previewQualityIcon = document.getElementById('previewQualityIcon');
+    const qualityOpt720 = document.getElementById('qualityOpt720');
+    const qualityOpt1080 = document.getElementById('qualityOpt1080');
+
     // Initialize Player & Timeline
     const player = new SynchronizedPlayer(videoEl, audioEl, overlayEl);
     const timeline = new LyricTimeline(document.getElementById('lyricLinesList'), player);
+
+    // Wire Preview Quality Switcher
+    function setPreviewQuality(quality) {
+        player.setQuality(quality);
+        if (quality === '720') {
+            if (previewQualityLabel) previewQualityLabel.textContent = '720p Draft';
+            if (previewQualityIcon) previewQualityIcon.className = 'bi bi-lightning-charge-fill text-warning';
+            if (qualityOpt720) {
+                qualityOpt720.classList.add('active');
+                qualityOpt720.querySelector('.check-icon')?.classList.remove('d-none');
+            }
+            if (qualityOpt1080) {
+                qualityOpt1080.classList.remove('active');
+                qualityOpt1080.querySelector('.check-icon')?.classList.add('d-none');
+            }
+        } else {
+            if (previewQualityLabel) previewQualityLabel.textContent = '1080p Studio';
+            if (previewQualityIcon) previewQualityIcon.className = 'bi bi-stars text-primary';
+            if (qualityOpt1080) {
+                qualityOpt1080.classList.add('active');
+                qualityOpt1080.querySelector('.check-icon')?.classList.remove('d-none');
+            }
+            if (qualityOpt720) {
+                qualityOpt720.classList.remove('active');
+                qualityOpt720.querySelector('.check-icon')?.classList.add('d-none');
+            }
+        }
+    }
+    if (qualityOpt720) qualityOpt720.addEventListener('click', () => setPreviewQuality('720'));
+    if (qualityOpt1080) qualityOpt1080.addEventListener('click', () => setPreviewQuality('1080'));
 
     function renderConfidenceHeatmap(lines = timeline.getLines()) {
         if (!confidenceHeatmap) return;
@@ -304,20 +347,57 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Video & Audio metadata loaded
     const updateDuration = () => {
-        const dur = videoEl.duration || audioEl.duration || 0;
-        scrubber.max = dur;
-        totalDurationDisplay.textContent = formatTime(dur);
+        const dur = player.duration || videoEl.duration || audioEl.duration || 0;
+        if (dur > 0) {
+            scrubber.max = dur;
+            totalDurationDisplay.textContent = formatTime(dur);
+        }
     };
     videoEl.addEventListener('loadedmetadata', updateDuration);
     audioEl.addEventListener('loadedmetadata', updateDuration);
 
-    // Playback time tracking
-    videoEl.addEventListener('timeupdate', () => {
-        const cur = videoEl.currentTime;
+    // Playback time tracking via player unified events
+    const onTimeTick = (cur, dur) => {
         if (!scrubber.matches(':active')) {
             scrubber.value = cur;
         }
         currentTimeDisplay.textContent = formatTime(cur);
+        if (dur && scrubber.max != dur) {
+            scrubber.max = dur;
+            totalDurationDisplay.textContent = formatTime(dur);
+        }
+    };
+
+    window.addEventListener('player-timeupdate', (e) => {
+        onTimeTick(e.detail?.currentTime ?? player.currentTime, e.detail?.duration ?? player.duration);
+    });
+    videoEl.addEventListener('timeupdate', () => {
+        onTimeTick(videoEl.currentTime, videoEl.duration);
+    });
+    audioEl.addEventListener('timeupdate', () => {
+        if (!player.hasVideo) {
+            onTimeTick(audioEl.currentTime, audioEl.duration);
+        }
+    });
+
+    // Play/Pause icon sync
+    window.addEventListener('player-play', () => {
+        playIcon.className = 'bi bi-pause-fill fs-4';
+    });
+    window.addEventListener('player-pause', () => {
+        playIcon.className = 'bi bi-play-fill fs-4';
+    });
+    videoEl.addEventListener('play', () => {
+        playIcon.className = 'bi bi-pause-fill fs-4';
+    });
+    videoEl.addEventListener('pause', () => {
+        playIcon.className = 'bi bi-play-fill fs-4';
+    });
+    audioEl.addEventListener('play', () => {
+        if (!player.hasVideo) playIcon.className = 'bi bi-pause-fill fs-4';
+    });
+    audioEl.addEventListener('pause', () => {
+        if (!player.hasVideo) playIcon.className = 'bi bi-play-fill fs-4';
     });
 
     // Play/Pause toggle
@@ -325,13 +405,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         player.togglePlay();
     };
     playPauseBtn.addEventListener('click', togglePlayback);
-
-    videoEl.addEventListener('play', () => {
-        playIcon.className = 'bi bi-pause-fill fs-4';
-    });
-    videoEl.addEventListener('pause', () => {
-        playIcon.className = 'bi bi-play-fill fs-4';
-    });
 
     // Keyboard Space shortcut
     window.addEventListener('keydown', (e) => {
@@ -352,16 +425,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Replay / Forward 5s
     replay5Btn.addEventListener('click', () => {
-        player.seekTo(Math.max(0, videoEl.currentTime - 5));
+        player.seekTo(Math.max(0, player.currentTime - 5));
     });
     forward5Btn.addEventListener('click', () => {
-        player.seekTo(videoEl.currentTime + 5);
+        player.seekTo(player.currentTime + 5);
     });
 
     // Playback Speed
     speedSelect.addEventListener('change', (e) => {
         const rate = parseFloat(e.target.value);
-        videoEl.playbackRate = rate;
+        if (videoEl) videoEl.playbackRate = rate;
         if (audioEl) audioEl.playbackRate = rate;
     });
 
@@ -686,12 +759,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await LyricSyncAPI.updateStyle(projectId, styleConfig, { aspect_ratio: aspect });
                 const res = await LyricSyncAPI.updateBackgroundTemplate(projectId, selectedBackgroundTemplate, aspect);
                 if (res.success && res.video_url) {
-                    const curTime = videoEl.currentTime;
-                    const wasPlaying = !videoEl.paused;
-                    videoEl.src = res.video_url;
-                    videoEl.load();
-                    videoEl.currentTime = curTime;
-                    if (wasPlaying) videoEl.play().catch(() => {});
+                    const curTime = player.currentTime;
+                    const wasPlaying = player.isPlaying;
+                    if (res.is_image !== false) {
+                        player.setMediaMode({ hasVideo: false, imageSrc: res.video_url });
+                    } else {
+                        player.setMediaMode({ hasVideo: true, videoSrc: res.video_url });
+                    }
+                    player.seekTo(curTime);
+                    if (wasPlaying) player.play();
                 }
             } catch (e) {
                 console.warn("Could not update aspect background video:", e);
@@ -733,13 +809,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const res = await LyricSyncAPI.updateBackgroundTemplate(projectId, tid, currentAspectRatio);
                 if (res.success && res.video_url) {
-                    const curTime = videoEl.currentTime;
-                    const wasPlaying = !videoEl.paused;
-                    videoEl.src = res.video_url;
-                    videoEl.load();
-                    videoEl.currentTime = curTime;
+                    const curTime = player.currentTime;
+                    const wasPlaying = player.isPlaying;
+                    if (res.is_image !== false) {
+                        player.setMediaMode({ hasVideo: false, imageSrc: res.video_url });
+                    } else {
+                        player.setMediaMode({ hasVideo: true, videoSrc: res.video_url });
+                    }
+                    player.seekTo(curTime);
                     if (wasPlaying) {
-                        videoEl.play().catch(() => {});
+                        player.play();
                     }
                 }
             } catch (err) {
@@ -1001,7 +1080,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         displayActiveText.classList.remove('canvas-direct-editing');
         editingLineIndex = -1;
         editingLineIndices = [];
-        player.renderActiveFrame(videoEl.currentTime);
+        player.renderActiveFrame(player.currentTime);
     }
 
     async function saveCanvasEditorText() {
@@ -1244,66 +1323,113 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // Export Video Button & Modal Handling
-    exportVideoBtn.addEventListener('click', async () => {
-        // Apply latest style first
-        const styleConfig = applyCurrentStyle();
-        const renderConfig = { aspect_ratio: renderAspectRatio.value, resolution: renderResolution ? renderResolution.value : '1080', lyrics_format: currentLyricsFormat };
-        await LyricSyncAPI.updateStyle(projectId, styleConfig, renderConfig);
+    // Export Quality Tier Card Selection
+    let selectedExportResolution = '720';
 
-        // Reset modal state
-        exportSpinner.classList.remove('d-none');
-        exportErrorBox.classList.add('d-none');
-        downloadFinalVideoBtn.classList.add('d-none');
-        exportProgressBar.style.width = '20%';
-        exportProgressPct.textContent = '20%';
-        exportStageText.textContent = 'Queueing FFmpeg render job...';
+    if (exportTierLabel720) {
+        exportTierLabel720.addEventListener('click', () => {
+            selectedExportResolution = '720';
+            exportTierLabel720.classList.add('bg-light');
+            exportTierLabel1080.classList.remove('bg-light');
+            const radio = exportTierLabel720.querySelector('input[type="radio"]');
+            if (radio) radio.checked = true;
+        });
+    }
+
+    if (exportTierLabel1080) {
+        exportTierLabel1080.addEventListener('click', () => {
+            selectedExportResolution = '1080';
+            exportTierLabel1080.classList.add('bg-light');
+            exportTierLabel720.classList.remove('bg-light');
+            const radio = exportTierLabel1080.querySelector('input[type="radio"]');
+            if (radio) radio.checked = true;
+        });
+    }
+
+    // Open Export Modal in Quality Selection View
+    exportVideoBtn.addEventListener('click', () => {
+        if (exportSelectView) exportSelectView.classList.remove('d-none');
+        if (exportProgressView) exportProgressView.classList.add('d-none');
+        if (startExportActionBtn) startExportActionBtn.classList.remove('d-none');
+        if (downloadFinalVideoBtn) downloadFinalVideoBtn.classList.add('d-none');
+        if (exportErrorBox) exportErrorBox.classList.add('d-none');
         exportModal.show();
-
-        try {
-            const queueRes = await LyricSyncAPI.queueRender(projectId, {
-                aspect_ratio: renderAspectRatio.value,
-                resolution: renderResolution ? renderResolution.value : '1080',
-                mode: styleMode.value,
-                format: currentLyricsFormat,
-            });
-
-            if (!queueRes.success) throw new Error(queueRes.error?.message || "Failed to start render");
-
-            const jobId = queueRes.job_id;
-
-            // Listen to progress events
-            const progressHandler = (e) => {
-                const job = e.detail;
-                exportProgressBar.style.width = `${job.progress}%`;
-                exportProgressPct.textContent = `${job.progress}%`;
-                if (job.stage) exportStageText.textContent = job.stage;
-            };
-            window.addEventListener('job-progress', progressHandler);
-
-            const completedJob = await LyricSyncAPI.pollJob(jobId);
-            window.removeEventListener('job-progress', progressHandler);
-
-            // Completed!
-            exportSpinner.classList.add('d-none');
-            exportProgressBar.style.width = '100%';
-            exportProgressPct.textContent = '100%';
-            exportStageText.textContent = 'Video Render Complete!';
-
-            const downloadUrl = `/api/projects/${projectId}/download`;
-            downloadFinalVideoBtn.href = downloadUrl;
-            downloadFinalVideoBtn.classList.remove('d-none');
-
-            // Also show header download button
-            downloadHeaderBtn.href = downloadUrl;
-            downloadHeaderBtn.classList.remove('d-none');
-            downloadHeaderBtn.classList.add('d-flex');
-
-        } catch (err) {
-            exportSpinner.classList.add('d-none');
-            exportStageText.textContent = 'Rendering Failed';
-            exportErrorBox.textContent = err.message;
-            exportErrorBox.classList.remove('d-none');
-        }
     });
+
+    // Execute Export Render upon clicking Start Render button
+    if (startExportActionBtn) {
+        startExportActionBtn.addEventListener('click', async () => {
+            const chosenRes = document.querySelector('input[name="exportResolutionTier"]:checked')?.value || selectedExportResolution || '720';
+
+            // Transition to progress view
+            if (exportSelectView) exportSelectView.classList.add('d-none');
+            if (exportProgressView) exportProgressView.classList.remove('d-none');
+            if (startExportActionBtn) startExportActionBtn.classList.add('d-none');
+            if (exportSpinner) exportSpinner.classList.remove('d-none');
+            if (exportErrorBox) exportErrorBox.classList.add('d-none');
+            if (exportQualityBadgeText) {
+                exportQualityBadgeText.textContent = chosenRes === '720' ? '720p Fast Draft MP4' : '1080p Studio Master MP4';
+            }
+
+            exportProgressBar.style.width = '15%';
+            exportProgressPct.textContent = '15%';
+            exportStageText.textContent = 'Queueing FFmpeg render job...';
+
+            try {
+                // Apply latest style first
+                const styleConfig = applyCurrentStyle();
+                const renderConfig = {
+                    aspect_ratio: renderAspectRatio.value,
+                    resolution: chosenRes,
+                    lyrics_format: currentLyricsFormat
+                };
+                await LyricSyncAPI.updateStyle(projectId, styleConfig, renderConfig);
+
+                const queueRes = await LyricSyncAPI.queueRender(projectId, {
+                    aspect_ratio: renderAspectRatio.value,
+                    resolution: chosenRes,
+                    mode: styleMode.value,
+                    format: currentLyricsFormat,
+                });
+
+                if (!queueRes.success) throw new Error(queueRes.error?.message || "Failed to start render");
+
+                const jobId = queueRes.job_id;
+
+                // Listen to progress events
+                const progressHandler = (e) => {
+                    const job = e.detail;
+                    exportProgressBar.style.width = `${job.progress}%`;
+                    exportProgressPct.textContent = `${job.progress}%`;
+                    if (job.stage) exportStageText.textContent = job.stage;
+                };
+                window.addEventListener('job-progress', progressHandler);
+
+                const completedJob = await LyricSyncAPI.pollJob(jobId);
+                window.removeEventListener('job-progress', progressHandler);
+
+                // Completed!
+                exportSpinner.classList.add('d-none');
+                exportProgressBar.style.width = '100%';
+                exportProgressPct.textContent = '100%';
+                exportStageText.textContent = 'Video Render Complete!';
+
+                const downloadUrl = `/api/projects/${projectId}/download`;
+                downloadFinalVideoBtn.href = downloadUrl;
+                downloadFinalVideoBtn.classList.remove('d-none');
+
+                // Also show header download button
+                downloadHeaderBtn.href = downloadUrl;
+                downloadHeaderBtn.classList.remove('d-none');
+                downloadHeaderBtn.classList.add('d-flex');
+
+            } catch (err) {
+                if (exportSpinner) exportSpinner.classList.add('d-none');
+                exportStageText.textContent = 'Rendering Failed';
+                exportErrorBox.textContent = err.message;
+                exportErrorBox.classList.remove('d-none');
+                if (startExportActionBtn) startExportActionBtn.classList.remove('d-none');
+            }
+        });
+    }
 });

@@ -77,32 +77,46 @@ class FFmpegRenderer:
         cmd = [self.ffmpeg_bin, "-y"]
 
         # Duration policy & Looping
-        # If video is shorter than audio and video_policy is 'loop', loop the video
-        is_looping = video_policy == "loop" and video_dur > 0 and audio_dur > video_dur
-        if is_looping:
-            cmd.extend(["-stream_loop", "-1"])
+        # If input is a static image or template, loop it seamlessly across the audio duration
+        is_image_bg = video_path.suffix.lower() in (".png", ".webp", ".jpg", ".jpeg")
+        is_looping = (video_policy == "loop" and video_dur > 0 and audio_dur > video_dur)
 
-        cmd.extend(["-i", str(video_path)])
+        if is_image_bg:
+            cmd.extend(["-loop", "1", "-framerate", "30", "-i", str(video_path)])
+        else:
+            if is_looping:
+                cmd.extend(["-stream_loop", "-1"])
+            cmd.extend(["-i", str(video_path)])
+
         cmd.extend(["-i", str(audio_path)])
 
         # Video filter
         cmd.extend(["-vf", vf_filter])
 
         # Audio stream mapping: map audio track 1 (uploaded audio)
-        if audio_policy == "replace" or not v_probe.get("has_audio"):
-            cmd.extend(["-map", "0:v:0", "-map", "1:a:0"])
-        else:
-            # default to audio track 1
-            cmd.extend(["-map", "0:v:0", "-map", "1:a:0"])
+        cmd.extend(["-map", "0:v:0", "-map", "1:a:0"])
 
-        # Codecs & Encoding settings with lockstep sync
+        # Quality profiles: 720p Draft (faster, smaller download for low bandwidth) vs 1080p Studio
+        if str(resolution) == "720":
+            cmd.extend([
+                "-c:v", "mpeg4",
+                "-r", "30",
+                "-q:v", "6",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac",
+                "-b:a", "128k",
+            ])
+        else:
+            cmd.extend([
+                "-c:v", "mpeg4",
+                "-r", "30",
+                "-q:v", "3",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac",
+                "-b:a", "192k",
+            ])
+
         cmd.extend([
-            "-c:v", "mpeg4",
-            "-r", "30",
-            "-q:v", "4",
-            "-pix_fmt", "yuv420p",
-            "-c:a", "aac",
-            "-b:a", "192k",
             "-af", "aresample=async=1000:min_hard_comp=0.100000:first_pts=0",
             "-avoid_negative_ts", "make_zero",
             "-shortest",

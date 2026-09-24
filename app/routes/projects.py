@@ -105,7 +105,10 @@ def stream_project_media(project_id: str, kind: str):
         return f"Media file not found at {path}", 404
 
     from app.utils.files import detect_mime_type
-    return send_file(str(path), mimetype=detect_mime_type(path), conditional=True)
+    response = send_file(str(path), mimetype=detect_mime_type(path), conditional=True)
+    response.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=3600"
+    response.headers["Accept-Ranges"] = "bytes"
+    return response
 
 @projects_bp.route("/<project_id>/download", methods=["GET"])
 def download_project_render(project_id: str):
@@ -185,30 +188,40 @@ def update_project_background(project_id: str):
         }), 400
 
     proj_dir = get_project_dir(project_id)
-    video_saved_path = proj_dir / "background_video.mp4"
+    bg_file = proj_dir / f"background_{template_id}.webp"
 
     try:
-        BackgroundGenerator.generate_background_video(
-            audio_path=audio_path,
-            output_video_path=video_saved_path,
-            duration=project.audio_duration,
+        BackgroundGenerator.generate_template_asset(
             pattern_type=template_id,
-            aspect_ratio=aspect_ratio
+            output_path=bg_file,
+            width=w,
+            height=h,
+            fmt="WEBP"
         )
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": {"code": "BACKGROUND_GENERATION_FAILED", "message": f"Failed to generate background: {e}", "retryable": True}
-        }), 500
+        bg_file = proj_dir / f"background_{template_id}.png"
+        try:
+            BackgroundGenerator.generate_template_asset(
+                pattern_type=template_id,
+                output_path=bg_file,
+                width=w,
+                height=h,
+                fmt="PNG"
+            )
+        except Exception as e2:
+            return jsonify({
+                "success": False,
+                "error": {"code": "BACKGROUND_GENERATION_FAILED", "message": f"Failed to generate background: {e2}", "retryable": True}
+            }), 500
 
     # Update Project record
-    project.video_path = str(video_saved_path.resolve())
+    project.video_path = str(bg_file.resolve())
     project.video_duration = project.audio_duration
     project.width = w
     project.height = h
 
     # Update Canonical JSON
-    canonical["media"]["video_path"] = str(video_saved_path.resolve())
+    canonical["media"]["video_path"] = str(bg_file.resolve())
     canonical["media"]["video_duration"] = project.audio_duration
     canonical["media"]["width"] = w
     canonical["media"]["height"] = h
@@ -220,11 +233,11 @@ def update_project_background(project_id: str):
     # Update MediaAsset if present
     video_asset = db.session.query(MediaAsset).filter_by(project_id=project_id, kind="video").first()
     if video_asset:
-        video_asset.file_path = str(video_saved_path.resolve())
-        video_asset.storage_key = video_saved_path.name
+        video_asset.file_path = str(bg_file.resolve())
+        video_asset.storage_key = bg_file.name
         video_asset.duration = project.audio_duration
         try:
-            video_asset.size_bytes = video_saved_path.stat().st_size
+            video_asset.size_bytes = bg_file.stat().st_size
         except Exception:
             pass
 
@@ -233,6 +246,7 @@ def update_project_background(project_id: str):
     return jsonify({
         "success": True,
         "template": template_id,
-        "video_url": url_for("projects.stream_project_media", project_id=project_id, kind="video", t=int(time.time() * 1000))
+        "video_url": url_for("projects.stream_project_media", project_id=project_id, kind="video", t=int(time.time() * 1000)),
+        "is_image": True
     })
 
