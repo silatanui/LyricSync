@@ -2,6 +2,9 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+os.environ.setdefault("LC_ALL", "C.UTF-8")
+
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 

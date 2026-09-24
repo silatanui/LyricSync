@@ -45,7 +45,14 @@ class MediaProbe:
                     "-show_streams",
                     str(file_path)
                 ]
-                proc = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                proc = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    check=True
+                )
                 data = json.loads(proc.stdout)
                 return MediaProbe._parse_ffprobe_json(data)
             except Exception:
@@ -99,7 +106,13 @@ class MediaProbe:
     def _probe_with_ffmpeg(file_path: Path) -> Dict[str, Any]:
         ffmpeg = get_ffmpeg_binary()
         cmd = [ffmpeg, "-i", str(file_path)]
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace"
+        )
         text = proc.stderr
 
         duration = 0.0

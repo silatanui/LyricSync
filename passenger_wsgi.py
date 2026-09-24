@@ -1,6 +1,8 @@
-"""Passenger entrypoint for shared hosting deployments."""
 import os
 import sys
+
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+os.environ.setdefault("LC_ALL", "C.UTF-8")
 
 app_dir = os.path.dirname(os.path.abspath(__file__))
 if app_dir and app_dir not in sys.path:
