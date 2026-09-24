@@ -41,8 +41,8 @@
                 <a class="nav-link-studio text-decoration-none" href="{{ url_for('views.upload_page') }}">
                     <i class="bi bi-cloud-arrow-up me-1"></i> Upload
                 </a>
-                <a class="nav-link-studio text-decoration-none" href="{{ url_for('views.upload_page') }}">
-                    <i class="bi bi-magic me-1"></i> Quick Start
+                <a class="nav-link-studio text-decoration-none" href="{{ url_for('views.docs_page') }}">
+                    <i class="bi bi-journal-code me-1"></i> Documentation
                 </a>
             </nav>
         </div>
@@ -204,6 +204,7 @@
     </div>
 
     <footer class="site-legal-footer">
+        <a href="{{ url_for('views.docs_page') }}">Documentation</a>
         <a href="{{ url_for('views.privacy_page') }}">Privacy</a>
         <a href="{{ url_for('views.terms_page') }}">Terms</a>
         <button type="button" id="cookieSettingsBtn">Cookie settings</button>

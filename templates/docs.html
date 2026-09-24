@@ -1,0 +1,908 @@
+{% extends "base.html" %}
+
+{% block title %}System Architecture & Technical Documentation - LyricSync Studio{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/docs.css') }}">
+
+<div class="docs-wrapper container-fluid p-0">
+    <div class="row g-0">
+        <!-- ================= ASTRO-STYLE STICKY LEFT SIDEBAR ================= -->
+        <aside class="col-lg-3 col-xl-2 d-none d-lg-block docs-sidebar" id="docsSidebar">
+            <div class="mb-3 px-2">
+                <input type="text" id="docsSearchInput" class="form-control form-control-sm border" placeholder="Quick filter docs..." style="font-size: 0.8rem; line-height: 1em !important;">
+            </div>
+
+            <div class="docs-sidebar-group">
+                <div class="docs-sidebar-heading">Getting Started</div>
+                <a class="docs-nav-link active" href="#section-overview"><i class="bi bi-compass"></i> System Overview</a>
+                <a class="docs-nav-link" href="#section-diagrams"><i class="bi bi-diagram-3"></i> 7 System Diagrams</a>
+            </div>
+
+            <div class="docs-sidebar-group">
+                <div class="docs-sidebar-heading">Core Engine &amp; Services</div>
+                <a class="docs-nav-link" href="#section-ingestion"><i class="bi bi-soundwave"></i> Media Ingestion &amp; Probe</a>
+                <a class="docs-nav-link" href="#section-alignment"><i class="bi bi-magic"></i> AI Word-Level Alignment</a>
+                <a class="docs-nav-link" href="#section-subtitles"><i class="bi bi-fonts"></i> ASS Vector Subtitles</a>
+                <a class="docs-nav-link" href="#section-rendering"><i class="bi bi-film"></i> FFmpeg Dual-Tier Video</a>
+            </div>
+
+            <div class="docs-sidebar-group">
+                <div class="docs-sidebar-heading">Data &amp; Security</div>
+                <a class="docs-nav-link" href="#section-database"><i class="bi bi-database"></i> Database Schema (ERD)</a>
+                <a class="docs-nav-link" href="#section-security"><i class="bi bi-shield-lock"></i> RBAC &amp; Admin Guard</a>
+                <a class="docs-nav-link" href="#section-frontend"><i class="bi bi-window"></i> Studio Frontend Engine</a>
+                <a class="docs-nav-link" href="#section-api"><i class="bi bi-code-slash"></i> REST API Specifications</a>
+            </div>
+        </aside>
+
+        <!-- ================= MAIN DOCUMENTATION CONTENT ================= -->
+        <main class="col-lg-7 col-xl-8 docs-content mx-auto">
+            <!-- Breadcrumbs -->
+            <nav aria-label="breadcrumb" class="mb-3">
+                <ol class="breadcrumb small" style="font-size: 0.78rem;">
+                    <li class="breadcrumb-item"><a href="{{ url_for('views.home') }}" class="text-decoration-none text-secondary">LyricSync</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('views.docs_page') }}" class="text-decoration-none text-secondary">Documentation</a></li>
+                    <li class="breadcrumb-item active text-dark fw-bold" aria-current="page">Architecture &amp; Source Engineering</li>
+                </ol>
+            </nav>
+
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge bg-burgundy text-white font-mono" style="background-color: var(--brand-burgundy); font-size: 0.7rem;">v2.4.0 Studio Release</span>
+                <span class="badge bg-success-subtle text-success border border-success-subtle font-mono" style="font-size: 0.7rem;">Production Verified</span>
+            </div>
+
+            <h1>System Architecture &amp; Technical Documentation</h1>
+            <p class="docs-lead">A comprehensive technical reference detailing the ingestion pipeline, word-level speech alignment mathematics, ASS vector subtitle rasterization, and FFmpeg video synthesis for LyricSync Studio.</p>
+
+            <!-- Quick Jump Badges -->
+            <div class="d-flex flex-wrap gap-2 mb-4 pb-3 border-bottom">
+                <a href="#section-diagrams" class="btn btn-outline-secondary btn-sm py-1 px-2.5 d-flex align-items-center gap-1.5" style="font-size: 0.8rem;">
+                    <i class="bi bi-diagram-3-fill text-primary"></i> 7 Diagrams
+                </a>
+                <a href="#section-alignment" class="btn btn-outline-secondary btn-sm py-1 px-2.5 d-flex align-items-center gap-1.5" style="font-size: 0.8rem;">
+                    <i class="bi bi-stars" style="color: var(--brand-burgundy);"></i> Word Alignment
+                </a>
+                <a href="#section-rendering" class="btn btn-outline-secondary btn-sm py-1 px-2.5 d-flex align-items-center gap-1.5" style="font-size: 0.8rem;">
+                    <i class="bi bi-speedometer2 text-success"></i> 720p &amp; 1080p Engine
+                </a>
+                <a href="#section-database" class="btn btn-outline-secondary btn-sm py-1 px-2.5 d-flex align-items-center gap-1.5" style="font-size: 0.8rem;">
+                    <i class="bi bi-hdd-network text-info"></i> Relational ERD
+                </a>
+            </div>
+
+            <!-- ================= 1. SYSTEM OVERVIEW ================= -->
+            <section id="section-overview" class="mb-5">
+                <h2>1. System Overview &amp; Architectural Tenets</h2>
+                <p>LyricSync Studio is an automated audio-to-video synchronization suite designed to bridge raw musical vocals and typography. Unlike traditional monolithic video renderers that require local graphics workstations or heavy desktop software, LyricSync functions with zero mandatory GPU dependencies and operates seamlessly in constrained cloud/shared hosting environments.</p>
+
+                <div class="docs-feature-grid">
+                    <div class="docs-feature-card">
+                        <h5><i class="bi bi-cpu text-primary me-1"></i> CPU-Efficient Synthesis</h5>
+                        <p>Leverages native single-pass FFmpeg libass filtergraphs, avoiding intermediate frame dumps or disk space bloat.</p>
+                    </div>
+                    <div class="docs-feature-card">
+                        <h5><i class="bi bi-lightning-charge text-warning me-1"></i> Dual-Tier Draft Mode</h5>
+                        <p>Low-bandwidth connections utilize 720p Fast Draft for near-instant rendering and low latency playback.</p>
+                    </div>
+                    <div class="docs-feature-card">
+                        <h5><i class="bi bi-stopwatch text-success me-1"></i> Word-Level Precision</h5>
+                        <p>Timestamp interpolation down to millisecond accuracy with musical phrasing gap filling.</p>
+                    </div>
+                    <div class="docs-feature-card">
+                        <h5><i class="bi bi-shield-check text-danger me-1"></i> Strict RBAC Separation</h5>
+                        <p>Technical server internals are restricted exclusively to system admin (silatanuikipngetich@gmail.com).</p>
+                    </div>
+                </div>
+
+                <div class="docs-callout tip">
+                    <div class="docs-callout-title"><i class="bi bi-check-circle-fill text-success"></i> Clean Security Model</div>
+                    <p>All sensitive credentials (API keys, database secrets, session salts) are strictly ingested through OS environment variables. The codebase never hardcodes plain-text secrets.</p>
+                </div>
+            </section>
+
+            <!-- ================= 2. INTERACTIVE SYSTEM DIAGRAMS ================= -->
+            <section id="section-diagrams" class="mb-5">
+                <h2>2. Interactive System Diagrams (7 Comprehensive Views)</h2>
+                <p>The diagrams below document the exact end-to-end data lifecycle, component relationships, and execution flows within the application.</p>
+
+                <!-- Diagram 1: High-Level Architecture -->
+                <div class="diagram-card">
+                    <div class="diagram-card-title"><i class="bi bi-diagram-3-fill" style="color: var(--brand-burgundy);"></i> Diagram 1: End-to-End System Architecture Flow</div>
+                    <div class="diagram-card-desc">Chronological lifecycle from media ingestion to synchronized streaming video delivery.</div>
+                    <div class="diagram-svg-wrapper">
+                        <pre class="mermaid">
+flowchart TD
+    A["User Audio/Video Upload"] --> B["Flask Upload Controller"]
+    B --> C["Media Probe (FFprobe)"]
+    C --> D["Database (SQLite / MySQL)"]
+    D --> E["Background Generator (16:9 Canvas)"]
+    E --> F["OpenAI Whisper Word Transcription"]
+    F --> G["Temporal Alignment & Gap Filler"]
+    G --> H["Canonical Lyrics JSON Storage"]
+    H --> I["Interactive Studio Editor"]
+    I --> J["ASS Vector Subtitle Generator"]
+    J --> K["FFmpeg Hardware/Software Encoder"]
+    K --> L["Progressive Streaming MP4 Video"]
+                        </pre>
+                    </div>
+                </div>
+
+                <!-- Diagram 2: Dual-Tier Quality Pipeline -->
+                <div class="diagram-card">
+                    <div class="diagram-card-title"><i class="bi bi-speedometer2 text-success"></i> Diagram 2: Dual-Tier Quality &amp; Bandwidth Optimization Flow</div>
+                    <div class="diagram-card-desc">Architecture allowing instant drafts on mobile and high-fidelity masters on desktop.</div>
+                    <div class="diagram-svg-wrapper">
+                        <pre class="mermaid">
+flowchart LR
+    subgraph Client["Client Browser"]
+        Q["User Selects Quality"]
+    end
+    subgraph Engine["FFmpeg Rendering Engine"]
+        Q -->|720p Fast Draft| D720["Scale: 1280x720<br>CRF 23 | Preset: veryfast<br>AAC 128k (Low Bandwidth)"]
+        Q -->|1080p Studio Master| D1080["Scale: 1920x1080<br>CRF 20 | Preset: medium<br>AAC 192k (Broadcast Quality)"]
+    end
+    D720 --> M["MP4 Stream (+faststart)"]
+    D1080 --> M
+                        </pre>
+                    </div>
+                </div>
+
+                <!-- Diagram 3: Word-Level Alignment -->
+                <div class="diagram-card">
+                    <div class="diagram-card-title"><i class="bi bi-magic text-primary"></i> Diagram 3: Word-Level Temporal Alignment Pipeline</div>
+                    <div class="diagram-card-desc">Transformation of continuous speech streams into quantized lyric chips with musical boundaries.</div>
+                    <div class="diagram-svg-wrapper">
+                        <pre class="mermaid">
+flowchart TD
+    W0["Audio Input Stream"] --> W1["OpenAI Whisper-1 API<br>(timestamp_granularities=['word'])"]
+    W1 --> W2["Raw Timestamp Tokens (start, end, text)"]
+    W2 --> W3{"Missing End Times?"}
+    W3 -->|Yes| W4["Interpolate from Next Token Start"]
+    W3 -->|No| W5["Normalize Syllable Characters"]
+    W4 --> W5
+    W5 --> W6{"Inter-word Gap > 0.45s or Punctuation?"}
+    W6 -->|Yes| W7["Segment into New Musical Lyric Line"]
+    W6 -->|No| W8["Append to Current Stanza"]
+    W7 --> W9["Canonical Word-Level JSON Dataset"]
+    W8 --> W9
+                        </pre>
+                    </div>
+                </div>
+
+                <!-- Diagram 4: FFmpeg Filtergraph Sequence -->
+                <div class="diagram-card">
+                    <div class="diagram-card-title"><i class="bi bi-film text-warning"></i> Diagram 4: FFmpeg Filtergraph &amp; Subtitle Blending Sequence</div>
+                    <div class="diagram-card-desc">Single-pass filter composition merging audio streams, aesthetic canvases, and ASS scripts.</div>
+                    <div class="diagram-svg-wrapper">
+                        <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant UI as Studio Editor
+    participant API as Flask Render Route
+    participant SUB as Subtitle Service (ASS)
+    participant FF as FFmpeg Subprocess
+    participant FS as Media File Storage
+
+    UI->>API: POST /api/projects/{id}/render (Tier: 720/1080)
+    API->>SUB: generate_ass_subtitles(canonical_lyrics, style)
+    SUB-->>API: lyric_script.ass
+    API->>FF: Spawn: ffmpeg -i visual -i audio -vf "scale,ass=lyric_script.ass" -c:v libx264 -c:a aac -movflags +faststart output.mp4
+    FF->>FS: Stream progressive frames
+    FF-->>API: Process Return Code 0
+    API-->>UI: Render Job Completed (HTTP 200)
+    UI->>FS: GET /api/projects/{id}/download
+                        </pre>
+                    </div>
+                </div>
+
+                <!-- Diagram 5: Database ERD -->
+                <div class="diagram-card">
+                    <div class="diagram-card-title"><i class="bi bi-database text-info"></i> Diagram 5: Relational Database Schema (ERD Model)</div>
+                    <div class="diagram-card-desc">7 primary tables supporting users, versioned projects, lyrics, assets, and render queues.</div>
+                    <div class="diagram-svg-wrapper">
+                        <pre class="mermaid">
+erDiagram
+    USERS ||--o{ PROJECTS : owns
+    PROJECTS ||--o{ MEDIA_ASSETS : contains
+    PROJECTS ||--o{ LYRIC_LINES : segments
+    LYRIC_LINES ||--o{ LYRIC_WORDS : contains
+    PROJECTS ||--o{ TRANSCRIPTIONS : stores
+    PROJECTS ||--o{ RENDER_JOBS : queues
+
+    USERS {
+        string id PK
+        string email UK
+        string display_name
+        string password_hash
+        string google_id UK
+        string avatar_url
+        datetime created_at
+    }
+
+    PROJECTS {
+        string id PK
+        string user_id FK
+        string name
+        string status
+        float audio_duration
+        integer width
+        integer height
+        integer current_revision
+        text canonical_json
+        datetime created_at
+    }
+
+    LYRIC_LINES {
+        string id PK
+        string project_id FK
+        integer line_index
+        float start_time
+        float end_time
+        text text_content
+    }
+
+    LYRIC_WORDS {
+        string id PK
+        string line_id FK
+        integer word_index
+        float start_time
+        float end_time
+        string word_text
+        float confidence
+    }
+
+    RENDER_JOBS {
+        string id PK
+        string project_id FK
+        string status
+        integer progress
+        string stage
+        string output_video_path
+        datetime created_at
+    }
+                        </pre>
+                    </div>
+                </div>
+
+                <!-- Diagram 6: Role-Based Access Control -->
+                <div class="diagram-card">
+                    <div class="diagram-card-title"><i class="bi bi-shield-lock text-danger"></i> Diagram 6: Role-Based Access Control Architecture (RBAC)</div>
+                    <div class="diagram-card-desc">Enforcing strict separation of deep diagnostic technicalities from creator interfaces.</div>
+                    <div class="diagram-svg-wrapper">
+                        <pre class="mermaid">
+flowchart TD
+    Req["Incoming User Request"] --> Auth{"Authenticated?"}
+    Auth -->|No| Pub["Public View: Clean status (200), Zero Server Internals"]
+    Auth -->|Yes| Chk{"Email == silatanuikipngetich@gmail.com?"}
+    Chk -->|Yes| Adm["Admin Privilege: Full Diagnostics<br>• Table Names • FFmpeg Binaries<br>• AI Model Specs • Storage Paths<br>• Raw Health Telemetry"]
+    Chk -->|No| Usr["Normal Creator Privilege:<br>• Music-Focused UI • Word-Level Sync<br>• 720p/1080p HQ Export<br>• Technical Jargon Completely Hidden"]
+                        </pre>
+                    </div>
+                </div>
+
+                <!-- Diagram 7: Playback State Machine -->
+                <div class="diagram-card">
+                    <div class="diagram-card-title"><i class="bi bi-play-circle text-primary"></i> Diagram 7: Studio Realtime Playback Synchronization Loop</div>
+                    <div class="diagram-card-desc">Sub-second synchronization loop binding HTML5 media elements, active timeline chips, and video.</div>
+                    <div class="diagram-svg-wrapper">
+                        <pre class="mermaid">
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Playing : play() triggered
+    state Playing {
+        [*] --> SyncLoop
+        SyncLoop --> ReadTime : requestAnimationFrame()
+        ReadTime --> BinarySearchWord : Lookup word [start_time, end_time]
+        BinarySearchWord --> HighlightActiveChip : Add .active-chip class
+        HighlightActiveChip --> UpdateCanvasOverlay : Redraw sub-second text
+        UpdateCanvasOverlay --> SyncLoop
+    }
+    Playing --> Paused : pause() triggered
+    Paused --> Playing : resume()
+    Playing --> ScrubberSeek : User drags scrubber
+    ScrubberSeek --> Playing : currentTime updated
+                        </pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ================= 3. ESSENTIAL CODE SNIPPETS ================= -->
+            <section id="section-ingestion" class="mb-5">
+                <h2>3. Media Ingestion &amp; Safety Probing Engine</h2>
+                <p>Media files uploaded to the studio undergo validation and sanitization. The duration, channels, and sample rates are extracted via UTF-8 safe FFprobe subprocesses that guarantee stability across Windows and Linux hosting environments.</p>
+
+                <!-- Code Block 1: media_probe.py -->
+                <div class="code-block-wrapper">
+                    <div class="code-header">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="code-lang-tag">Python</span>
+                            <span class="code-filename">app/services/media_probe.py</span>
+                        </div>
+                        <button class="copy-code-btn" type="button" title="Copy code to clipboard">
+                            <i class="bi bi-clipboard"></i> <span>Copy</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-python">{% raw %}import os
+import shutil
+import subprocess
+from pathlib import Path
+from typing import Dict, Any, Optional
+
+def get_ffprobe_binary() -> Optional[str]:
+    """Resolve ffprobe executable from system PATH or virtualenv binaries."""
+    env_bin = os.getenv("FFPROBE_BINARY")
+    if env_bin and (shutil.which(env_bin) or Path(env_bin).is_file()):
+        return env_bin
+    system_bin = shutil.which("ffprobe")
+    if system_bin:
+        return system_bin
+    return None
+
+def probe_media_file(file_path: str) -> Dict[str, Any]:
+    """Inspect duration, streams, and codecs using UTF-8 error-tolerant decoding."""
+    ffprobe = get_ffprobe_binary()
+    if not ffprobe or not Path(file_path).is_file():
+        return {"duration": 0.0, "has_audio": True, "has_video": False}
+
+    cmd = [
+        ffprobe, "-v", "error",
+        "-show_entries", "format=duration:stream=codec_type,width,height",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        str(file_path)
+    ]
+    # Enforce UTF-8 with replace mode to eliminate ascii decode errors on remote servers
+    res = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        encoding="utf-8",
+        errors="replace"
+    )
+    lines = [ln.strip() for ln in res.stdout.splitlines() if ln.strip()]
+    duration = 0.0
+    for line in lines:
+        try:
+            val = float(line)
+            if val > duration:
+                duration = val
+        except ValueError:
+            pass
+
+    return {
+        "duration": duration,
+        "raw_probe": lines
+    }{% endraw %}</code></pre>
+                </div>
+            </section>
+
+            <!-- ================= 4. AI WORD-LEVEL ALIGNMENT ================= -->
+            <section id="section-alignment" class="mb-5">
+                <h2>4. AI Word-Level Alignment &amp; Transcription Pipeline</h2>
+                <p>Speech-to-text recognition requests OpenAI Whisper with word timestamp granularities enabled. The resulting word tokens are processed through an interpolation pass and split into musical lines using pause detection (&Delta;t &gt; 0.45s) and punctuation rules.</p>
+
+                <!-- Code Block 2: alignment.py -->
+                <div class="code-block-wrapper">
+                    <div class="code-header">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="code-lang-tag">Python</span>
+                            <span class="code-filename">app/services/alignment.py</span>
+                        </div>
+                        <button class="copy-code-btn" type="button" title="Copy code to clipboard">
+                            <i class="bi bi-clipboard"></i> <span>Copy</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-python">{% raw %}import re
+from typing import List, Dict, Any
+
+PAUSE_SPLIT_THRESHOLD_SECONDS = 0.45
+PUNCTUATION_BREAK_PATTERN = re.compile(r'[\.\?\!\;\:\,\—\-]')
+
+def segment_transcript_words_into_lines(words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Segment a continuous list of word timestamps into structured musical lyric lines.
+    Splits are triggered upon:
+      1. Vocal pauses where gap between word_n.end and word_{n+1}.start exceeds 0.45s
+      2. Natural phrase punctuation (. ! ? ; , -)
+      3. Maximum word constraints per visual line (typically 8-10 words)
+    """
+    if not words:
+        return []
+
+    lines = []
+    current_words = []
+    
+    for idx, w in enumerate(words):
+        current_words.append(w)
+        is_last_word = (idx == len(words) - 1)
+        
+        # Check pause gap to next word
+        has_pause = False
+        if not is_last_word:
+            next_w = words[idx + 1]
+            gap = float(next_w.get("start", 0)) - float(w.get("end", 0))
+            if gap >= PAUSE_SPLIT_THRESHOLD_SECONDS:
+                has_pause = True
+                
+        # Check terminal punctuation in word text
+        has_punct = bool(PUNCTUATION_BREAK_PATTERN.search(w.get("word", "")))
+        is_lengthy = len(current_words) >= 9
+
+        if is_last_word or has_pause or has_punct or is_lengthy:
+            line_text = " ".join([item.get("word", "").strip() for item in current_words]).strip()
+            line_start = float(current_words[0].get("start", 0))
+            line_end = float(current_words[-1].get("end", line_start + 1.0))
+            
+            lines.append({
+                "line_id": f"line_{len(lines) + 1}",
+                "start": round(line_start, 3),
+                "end": round(line_end, 3),
+                "text": line_text,
+                "words": current_words
+            })
+            current_words = []
+            
+    return lines{% endraw %}</code></pre>
+                </div>
+
+                <!-- Code Block 3: openai_transcription.py -->
+                <div class="code-block-wrapper">
+                    <div class="code-header">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="code-lang-tag">Python</span>
+                            <span class="code-filename">app/services/openai_transcription.py</span>
+                        </div>
+                        <button class="copy-code-btn" type="button" title="Copy code to clipboard">
+                            <i class="bi bi-clipboard"></i> <span>Copy</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-python">{% raw %}import os
+from openai import OpenAI
+from config import Config
+
+class OpenAITranscriptionService:
+    def __init__(self, api_key: str = None, model: str = None):
+        # API key is securely retrieved from environment configuration
+        self.api_key = api_key or Config.OPENAI_API_KEY or os.getenv("OPENAI_API_KEY", "")
+        self.model = model or Config.OPENAI_TRANSCRIPTION_MODEL or "whisper-1"
+        self.client = OpenAI(api_key=self.api_key) if self.api_key else None
+
+    def transcribe_audio_words(self, audio_file_path: str) -> dict:
+        """Call Whisper API with timestamp_granularities=['word'] enabled."""
+        if not self.client:
+            raise ValueError("OpenAI client not initialized. Set OPENAI_API_KEY in environment.")
+
+        with open(audio_file_path, "rb") as audio_file:
+            transcript = self.client.audio.transcriptions.create(
+                file=audio_file,
+                model=self.model,
+                response_format="verbose_json",
+                timestamp_granularities=["word"]
+            )
+            
+        return transcript.to_dict(){% endraw %}</code></pre>
+                </div>
+            </section>
+
+            <!-- ================= 5. ASS SUBTITLES ================= -->
+            <section id="section-subtitles" class="mb-5">
+                <h2>5. Advanced SubStation Alpha (ASS) Vector Subtitles</h2>
+                <p>Rather than burning rasterized text images, LyricSync compiles lyric timings into native Advanced SubStation Alpha scripts (.ass). Timing tags (&bsol;k&lt;duration&gt;) enable sub-frame syllable highlighting with crisp typography.</p>
+
+                <!-- Code Block 4: subtitles.py -->
+                <div class="code-block-wrapper">
+                    <div class="code-header">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="code-lang-tag">Python</span>
+                            <span class="code-filename">app/services/subtitles.py</span>
+                        </div>
+                        <button class="copy-code-btn" type="button" title="Copy code to clipboard">
+                            <i class="bi bi-clipboard"></i> <span>Copy</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-python">{% raw %}def format_ass_time(seconds: float) -> str:
+    """Format floating point seconds into ASS timestamp standard (H:MM:SS.cs)."""
+    hrs = int(seconds // 3600)
+    mins = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    centis = int(round((seconds - int(seconds)) * 100))
+    if centis >= 100:
+        centis = 99
+    return f"{hrs}:{mins:02d}:{secs:02d}.{centis:02d}"
+
+def generate_ass_script(lines: list, style: dict, width: int = 1920, height: int = 1080) -> str:
+    """Construct complete ASS subtitle specification with karaoke timing wipes."""
+    font_name = style.get("font", "Outfit")
+    font_size = style.get("font_size", 42)
+    primary_color = "&H00FFFFFF"  # White in ASS &HAABBGGRR format
+    karaoke_color = "&H00DF77B7"  # Mint/Burgundy accent
+
+    ass_content = [
+        "[Script Info]",
+        "ScriptType: v4.00+",
+        f"PlayResX: {width}",
+        f"PlayResY: {height}",
+        "ScaledBorderAndShadow: yes",
+        "",
+        "[V4+ Styles]",
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+        f"Style: Default,{font_name},{font_size},{primary_color},{karaoke_color},&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,2,3,2,60,60,80,1",
+        "",
+        "[Events]",
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
+    ]
+
+    for line in lines:
+        start_ts = format_ass_time(line.get("start", 0))
+        end_ts = format_ass_time(line.get("end", 0))
+        words = line.get("words", [])
+        
+        # Build \k tags for karaoke syllable transitions
+        dialogue_text = ""
+        for w in words:
+            duration_cs = max(1, int(round((w.get("end", 0) - w.get("start", 0)) * 100)))
+            dialogue_text += f"{{\\k{duration_cs}}}{w.get('word', '')} "
+            
+        ass_content.append(f"Dialogue: 0,{start_ts},{end_ts},Default,,0,0,0,,{dialogue_text.strip()}")
+
+    return "\n".join(ass_content){% endraw %}</code></pre>
+                </div>
+            </section>
+
+            <!-- ================= 6. FFMPEG RENDERING ================= -->
+            <section id="section-rendering" class="mb-5">
+                <h2>6. FFmpeg Dual-Tier Video Rendering Engine</h2>
+                <p>The rendering pipeline synthesizes the visual background and audio track while rasterizing ASS subtitles in a single execution pass. To minimize latency on mobile or constrained bandwidth, a 720p Fast Draft profile renders in seconds.</p>
+
+                <!-- Code Block 5: ffmpeg.py -->
+                <div class="code-block-wrapper">
+                    <div class="code-header">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="code-lang-tag">Python</span>
+                            <span class="code-filename">app/services/ffmpeg.py</span>
+                        </div>
+                        <button class="copy-code-btn" type="button" title="Copy code to clipboard">
+                            <i class="bi bi-clipboard"></i> <span>Copy</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-python">{% raw %}import subprocess
+from app.services.media_probe import get_ffmpeg_binary
+
+def execute_render_job(video_in: str, audio_in: str, ass_path: str, output_mp4: str, resolution: str = "720"):
+    """Compile final synchronized lyric MP4.
+    Resolution '720' uses CRF 23 with veryfast preset for instant preview.
+    Resolution '1080' uses CRF 20 with medium preset for broadcast masters.
+    """
+    ffmpeg_bin = get_ffmpeg_binary()
+    is_draft = (resolution == "720")
+    
+    scale_filter = "scale=-2:720" if is_draft else "scale=-2:1080"
+    preset = "veryfast" if is_draft else "medium"
+    crf = "23" if is_draft else "20"
+    audio_bitrate = "128k" if is_draft else "192k"
+
+    # Escape path separators for FFmpeg libass filter syntax
+    escaped_ass = str(ass_path).replace("\\", "/").replace(":", "\\:")
+    vf_chain = f"{scale_filter},ass='{escaped_ass}'"
+
+    cmd = [
+        ffmpeg_bin, "-y",
+        "-i", str(video_in),
+        "-i", str(audio_in),
+        "-vf", vf_chain,
+        "-c:v", "libx264",
+        "-preset", preset,
+        "-crf", crf,
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac",
+        "-b:a", audio_bitrate,
+        "-shortest",
+        "-movflags", "+faststart",  # Optimizes MP4 header for instant web streaming
+        str(output_mp4)
+    ]
+
+    process = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        encoding="utf-8",
+        errors="replace"
+    )
+    if process.returncode != 0:
+        raise RuntimeError(f"FFmpeg render failure: {process.stderr[-500:]}")
+        
+    return output_mp4{% endraw %}</code></pre>
+                </div>
+            </section>
+
+            <!-- ================= 7. DATABASE SCHEMA ================= -->
+            <section id="section-database" class="mb-5">
+                <h2>7. Database Entities &amp; ORM Architecture</h2>
+                <p>Built with SQLAlchemy 2.0 with strict typed mappings. Cascade deletions ensure uploaded media, transcriptions, and cached sync revisions are cleaned atomically when a project is deleted.</p>
+
+                <!-- Code Block 6: models.py -->
+                <div class="code-block-wrapper">
+                    <div class="code-header">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="code-lang-tag">Python</span>
+                            <span class="code-filename">app/models/project.py</span>
+                        </div>
+                        <button class="copy-code-btn" type="button" title="Copy code to clipboard">
+                            <i class="bi bi-clipboard"></i> <span>Copy</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-python">{% raw %}from datetime import datetime, timezone
+from sqlalchemy import String, Float, Integer, Text, ForeignKey, DateTime
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from app.extensions import db
+from app.utils.ids import generate_project_id
+
+class Project(db.Model):
+    __tablename__ = "projects"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=generate_project_id)
+    user_id: Mapped[str] = mapped_column(String(64), ForeignKey("users.id"), nullable=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="created")
+    audio_duration: Mapped[float] = mapped_column(Float, default=0.0)
+    width: Mapped[int] = mapped_column(Integer, default=1920)
+    height: Mapped[int] = mapped_column(Integer, default=1080)
+    current_revision: Mapped[int] = mapped_column(Integer, default=1)
+    canonical_json: Mapped[str] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    user = relationship("User", back_populates="projects")
+    media_assets = relationship("MediaAsset", back_populates="project", cascade="all, delete-orphan")
+    lyric_lines = relationship("LyricLine", back_populates="project", cascade="all, delete-orphan")
+    render_jobs = relationship("RenderJob", back_populates="project", cascade="all, delete-orphan"){% endraw %}</code></pre>
+                </div>
+            </section>
+
+            <!-- ================= 8. SECURITY & RBAC ================= -->
+            <section id="section-security" class="mb-5">
+                <h2>8. Role-Based Access Control (RBAC) &amp; Diagnostics Guard</h2>
+                <p>System technicalities (such as AI model parameters, FFmpeg binary locations, SQLite/MySQL table schemas, and disk diagnostics) are strictly gated so only the authorized administrator can inspect them.</p>
+
+                <!-- Code Block 7: views.py RBAC -->
+                <div class="code-block-wrapper">
+                    <div class="code-header">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="code-lang-tag">Python</span>
+                            <span class="code-filename">app/routes/views.py (Gated Health Route)</span>
+                        </div>
+                        <button class="copy-code-btn" type="button" title="Copy code to clipboard">
+                            <i class="bi bi-clipboard"></i> <span>Copy</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-python">{% raw %}from flask import Blueprint, jsonify, current_app
+from flask_login import current_user
+
+ADMIN_EMAIL = "silatanuikipngetich@gmail.com"
+
+@views_bp.route("/health")
+def health_check():
+    """Restricted health diagnostics.
+    Only silatanuikipngetich@gmail.com can inspect technical internals.
+    Normal users receive a clean operational status.
+    """
+    is_admin = bool(
+        current_user.is_authenticated and
+        current_user.email and
+        current_user.email.strip().lower() == ADMIN_EMAIL
+    )
+
+    if not is_admin:
+        # Hides all server paths, table schemas, and binary paths
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "service": "LyricSync Studio",
+            "message": "LyricSync Studio is operational."
+        }, 200
+
+    # Full technical diagnostics reserved for administrator
+    return {
+        "status": "healthy",
+        "database": "connected",
+        "database_tables": inspector.get_table_names(),
+        "storage_path": str(current_app.config.get("MEDIA_ROOT")),
+        "ffmpeg_binary": get_ffmpeg_binary(),
+        "ai_model": current_app.config.get("OPENAI_TRANSCRIPTION_MODEL", "whisper-1"),
+        "rendering_engine": "FFmpeg (libass + h264 + aac)",
+        "admin_access": True
+    }, 200{% endraw %}</code></pre>
+                </div>
+            </section>
+
+            <!-- ================= 9. FRONTEND ENGINE ================= -->
+            <section id="section-frontend" class="mb-5">
+                <h2>9. Studio Frontend Engine &amp; State Synchronization</h2>
+                <p>The frontend editor features bidirectional scrubbing: scrubbing the audio player immediately repositions the timeline chips and video preview, while clicking any lyric chip jumps audio playback to the exact timestamp.</p>
+
+                <!-- Code Block 8: editor.js snippet -->
+                <div class="code-block-wrapper">
+                    <div class="code-header">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="code-lang-tag">JavaScript</span>
+                            <span class="code-filename">static/js/editor.js</span>
+                        </div>
+                        <button class="copy-code-btn" type="button" title="Copy code to clipboard">
+                            <i class="bi bi-clipboard"></i> <span>Copy</span>
+                        </button>
+                    </div>
+                    <pre><code class="language-javascript">{% raw %}// Sub-second playback synchronization loop
+function startSyncLoop() {
+    function loop() {
+        if (!audioEl.paused) {
+            const currentTime = audioEl.currentTime;
+            scrubber.value = currentTime;
+            currentTimeDisplay.textContent = formatTime(currentTime);
+
+            // Synchronize active lyric chips
+            const activeLine = timeline.findLineAt(currentTime);
+            if (activeLine) {
+                timeline.highlightLine(activeLine.line_id);
+                overlayEl.textContent = activeLine.text;
+            }
+            
+            // Align background video
+            if (videoEl && Math.abs(videoEl.currentTime - currentTime) > 0.3) {
+                videoEl.currentTime = currentTime;
+            }
+        }
+        requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+}{% endraw %}</code></pre>
+                </div>
+            </section>
+
+            <!-- ================= 10. REST API SPECIFICATION ================= -->
+            <section id="section-api" class="mb-5">
+                <h2>10. Complete REST API Specifications</h2>
+                <p>All API endpoints return JSON conforming to the standardized response envelope: <code>{"success": true, ...}</code> on 200 OK or <code>{"success": false, "error": {"code": "...", "message": "..."}}</code> on errors.</p>
+
+                <div class="table-responsive my-3">
+                    <table class="table table-bordered table-hover bg-white small" style="font-size: 0.82rem; line-height: 1em !important;">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Method</th>
+                                <th>Endpoint</th>
+                                <th>Role</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="badge bg-success">GET</span></td>
+                                <td><code>/api/projects</code></td>
+                                <td>Public / User</td>
+                                <td>List projects created by current user or public shelf</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-primary">POST</span></td>
+                                <td><code>/api/projects</code></td>
+                                <td>Creator</td>
+                                <td>Multipart upload for audio track + background selection</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-warning text-dark">PUT</span></td>
+                                <td><code>/api/projects/{id}/lyrics</code></td>
+                                <td>Creator</td>
+                                <td>Save revised lyric timings and word timestamps</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-primary">POST</span></td>
+                                <td><code>/api/projects/{id}/transcribe</code></td>
+                                <td>Creator</td>
+                                <td>Trigger background Whisper word transcription task</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-danger">POST</span></td>
+                                <td><code>/api/projects/{id}/render</code></td>
+                                <td>Creator</td>
+                                <td>Queue FFmpeg MP4 render job (resolution: 720 / 1080)</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-success">GET</span></td>
+                                <td><code>/health</code></td>
+                                <td>Admin / Public</td>
+                                <td>Diagnostics (Deep stats for silatanuikipngetich@gmail.com)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+
+        <!-- ================= RIGHT TABLE OF CONTENTS (ON THIS PAGE) ================= -->
+        <aside class="col-xl-2 d-none d-xl-block docs-toc" id="docsToc">
+            <div class="docs-toc-title">On This Page</div>
+            <a class="docs-toc-link" href="#section-overview">1. System Overview</a>
+            <a class="docs-toc-link" href="#section-diagrams">2. 7 System Diagrams</a>
+            <a class="docs-toc-link" href="#section-ingestion">3. Media Ingestion</a>
+            <a class="docs-toc-link" href="#section-alignment">4. AI Word Alignment</a>
+            <a class="docs-toc-link" href="#section-subtitles">5. ASS Subtitles</a>
+            <a class="docs-toc-link" href="#section-rendering">6. FFmpeg Dual-Tier</a>
+            <a class="docs-toc-link" href="#section-database">7. Database Schema</a>
+            <a class="docs-toc-link" href="#section-security">8. RBAC &amp; Admin Guard</a>
+            <a class="docs-toc-link" href="#section-frontend">9. Frontend Engine</a>
+            <a class="docs-toc-link" href="#section-api">10. REST API Specs</a>
+        </aside>
+    </div>
+</div>
+
+<!-- ================= MERMAID.JS FOR INTERACTIVE DIAGRAM RENDERING ================= -->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // Initialize Mermaid for vector architectural diagrams
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'neutral',
+            themeVariables: {
+                primaryColor: '#FDF2F4',
+                primaryBorderColor: '#7B112E',
+                primaryTextColor: '#111827',
+                lineColor: '#7B112E',
+                secondaryColor: '#F0FDF4',
+                tertiaryColor: '#FFFFFF',
+                fontFamily: 'Outfit, sans-serif'
+            }
+        });
+
+        // Copy Code to Clipboard Handler with Visual Feedback
+        document.querySelectorAll('.copy-code-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const wrapper = btn.closest('.code-block-wrapper');
+                const codeEl = wrapper ? wrapper.querySelector('pre code') : null;
+                if (!codeEl) return;
+
+                const codeText = codeEl.textContent;
+                try {
+                    await navigator.clipboard.writeText(codeText);
+                    const originalHtml = btn.innerHTML;
+                    btn.classList.add('copied');
+                    btn.innerHTML = '<i class="bi bi-check2"></i> <span>Copied!</span>';
+                    setTimeout(() => {
+                        btn.classList.remove('copied');
+                        btn.innerHTML = originalHtml;
+                    }, 2000);
+                } catch (err) {
+                    console.error('Clipboard copy failed:', err);
+                }
+            });
+        });
+
+        // Live Sidebar Filter Search
+        const searchInput = document.getElementById('docsSearchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase().trim();
+                document.querySelectorAll('.docs-nav-link').forEach(link => {
+                    const text = link.textContent.toLowerCase();
+                    link.style.display = text.includes(query) ? 'flex' : 'none';
+                });
+            });
+        }
+
+        // Active link scrollspy
+        const sections = document.querySelectorAll('section[id]');
+        const navLinks = document.querySelectorAll('.docs-nav-link');
+        window.addEventListener('scroll', () => {
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop - 120;
+                if (window.scrollY >= sectionTop) {
+                    current = section.getAttribute('id');
+                }
+            });
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === `#${current}`) {
+                    link.classList.add('active');
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

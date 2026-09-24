@@ -26,6 +26,12 @@ def terms_page():
 def privacy_page():
     return render_template("privacy.html")
 
+@views_bp.route("/documentation")
+@views_bp.route("/docs")
+def docs_page():
+    """Full architectural and technical documentation page."""
+    return render_template("docs.html")
+
 @views_bp.route("/projects")
 def dashboard():
     """Projects dashboard page."""
