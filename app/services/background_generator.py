@@ -2,6 +2,7 @@ import math
 import random
 import subprocess
 from pathlib import Path
+from typing import Optional, Tuple, Dict, Any, List
 from PIL import Image, ImageDraw, ImageFilter
 from app.services.media_probe import get_ffmpeg_binary
 
