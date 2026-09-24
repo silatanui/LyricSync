@@ -42,7 +42,10 @@ def create_app(config_class=Config):
     # Create tables automatically for development
     with flask_app.app_context():
         import app.models  # load models
-        db.create_all()
+        try:
+            db.create_all()
+        except Exception as db_err:
+            flask_app.logger.warning(f"db.create_all() warning on startup: {db_err}")
 
     # Global JSON error handling according to Section 12.3 specification
     @flask_app.errorhandler(404)
