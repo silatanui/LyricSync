@@ -80,23 +80,32 @@ def run_transcription_pipeline(app, project_id: str, job_id: str = None):
             return
 
         try:
+            audio_path = Path(project.audio_path)
+            if not audio_path.is_absolute():
+                audio_path = (Path(app.root_path).parent / audio_path).resolve()
+            else:
+                audio_path = audio_path.resolve()
+
+            if not audio_path.exists():
+                raise FileNotFoundError(f"Project audio file not found on disk at: {audio_path}")
+
             if job:
                 job.status = "transcribing"
-                job.stage = "Uploading audio to OpenAI Whisper-1"
-                job.progress = 25
+                job.stage = "Optimizing audio & uploading to OpenAI Whisper-1"
+                job.progress = 30
                 db.session.commit()
 
             project.status = "transcribing"
             db.session.commit()
 
-            audio_path = str(Path(project.audio_path).resolve())
-
-            # Transcribe with Whisper-1
-            transcriber = OpenAITranscriber()
-            tx_result = transcriber.transcribe_word_timestamps(audio_path)
-
-            # Whisper can take longer than cPanel's MySQL idle timeout; reload ORM state before writing.
+            # Temporarily release DB connection before external network call to prevent MySQL timeout
             db.session.remove()
+
+            # Transcribe with Whisper-1 (using 16kHz mono audio optimization)
+            transcriber = OpenAITranscriber()
+            tx_result = transcriber.transcribe_word_timestamps(str(audio_path))
+
+            # Re-acquire fresh ORM session
             project = db.session.get(Project, project_id)
             job = db.session.get(RenderJob, job_id) if job_id else None
             if not project:
@@ -104,8 +113,8 @@ def run_transcription_pipeline(app, project_id: str, job_id: str = None):
 
             if job:
                 job.status = "aligning"
-                job.stage = "Aligning words and generating lyric lines"
-                job.progress = 80
+                job.stage = "Aligning words into musical lyric lines"
+                job.progress = 75
                 db.session.commit()
 
             raw_words = tx_result.get("words", [])
@@ -118,11 +127,12 @@ def run_transcription_pipeline(app, project_id: str, job_id: str = None):
                     line["words"][0]["text"] = line["words"][0]["text"].strip().capitalize()
 
             # Persist raw transcription
+            raw_text = str(tx_result.get("text", "")).encode("utf-8", errors="replace").decode("utf-8")
             tx_record = Transcription(
                 project_id=project.id,
                 model=transcriber.model,
                 language=tx_result.get("language", "en"),
-                raw_text=tx_result.get("text", ""),
+                raw_text=raw_text,
                 json_payload=json.dumps(tx_result),
                 version=project.current_revision,
             )
@@ -130,7 +140,7 @@ def run_transcription_pipeline(app, project_id: str, job_id: str = None):
 
             # Update canonical document
             canonical = project.get_canonical_json()
-            canonical["transcription"]["raw_text"] = tx_result.get("text", "")
+            canonical["transcription"]["raw_text"] = raw_text
             canonical["transcription"]["language"] = tx_result.get("language", "en")
             canonical["lyrics"] = segmented_lines
             canonical.setdefault("meta", {}).setdefault("description", "Synchronized lyric video project")
@@ -178,11 +188,22 @@ def run_transcription_pipeline(app, project_id: str, job_id: str = None):
             logger.info(f"Transcription pipeline completed for project {project_id}")
 
         except Exception as e:
-            logger.exception(f"Error during transcription pipeline: {e}")
-            db.session.rollback()
-            project.status = "error"
-            if job:
-                job.status = "failed"
-                job.error_code = "TRANSCRIPTION_ERROR"
-                job.error_message = str(e)
-            db.session.commit()
+            logger.exception(f"Error during transcription pipeline for {project_id}: {e}")
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            try:
+                db.session.remove()
+                project = db.session.get(Project, project_id)
+                job = db.session.get(RenderJob, job_id) if job_id else None
+                if project:
+                    project.status = "error"
+                if job:
+                    job.status = "failed"
+                    job.error_code = "TRANSCRIPTION_ERROR"
+                    job.error_message = str(e)
+                    job.progress = 0
+                db.session.commit()
+            except Exception as db_err:
+                logger.error(f"Failed to record transcription failure in DB: {db_err}")

@@ -1227,6 +1227,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         transcribeSuccessIcon.classList.add('d-none');
         transcribeErrorBox.classList.add('d-none');
         transcribeModalFooter.classList.add('d-none');
+        
+        let currentPct = 15;
         transcribeProgressBar.style.width = '15%';
         transcribeProgressPct.textContent = '15%';
         transcribeStageText.textContent = isAdmin ? 'Preparing audio for OpenAI Whisper-1...' : 'Listening to song vocals & timing...';
@@ -1235,10 +1237,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         let ticker = null;
         const progressHandler = (e) => {
             const job = e.detail;
-            if (job && job.progress) {
-                transcribeProgressBar.style.width = `${job.progress}%`;
-                transcribeProgressPct.textContent = `${job.progress}%`;
-                if (job.stage) transcribeStageText.textContent = friendlyStage(job.stage);
+            if (job) {
+                // Advance progress monotonically (never jump backward to 25%)
+                if (typeof job.progress === 'number' && job.progress > currentPct) {
+                    currentPct = job.progress;
+                    transcribeProgressBar.style.width = `${currentPct}%`;
+                    transcribeProgressPct.textContent = `${currentPct}%`;
+                }
+                if (job.stage) {
+                    transcribeStageText.textContent = friendlyStage(job.stage);
+                }
             }
         };
 
@@ -1246,30 +1254,32 @@ document.addEventListener('DOMContentLoaded', async () => {
             const res = await LyricSyncAPI.triggerTranscription(projectId);
             if (!res.success) throw new Error(res.error?.message || "Failed to trigger transcription");
 
-            // Smooth progress ticker (technical for admin, friendly for normal users)
-            const fakeStages = isAdmin ? [
-                { pct: 30, text: 'Uploading audio stream to OpenAI Whisper API...' },
-                { pct: 55, text: 'Analyzing vocal phonemes & calculating word timestamps...' },
-                { pct: 75, text: 'Extracting speech tokens and millisecond boundaries...' },
-                { pct: 88, text: 'Aligning words into musical lyric lines...' }
-            ] : [
-                { pct: 30, text: 'Analyzing song audio and vocals...' },
-                { pct: 55, text: 'Detecting sung words and tempo rhythm...' },
-                { pct: 75, text: 'Synchronizing words with singing timing...' },
-                { pct: 88, text: 'Arranging lyrics into clean musical lines...' }
-            ];
-            let fIdx = 0;
-            ticker = setInterval(() => {
-                if (fIdx < fakeStages.length) {
-                    const st = fakeStages[fIdx];
-                    transcribeProgressBar.style.width = `${st.pct}%`;
-                    transcribeProgressPct.textContent = `${st.pct}%`;
-                    transcribeStageText.textContent = st.text;
-                    fIdx++;
-                }
-            }, 1100);
-
             window.addEventListener('job-progress', progressHandler);
+
+            // Active smooth progress ticker to provide constant feedback while waiting for AI
+            ticker = setInterval(() => {
+                if (currentPct < 72) {
+                    // Smoothly increment by 2-3% every 800ms
+                    currentPct += 2;
+                    transcribeProgressBar.style.width = `${currentPct}%`;
+                    transcribeProgressPct.textContent = `${currentPct}%`;
+
+                    if (currentPct >= 25 && currentPct < 45) {
+                        transcribeStageText.textContent = isAdmin
+                            ? 'Compressing audio stream with FFmpeg for fast upload...'
+                            : 'Analyzing audio frequency & tempo...';
+                    } else if (currentPct >= 45 && currentPct < 65) {
+                        transcribeStageText.textContent = isAdmin
+                            ? 'Uploading audio stream to OpenAI Whisper API...'
+                            : 'Listening to song vocals & timing...';
+                    } else if (currentPct >= 65 && currentPct < 72) {
+                        transcribeStageText.textContent = isAdmin
+                            ? 'Extracting speech tokens, syllable phonemes & word timestamps...'
+                            : 'Detecting sung words and tempo rhythm...';
+                    }
+                }
+            }, 750);
+
             await LyricSyncAPI.pollJob(res.job_id);
 
             if (ticker) clearInterval(ticker);
