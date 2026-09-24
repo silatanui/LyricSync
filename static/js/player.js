@@ -19,6 +19,7 @@ class SynchronizedPlayer {
             this.hasVideo = !!(this.video && !this.video.classList.contains('d-none') && (this.video.currentSrc || this.video.querySelector('source')));
         }
 
+        this.songTitle = options.songTitle || '';
         this.lines = [];
         this.allWords = [];
         this.currentWordIndex = 0;
@@ -44,9 +45,17 @@ class SynchronizedPlayer {
         this._setupListeners();
     }
 
+    setSongTitle(title) {
+        this.songTitle = (title || '').trim();
+        this.renderActiveFrame(this.currentTime);
+    }
+
     get clockElement() {
-        if (this.hasVideo && this.video) {
+        if (this.hasVideo && this.video && !this.video.error && this.video.readyState >= 1) {
             return this.video;
+        }
+        if (this.audio && !this.audio.error) {
+            return this.audio;
         }
         return this.audio || this.video;
     }
@@ -57,10 +66,12 @@ class SynchronizedPlayer {
     }
 
     get duration() {
-        const audioDur = this.audio ? (this.audio.duration || 0) : 0;
-        const videoDur = (this.hasVideo && this.video) ? (this.video.duration || 0) : 0;
-        return Math.max(audioDur, videoDur);
+        const audioDur = (this.audio && !isNaN(this.audio.duration)) ? this.audio.duration : 0;
+        const videoDur = (this.hasVideo && this.video && !isNaN(this.video.duration)) ? this.video.duration : 0;
+        const dur = Math.max(audioDur, videoDur);
+        return isNaN(dur) ? 0 : dur;
     }
+
 
     get isPaused() {
         const clock = this.clockElement;
@@ -239,6 +250,15 @@ class SynchronizedPlayer {
                 this.seekToWordIndex(t);
                 this.renderActiveFrame(t);
             });
+            this.video.addEventListener('error', (err) => {
+                console.warn("Video playback element failed, seamlessly falling back to audio mode:", err);
+                this.hasVideo = false;
+                if (this.video) this.video.classList.add('d-none');
+                if (this.bgImage) this.bgImage.classList.remove('d-none');
+                if (this.isPlaying && this.audio && this.audio.paused) {
+                    this.audio.play().catch(e => console.warn("Audio play error:", e));
+                }
+            });
         }
 
         if (this.audio) {
@@ -258,7 +278,11 @@ class SynchronizedPlayer {
                     this.renderActiveFrame(t);
                 }
             });
+            this.audio.addEventListener('error', (err) => {
+                console.warn("Audio stream error:", err);
+            });
         }
+
     }
 
     _startRenderLoop() {
@@ -356,6 +380,38 @@ class SynchronizedPlayer {
     }
 
     renderActiveFrame(time) {
+        const title = (this.songTitle || '').trim();
+        const firstLyricStart = (this.lines && this.lines.length > 0) ? (this.lines[0].start || 0) : 0;
+
+        // Intro mode: reveal song title with typewriter effect before music vocals start
+        const isIntro = (this.lines.length > 0) ? (time < firstLyricStart && firstLyricStart >= 0.8) : (time < 4.5);
+        if (isIntro && title) {
+            const introEnd = (this.lines.length > 0) ? Math.min(4.5, firstLyricStart - 0.2) : 4.0;
+            if (time < introEnd) {
+                const typingDuration = Math.max(0.6, introEnd * 0.72);
+                const progress = Math.min(1.0, Math.max(0.0, time / typingDuration));
+                const charIndex = Math.min(title.length, Math.floor(progress * title.length));
+                const typedTitle = title.slice(0, charIndex);
+                const isBlinking = Math.floor(time * 3.5) % 2 === 0;
+                const cursorHtml = `<span class="typewriter-cursor" style="color: ${this.style.highlightColor || '#10B981'}; opacity: ${isBlinking ? '1' : '0.15'}; margin-left: 2px;">|</span>`;
+
+                this.displayActiveText.innerHTML = `
+                    <div class="song-title-intro-box text-center py-2" style="max-width: 90%; margin: 0 auto; user-select: none;">
+                        <div class="song-title-kicker font-mono mb-2" style="letter-spacing: 0.18em; font-size: 0.72rem; color: ${this.style.highlightColor || '#10B981'}; font-weight: 700;">
+                            <i class="bi bi-disc me-1"></i> NOW PLAYING
+                        </div>
+                        <div class="song-title-heading fw-bold" style="font-size: ${Math.round((this.style.fontSize || 34) * 1.35)}px; color: ${this.style.primaryColor || '#FFFFFF'}; line-height: 1.15; word-break: break-word;">
+                            <span>${typedTitle}</span>${cursorHtml}
+                        </div>
+                    </div>
+                `;
+                return;
+            } else if (this.lines.length > 0) {
+                this.displayActiveText.innerHTML = '';
+                return;
+            }
+        }
+
         if (!this.lines.length) {
             this.displayActiveText.innerHTML = '<span class="text-secondary small font-monospace">[No lyrics loaded. Click "Transcribe AI" above]</span>';
             return;
@@ -363,6 +419,7 @@ class SynchronizedPlayer {
 
         let activeLine = null;
         let activeLineIdx = -1;
+
 
         for (let i = 0; i < this.lines.length; i++) {
             const l = this.lines[i];
@@ -442,13 +499,24 @@ class SynchronizedPlayer {
     play() {
         if (this.hasVideo && this.video) {
             this.video.muted = true;
-            this.video.play().catch(e => console.warn("Video play note:", e));
+            const vPromise = this.video.play();
+            if (vPromise && typeof vPromise.catch === 'function') {
+                vPromise.catch(e => {
+                    console.warn("Video play error, falling back to audio only:", e);
+                    this.hasVideo = false;
+                    if (this.video) this.video.classList.add('d-none');
+                    if (this.bgImage) this.bgImage.classList.remove('d-none');
+                    if (this.audio && this.audio.paused) {
+                        this.audio.play().catch(aErr => console.warn("Audio play error:", aErr));
+                    }
+                });
+            }
         }
 
         if (this.audio) {
             this.audio.muted = false;
             this.audio.volume = 1.0;
-            if (this.hasVideo && this.video) {
+            if (this.hasVideo && this.video && !isNaN(this.video.currentTime)) {
                 this.audio.currentTime = this.video.currentTime;
             }
             this.audio.play().catch(err => {
@@ -460,6 +528,7 @@ class SynchronizedPlayer {
         }
         this._startRenderLoop();
     }
+
 
     pause() {
         if (this.hasVideo && this.video) this.video.pause();

@@ -105,5 +105,72 @@ def test_project_creation_without_name_auto_generates_title(client, test_media_d
     assert res.status_code == 201
     json_data = res.get_json()
     assert json_data["success"] is True
-    # Verify title was auto-generated from audio filename
     assert json_data["project"]["name"] == "Midnight Acoustic Demo"
+
+def test_stream_media_with_fallback_path(client, test_media_dir):
+    audio_file = test_media_dir["audio"]
+    video_file = test_media_dir["video"]
+
+    with open(audio_file, "rb") as a_f, open(video_file, "rb") as v_f:
+        data = {
+            "name": "Streaming Path Test",
+            "audio": (a_f, "test_audio.wav"),
+            "video": (v_f, "test_video.mp4"),
+        }
+        res = client.post("/api/projects", data=data, content_type="multipart/form-data")
+
+    assert res.status_code == 201
+    project_id = res.get_json()["project"]["id"]
+
+    # Stream audio
+    res_audio = client.get(f"/api/projects/{project_id}/media/audio")
+    assert res_audio.status_code == 200
+    assert "audio/" in res_audio.headers.get("Content-Type", "")
+
+    # Stream video
+    res_video = client.get(f"/api/projects/{project_id}/media/video")
+    assert res_video.status_code == 200
+    assert "video/" in res_video.headers.get("Content-Type", "")
+
+def test_download_rendered_project(client, test_media_dir, app):
+    from app.models import Project, RenderJob
+    from app.utils.files import get_project_output_dir
+    from app.extensions import db
+
+    audio_file = test_media_dir["audio"]
+    video_file = test_media_dir["video"]
+
+    with open(audio_file, "rb") as a_f, open(video_file, "rb") as v_f:
+        data = {
+            "name": "Download Test Song!",
+            "audio": (a_f, "test_audio.wav"),
+            "video": (v_f, "test_video.mp4"),
+        }
+        res = client.post("/api/projects", data=data, content_type="multipart/form-data")
+
+    assert res.status_code == 201
+    project_id = res.get_json()["project"]["id"]
+
+    # Create dummy rendered output file
+    with app.app_context():
+        p = db.session.get(Project, project_id)
+        out_dir = get_project_output_dir(project_id)
+        out_file = out_dir / f"lyricsync_{project_id}_rev1.mp4"
+        out_file.write_bytes(b"dummy mp4 video bytes")
+
+        job = RenderJob(
+            project_id=project_id,
+            status="completed",
+            output_file_path=str(out_file),
+            progress=100
+        )
+        db.session.add(job)
+        db.session.commit()
+
+    # Test download endpoint
+    res_dl = client.get(f"/api/projects/{project_id}/download")
+    assert res_dl.status_code == 200
+    assert res_dl.headers.get("Content-Type") == "video/mp4"
+    assert "attachment" in res_dl.headers.get("Content-Disposition", "")
+    assert "Download_Test_Song_lyrics.mp4" in res_dl.headers.get("Content-Disposition", "")
+

@@ -100,3 +100,31 @@ def test_ass_generation_stanza_and_sentence(tmp_path):
     SubtitleGenerator.generate_ass(canonical, sentence_ass)
     s_content = sentence_ass.read_text(encoding="utf-8")
     assert "Dialogue: 0,0:00:01.00,0:00:03.00" in s_content
+
+def test_ass_generation_with_typewriter_title(tmp_path):
+    canonical = {
+        "project": {"name": "Amazing Grace"},
+        "style": {"format": "line", "mode": "karaoke", "font": "Caveat", "font_size": 34},
+        "lyrics": [
+            {
+                "id": 1,
+                "text": "Amazing grace how sweet the sound",
+                "start": 4.0,
+                "end": 8.0,
+                "words": [
+                    {"text": "Amazing", "start": 4.0, "end": 5.0},
+                    {"text": "grace", "start": 5.0, "end": 6.0}
+                ]
+            }
+        ]
+    }
+    ass_path = tmp_path / "typewriter_title.ass"
+    SubtitleGenerator.generate_ass(canonical, ass_path)
+    content = ass_path.read_text(encoding="utf-8")
+    assert "Style: Title,Caveat" in content
+    assert "NOW PLAYING" in content
+    assert "A|" in content
+    assert "Amazing Grace|" in content
+    assert "Dialogue: 1," in content
+
+

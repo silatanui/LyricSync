@@ -4,7 +4,7 @@ from app.extensions import db
 from app.models import Project, RenderJob, MediaAsset
 from app.services.subtitles import SubtitleGenerator
 from app.services.ffmpeg import FFmpegRenderer
-from app.utils.files import get_project_output_dir, calculate_checksum
+from app.utils.files import get_project_output_dir, calculate_checksum, resolve_project_media
 from app.utils.ids import generate_asset_id
 
 logger = logging.getLogger(__name__)
@@ -28,21 +28,23 @@ def run_render_pipeline(app, project_id: str, job_id: str):
             db.session.commit()
 
             canonical = project.get_canonical_json()
+            canonical.setdefault("project", {})["name"] = project.name
             out_dir = get_project_output_dir(project.id)
 
             # Generate ASS file
             ass_path = out_dir / f"lyrics_rev_{project.current_revision}.ass"
             SubtitleGenerator.generate_ass(canonical, ass_path)
 
-            video_path = Path(project.video_path)
-            if not video_path.is_absolute():
-                video_path = (Path(app.root_path).parent / video_path).resolve()
+            video_path = resolve_project_media(project, "video")
+            if not video_path or not video_path.exists():
+                raise FileNotFoundError("Project background video/image asset could not be located on disk.")
 
-            audio_path = Path(project.audio_path)
-            if not audio_path.is_absolute():
-                audio_path = (Path(app.root_path).parent / audio_path).resolve()
+            audio_path = resolve_project_media(project, "audio")
+            if not audio_path or not audio_path.exists():
+                raise FileNotFoundError("Project audio file could not be located on disk.")
 
             output_mp4 = out_dir / f"lyricsync_{project.id}_rev{project.current_revision}.mp4"
+
 
             render_cfg = canonical.get("render", {})
             aspect_ratio = render_cfg.get("aspect_ratio", "16:9")

@@ -139,8 +139,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const qualityOpt1080 = document.getElementById('qualityOpt1080');
 
     // Initialize Player & Timeline
-    const player = new SynchronizedPlayer(videoEl, audioEl, overlayEl);
+    const initialTitle = editorProjectName ? editorProjectName.value : '';
+    const player = new SynchronizedPlayer(videoEl, audioEl, overlayEl, { songTitle: initialTitle });
     const timeline = new LyricTimeline(document.getElementById('lyricLinesList'), player);
+
 
     // Wire Preview Quality Switcher
     function setPreviewQuality(quality) {
@@ -222,9 +224,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const res = await LyricSyncAPI.updateProject(projectId, { name });
                 if (!res.success) throw new Error(res.error?.message || 'Failed to save project name');
                 editorProjectName.value = res.project.name;
+                player.setSongTitle(res.project.name);
             } catch (err) {
                 console.warn('Could not save project name:', err);
             }
+
         };
         editorProjectName.addEventListener('change', saveProjectName);
         editorProjectName.addEventListener('keydown', (event) => {
@@ -250,12 +254,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function formatTime(s) {
-        const sec = Math.max(0, s);
+        if (s == null || isNaN(s)) return "00:00.00";
+        const sec = Math.max(0, Number(s));
         const m = Math.floor(sec / 60);
         const remS = Math.floor(sec % 60);
         const cs = Math.floor((sec - Math.floor(sec)) * 100);
         return `${m < 10 ? '0' : ''}${m}:${remS < 10 ? '0' : ''}${remS}.${cs < 10 ? '0' : ''}${cs}`;
     }
+
 
     // Helper: update font picker button display
     function updateFontPickerDisplay(fontName) {
@@ -342,6 +348,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (canonical.meta?.background_template) {
                 selectTemplate(canonical.meta.background_template);
             }
+
+            // Set song title in player for intro typewriter effect
+            const songTitle = canonical.project?.name || res.project?.name || editorProjectName?.value || 'Untitled Song';
+            player.setSongTitle(songTitle);
+
+            // Pre-seed total duration from canonical media metadata
+            if (canonical.media?.audio_duration && canonical.media.audio_duration > 0) {
+                const dur = Number(canonical.media.audio_duration);
+                scrubber.max = dur;
+                totalDurationDisplay.textContent = formatTime(dur);
+            }
+
+            // If a rendered video is already available, reveal header download button immediately
+            if (res.has_render && downloadHeaderBtn) {
+                downloadHeaderBtn.href = res.download_url || `/api/projects/${projectId}/download`;
+                downloadHeaderBtn.classList.remove('d-none');
+                downloadHeaderBtn.classList.add('d-flex');
+            }
         }
     } catch (e) {
         console.error("Failed to load project details:", e);
@@ -357,14 +381,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Video & Audio metadata loaded
     const updateDuration = () => {
-        const dur = player.duration || videoEl.duration || audioEl.duration || 0;
-        if (dur > 0) {
+        const pDur = player.duration;
+        const vDur = (videoEl && !isNaN(videoEl.duration)) ? videoEl.duration : 0;
+        const aDur = (audioEl && !isNaN(audioEl.duration)) ? audioEl.duration : 0;
+        const dur = (pDur && !isNaN(pDur) && pDur > 0) ? pDur : Math.max(vDur, aDur);
+        if (dur > 0 && !isNaN(dur)) {
             scrubber.max = dur;
             totalDurationDisplay.textContent = formatTime(dur);
         }
     };
     videoEl.addEventListener('loadedmetadata', updateDuration);
     audioEl.addEventListener('loadedmetadata', updateDuration);
+    if ((audioEl && audioEl.readyState >= 1) || (videoEl && videoEl.readyState >= 1)) {
+        updateDuration();
+    }
+
 
     // Playback time tracking via player unified events
     const onTimeTick = (cur, dur) => {
@@ -1376,10 +1407,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (exportSelectView) exportSelectView.classList.remove('d-none');
         if (exportProgressView) exportProgressView.classList.add('d-none');
         if (startExportActionBtn) startExportActionBtn.classList.remove('d-none');
-        if (downloadFinalVideoBtn) downloadFinalVideoBtn.classList.add('d-none');
+        if (downloadHeaderBtn && !downloadHeaderBtn.classList.contains('d-none') && downloadFinalVideoBtn) {
+            downloadFinalVideoBtn.href = downloadHeaderBtn.href;
+            downloadFinalVideoBtn.classList.remove('d-none');
+        } else if (downloadFinalVideoBtn) {
+            downloadFinalVideoBtn.classList.add('d-none');
+        }
         if (exportErrorBox) exportErrorBox.classList.add('d-none');
         exportModal.show();
     });
+
 
     // Execute Export Render upon clicking Start Render button
     if (startExportActionBtn) {

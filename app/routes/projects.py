@@ -4,7 +4,7 @@ from pathlib import Path
 from flask import Blueprint, jsonify, send_file, request, current_app, url_for
 from app.extensions import db
 from app.models import Project, MediaAsset, RenderJob
-from app.utils.files import get_project_dir, get_project_output_dir
+from app.utils.files import get_project_dir, get_project_output_dir, resolve_project_media, resolve_rendered_video
 from app.services.background_generator import BackgroundGenerator
 
 projects_bp = Blueprint("projects", __name__, url_prefix="/api/projects")
@@ -28,11 +28,18 @@ def get_project(project_id: str):
             "error": {"code": "PROJECT_NOT_FOUND", "message": "Project not found.", "retryable": False}
         }), 404
 
+    rendered_file = resolve_rendered_video(project)
+    has_render = rendered_file is not None
+    download_url = url_for("projects.download_project_render", project_id=project.id) if has_render else None
+
     return jsonify({
         "success": True,
         "project": project.to_dict(),
-        "canonical": project.get_canonical_json()
+        "canonical": project.get_canonical_json(),
+        "has_render": has_render,
+        "download_url": download_url
     })
+
 
 @projects_bp.route("/<project_id>", methods=["DELETE"])
 def delete_project(project_id: str):
@@ -93,16 +100,9 @@ def stream_project_media(project_id: str, kind: str):
     if not project:
         return "Project not found", 404
 
-    file_path_str = project.audio_path if kind == "audio" else project.video_path
-    if not file_path_str:
-        return "Media file not configured", 404
-
-    path = Path(file_path_str)
-    if not path.is_absolute():
-        path = (Path(current_app.root_path).parent / path).resolve()
-
-    if not path.exists():
-        return f"Media file not found at {path}", 404
+    path = resolve_project_media(project, kind)
+    if not path or not path.exists():
+        return f"Media file not found for kind '{kind}'", 404
 
     from app.utils.files import detect_mime_type
     response = send_file(str(path), mimetype=detect_mime_type(path), conditional=True)
@@ -113,6 +113,7 @@ def stream_project_media(project_id: str, kind: str):
 @projects_bp.route("/<project_id>/download", methods=["GET"])
 def download_project_render(project_id: str):
     """Download final rendered video MP4."""
+    import re
     project = db.session.get(Project, project_id)
     if not project:
         return jsonify({
@@ -120,35 +121,28 @@ def download_project_render(project_id: str):
             "error": {"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
         }), 404
 
-    # Find the latest completed render job or output media asset
-    completed_job = db.session.query(RenderJob).filter_by(
-        project_id=project_id,
-        status="completed"
-    ).order_by(RenderJob.created_at.desc()).first()
-
-    if not completed_job or not completed_job.output_file_path:
+    job_path = resolve_rendered_video(project)
+    if not job_path or not job_path.exists():
         return jsonify({
             "success": False,
-            "error": {"code": "OUTPUT_NOT_FOUND", "message": "No completed render available for download", "retryable": False}
+            "error": {"code": "OUTPUT_NOT_FOUND", "message": "No completed render available for download. Click Export Video to generate it.", "retryable": False}
         }), 404
 
-    job_path = Path(completed_job.output_file_path)
-    if not job_path.is_absolute():
-        job_path = (Path(current_app.root_path).parent / job_path).resolve()
+    clean_name = re.sub(r'[^\w\s-]', '', project.name).strip()
+    clean_name = re.sub(r'[-\s]+', '_', clean_name) or "lyricsync"
+    download_name = f"{clean_name}_lyrics.mp4"
 
-    if not job_path.exists():
-        return jsonify({
-            "success": False,
-            "error": {"code": "OUTPUT_NOT_FOUND", "message": "Rendered file missing from disk", "retryable": False}
-        }), 404
-
-    download_name = f"{project.name.replace(' ', '_')}_lyrics.mp4"
-    return send_file(
+    response = send_file(
         str(job_path),
         as_attachment=True,
         download_name=download_name,
-        mimetype="video/mp4"
+        mimetype="video/mp4",
+        conditional=True
     )
+    response.headers["Accept-Ranges"] = "bytes"
+    response.headers["Content-Disposition"] = f'attachment; filename="{download_name}"'
+    return response
+
 
 @projects_bp.route("/templates", methods=["GET"])
 def get_background_templates():
@@ -177,15 +171,13 @@ def update_project_background(project_id: str):
     aspect_ratio = data.get("aspect_ratio") or canonical.get("render", {}).get("aspect_ratio", "16:9")
     w, h = BackgroundGenerator.get_dimensions(aspect_ratio)
 
-    audio_path = Path(project.audio_path)
-    if not audio_path.is_absolute():
-        audio_path = (Path(current_app.root_path).parent / audio_path).resolve()
-
-    if not audio_path.exists():
+    audio_path = resolve_project_media(project, "audio")
+    if not audio_path or not audio_path.exists():
         return jsonify({
             "success": False,
             "error": {"code": "AUDIO_MISSING", "message": "Project audio file not found on disk.", "retryable": False}
         }), 400
+
 
     proj_dir = get_project_dir(project_id)
     bg_file = proj_dir / f"background_{template_id}.webp"

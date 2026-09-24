@@ -6,6 +6,7 @@ from app.extensions import db
 from app.models import Project, Transcription, LyricLine, LyricWord, RenderJob
 from app.services.openai_transcription import OpenAITranscriber
 from app.services.alignment import AlignmentEngine
+from app.utils.files import resolve_project_media
 
 logger = logging.getLogger(__name__)
 
@@ -80,14 +81,10 @@ def run_transcription_pipeline(app, project_id: str, job_id: str = None):
             return
 
         try:
-            audio_path = Path(project.audio_path)
-            if not audio_path.is_absolute():
-                audio_path = (Path(app.root_path).parent / audio_path).resolve()
-            else:
-                audio_path = audio_path.resolve()
+            audio_path = resolve_project_media(project, "audio")
+            if not audio_path or not audio_path.exists():
+                raise FileNotFoundError(f"Project audio file not found on disk for project {project.id}")
 
-            if not audio_path.exists():
-                raise FileNotFoundError(f"Project audio file not found on disk at: {audio_path}")
 
             if job:
                 job.status = "transcribing"

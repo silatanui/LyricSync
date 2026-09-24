@@ -49,7 +49,10 @@ def editor_page(project_id: str):
     project = db.session.get(Project, project_id)
     if not project:
         abort(404)
-    return render_template("editor.html", project=project, canonical=project.get_canonical_json())
+    from app.utils.files import resolve_rendered_video
+    has_render = resolve_rendered_video(project) is not None
+    return render_template("editor.html", project=project, canonical=project.get_canonical_json(), has_render=has_render)
+
 
 @views_bp.route("/public/project/<project_id>")
 def public_project_page(project_id: str):

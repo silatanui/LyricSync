@@ -115,8 +115,9 @@ const LyricSyncAPI = {
                 try {
                     if (Date.now() - startedAt >= timeoutMs) {
                         clearInterval(timer);
-                        return reject(new Error('Transcription is taking too long. Please check your OpenAI key and try again.'));
+                        return reject(new Error('Process took longer than expected. Please retry.'));
                     }
+
                     const res = await LyricSyncAPI.getJobStatus(jobId);
                     if (!res.success) {
                         if (res.error?.retryable) return;
