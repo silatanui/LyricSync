@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
-from sqlalchemy import String, DateTime
+from sqlalchemy import String, DateTime, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
 from app.extensions import db
@@ -17,7 +18,9 @@ class User(db.Model, UserMixin):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=True)
     google_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=True, index=True)
     avatar_url: Mapped[str] = mapped_column(String(1024), nullable=True)
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
 
     projects = relationship("Project", back_populates="user", cascade="all, delete-orphan")
 
@@ -56,5 +59,7 @@ class User(db.Model, UserMixin):
             "initials": self.initials,
             "avatar_url": self.avatar_url,
             "is_admin": self.is_admin,
+            "email_verified": self.email_verified,
             "created_at": self.created_at.isoformat() if self.created_at else None
         }
+

@@ -53,8 +53,18 @@ def create_app(config_class=Config):
         import app.models  # load models
         try:
             db.create_all()
+            inspector = db.inspect(db.engine)
+            if "users" in inspector.get_table_names():
+                user_cols = [c["name"] for c in inspector.get_columns("users")]
+                if "email_verified" not in user_cols:
+                    db.session.execute(db.text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT 0"))
+                    db.session.commit()
+                db.session.execute(db.text("UPDATE users SET email_verified = 1 WHERE email = 'silatanuikipngetich@gmail.com' OR google_id IS NOT NULL"))
+                db.session.commit()
         except Exception as db_err:
-            flask_app.logger.warning(f"db.create_all() warning on startup: {db_err}")
+            db.session.rollback()
+            flask_app.logger.warning(f"Database schema migration warning on startup: {db_err}")
+
 
     # Global JSON error handling according to Section 12.3 specification
     @flask_app.errorhandler(404)

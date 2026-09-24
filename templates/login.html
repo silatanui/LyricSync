@@ -81,6 +81,36 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
         const data = await res.json();
         if (data.success) {
             window.location.href = "{{ url_for('views.dashboard') }}";
+        } else if (data.error?.code === "EMAIL_NOT_VERIFIED") {
+            alertBox.innerHTML = `
+                <div>${data.error.message}</div>
+                <div class="mt-2">
+                    <button type="button" class="btn btn-outline-danger btn-sm" id="loginResendBtn">
+                        Resend Activation Email
+                    </button>
+                    <span id="loginResendStatus" class="ms-2 small"></span>
+                </div>
+            `;
+            alertBox.classList.remove('d-none');
+            document.getElementById('loginResendBtn')?.addEventListener('click', async () => {
+                const btn = document.getElementById('loginResendBtn');
+                const status = document.getElementById('loginResendStatus');
+                btn.disabled = true;
+                btn.textContent = "Sending...";
+                try {
+                    const r = await fetch("{{ url_for('auth.resend_activation') }}", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ email: payload.email })
+                    });
+                    const resJson = await r.json();
+                    status.textContent = resJson.message || "Activation email sent!";
+                    btn.textContent = "Sent";
+                } catch {
+                    btn.disabled = false;
+                    btn.textContent = "Try again";
+                }
+            });
         } else {
             alertBox.textContent = data.error?.message || "Unable to sign in.";
             alertBox.classList.remove('d-none');

@@ -2,6 +2,7 @@ import shutil
 import time
 from pathlib import Path
 from flask import Blueprint, jsonify, send_file, request, current_app, url_for
+from flask_login import current_user
 from app.extensions import db
 from app.models import Project, MediaAsset, RenderJob
 from app.utils.files import get_project_dir, get_project_output_dir, resolve_project_media, resolve_rendered_video
@@ -43,7 +44,17 @@ def get_project(project_id: str):
 
 @projects_bp.route("/<project_id>", methods=["DELETE"])
 def delete_project(project_id: str):
-    """Delete project and remove associated files."""
+    """Delete project and remove associated files. Restricted strictly to administrator."""
+    if not (current_user.is_authenticated and current_user.is_admin):
+        return jsonify({
+            "success": False,
+            "error": {
+                "code": "FORBIDDEN",
+                "message": "Only the administrator can delete projects.",
+                "retryable": False
+            }
+        }), 403
+
     project = db.session.get(Project, project_id)
     if not project:
         return jsonify({

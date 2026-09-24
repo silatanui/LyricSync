@@ -133,9 +133,11 @@
                     <a href="{{ url_for('projects.download_project_render', project_id=p.id) }}" class="btn btn-outline-green text-decoration-none px-3" title="Download Rendered MP4">
                         <i class="bi bi-download"></i>
                     </a>
+                    {% if is_admin %}
                     <button class="btn btn-outline-secondary px-3 delete-btn" data-id="{{ p.id }}" data-name="{{ p.name }}" title="Delete project">
                         <i class="bi bi-trash3"></i>
                     </button>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -161,6 +163,7 @@
     {% endif %}
 </div>
 
+{% if is_admin %}
 <!-- Delete Confirmation Modal (Square) -->
 <div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -181,6 +184,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -226,28 +230,33 @@
     projectItems.forEach(item => { item.dataset.matches = 'true'; });
     renderProjectPage(0);
 
+    {% if is_admin %}
     let projectToDelete = null;
-    const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
-    document.querySelectorAll('.delete-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            projectToDelete = btn.getAttribute('data-id');
-            document.getElementById('deleteProjectName').textContent = btn.getAttribute('data-name');
-            deleteModal.show();
+    const deleteModalEl = document.getElementById('deleteModal');
+    if (deleteModalEl) {
+        const deleteModal = new bootstrap.Modal(deleteModalEl);
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                projectToDelete = btn.getAttribute('data-id');
+                document.getElementById('deleteProjectName').textContent = btn.getAttribute('data-name');
+                deleteModal.show();
+            });
         });
-    });
 
-    document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
-        if (!projectToDelete) return;
-        try {
-            const res = await LyricSyncAPI.deleteProject(projectToDelete);
-            if (res.success) {
-                window.location.reload();
-            } else {
-                alert(res.error?.message || 'Failed to delete project');
+        document.getElementById('confirmDeleteBtn')?.addEventListener('click', async () => {
+            if (!projectToDelete) return;
+            try {
+                const res = await LyricSyncAPI.deleteProject(projectToDelete);
+                if (res.success) {
+                    window.location.reload();
+                } else {
+                    alert(res.error?.message || 'Failed to delete project');
+                }
+            } catch (err) {
+                alert('Error deleting project: ' + err.message);
             }
-        } catch (err) {
-            alert('Error deleting project: ' + err.message);
-        }
-    });
+        });
+    }
+    {% endif %}
 </script>
 {% endblock %}

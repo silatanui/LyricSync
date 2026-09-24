@@ -101,6 +101,36 @@ body {
     color: var(--brand-burgundy);
 }
 
+.studio-navbar .btn-signup,
+.btn-signup {
+    background-color: #10B981;
+    border: 1px solid #10B981;
+    color: #FFFFFF !important;
+    font-weight: 600;
+    font-size: 0.875rem;
+    padding: 0.5rem 1.15rem;
+    border-radius: 4px;
+    letter-spacing: 0.01em;
+    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.studio-navbar .btn-signup:hover,
+.studio-navbar .btn-signup:focus,
+.btn-signup:hover,
+.btn-signup:focus {
+    background-color: #059669;
+    border-color: #059669;
+    color: #FFFFFF !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+}
+
+.studio-navbar .btn-signup:active,
+.btn-signup:active {
+    transform: translateY(0);
+}
+
 /* Square Buttons (Generous, Solid, Architectural) */
 .btn-burgundy {
     background-color: var(--brand-burgundy);
@@ -1086,6 +1116,10 @@ body {
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--brand-burgundy);
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
 
 .active-lyric-text.canvas-direct-editing {
     min-width: min(70vw, 42rem);
@@ -1096,10 +1130,6 @@ body {
     user-select: text;
     white-space: pre-wrap;
     display: block;
-}
-    margin-bottom: 1.25rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--border-color);
 }
 
 /* Timeline Drawer */
@@ -1448,5 +1478,294 @@ body {
 }
 .border-burgundy-subtle {
     border-color: var(--brand-burgundy-border) !important;
+}
+
+/* Responsive layout adjustments */
+@media (max-width: 991px) {
+    .studio-navbar {
+        height: auto;
+        min-height: 68px;
+        padding: 0.75rem 1rem;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+
+    .studio-navbar > div:last-child {
+        margin-left: auto;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .editor-workspace {
+        height: auto;
+        min-height: calc(100vh - 68px);
+    }
+
+    .editor-header {
+        height: auto;
+        min-height: 60px;
+        gap: 0.6rem;
+        padding: 0.75rem 1rem !important;
+        flex-wrap: wrap;
+    }
+
+    .editor-header > div:first-child,
+    .editor-header > div:last-child {
+        flex: 1 1 100%;
+        min-width: 0;
+        flex-wrap: wrap;
+    }
+
+    .editor-header > div:last-child {
+        justify-content: flex-end;
+    }
+
+    .editor-main-area {
+        flex-direction: column;
+        overflow: visible !important;
+    }
+
+    .studio-left-dock {
+        width: 100%;
+        min-width: 100%;
+        max-width: none;
+        flex-direction: row;
+        overflow-x: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .dock-tab-btn {
+        flex: 1 0 82px;
+        min-height: 64px;
+    }
+
+    .studio-left-drawer {
+        width: 100%;
+        min-width: 100%;
+        max-width: none;
+        max-height: 45vh;
+        border-right: 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .preview-stage {
+        min-height: min(60vw, 460px);
+        flex: 0 0 auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .lyrics-sheet-sidebar {
+        width: 100% !important;
+        height: min(38vh, 300px) !important;
+        min-height: 220px;
+        border-left: 0 !important;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .player-controls-bar {
+        align-items: stretch;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem !important;
+    }
+
+    .player-controls-bar > .flex-grow-1 {
+        order: 3;
+        flex-basis: 100%;
+        margin: 0 !important;
+    }
+
+    .player-controls-bar > div:last-child {
+        margin-left: auto;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+}
+
+@media (max-width: 767px) {
+    .container-fluid {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+
+    .studio-box {
+        padding: 1rem !important;
+    }
+
+    .studio-stat-card {
+        padding: 1rem;
+    }
+
+    .project-card {
+        padding: 1rem;
+    }
+
+    .project-preview {
+        margin: -1rem -1rem 1rem;
+    }
+
+    .project-card .bg-light {
+        padding: 0.75rem !important;
+    }
+
+    .home-section-heading {
+        display: block;
+        margin-bottom: 2rem;
+    }
+
+    .home-section-index {
+        display: block;
+        margin-top: 0.75rem;
+    }
+
+    .home-feature-visual {
+        border-width: 0.5rem;
+        box-shadow: 10px 10px 0 var(--brand-burgundy);
+    }
+
+    .home-quote {
+        padding-left: 1rem;
+    }
+
+    .home-quote p {
+        font-size: 1.35rem;
+    }
+
+    .editor-header > div:first-child .border-start {
+        border-left: 0 !important;
+        padding-left: 0 !important;
+        flex-wrap: wrap;
+    }
+
+    #editorProjectName {
+        flex: 1 1 180px;
+        max-width: none !important;
+    }
+
+    .editor-header > div:last-child > * {
+        flex: 1 1 auto;
+    }
+
+    .editor-header .dropdown,
+    .editor-header button,
+    .editor-header a {
+        min-height: 42px;
+    }
+
+    .canvas-inline-editor-box {
+        bottom: 12px;
+        width: calc(100% - 1.5rem);
+        padding: 0.75rem;
+    }
+
+    .canvas-box-toolbar {
+        max-width: calc(100vw - 2rem);
+        overflow-x: auto;
+    }
+
+    .lyrics-sheet-footer {
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .site-legal-footer {
+        flex-wrap: wrap;
+        row-gap: 0.35rem;
+    }
+
+    .cookie-consent {
+        align-items: stretch;
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 575px) {
+    .home-page .row {
+        margin-left: 0;
+        margin-right: 0;
+    }
+
+    .studio-navbar {
+        padding: 0.6rem 0.75rem;
+    }
+
+    .studio-navbar > div:first-child {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .studio-navbar > div:last-child {
+        gap: 0.35rem !important;
+    }
+
+    .brand-subtitle,
+    .studio-navbar .btn-signup span,
+    .studio-navbar > div:last-child > .nav-link-studio span {
+        display: none;
+    }
+
+    .brand-title {
+        font-size: 1.1rem;
+    }
+
+    .brand-symbol {
+        margin-right: 0 !important;
+    }
+
+    .studio-navbar .nav-link-studio {
+        padding: 0.5rem;
+    }
+
+    .studio-navbar .btn-signup,
+    .studio-navbar .btn-burgundy {
+        padding: 0.55rem 0.7rem;
+    }
+
+    .studio-navbar .btn-burgundy span {
+        display: none;
+    }
+
+    .editor-header > div:last-child {
+        justify-content: stretch;
+    }
+
+    .editor-header > div:last-child > * {
+        flex: 1 1 calc(50% - 0.5rem);
+    }
+
+    .editor-header > div:last-child .dropdown {
+        flex-basis: 100%;
+    }
+
+    .editor-header > div:last-child .dropdown button,
+    .editor-header > div:last-child button,
+    .editor-header > div:last-child a {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .player-controls-bar > div:first-child,
+    .player-controls-bar > div:last-child {
+        width: 100%;
+        margin-left: 0;
+    }
+
+    .player-controls-bar > div:last-child {
+        justify-content: stretch;
+    }
+
+    .player-controls-bar > div:last-child > * {
+        flex: 1 1 auto;
+    }
+
+    .home-hero h1 {
+        font-size: 2.75rem;
+    }
+
+    .home-hero-copy {
+        font-size: 1rem;
+    }
 }
 
