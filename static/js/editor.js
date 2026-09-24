@@ -6,6 +6,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!workspace) return;
 
     const projectId = workspace.getAttribute('data-project-id');
+    const isAdmin = workspace.getAttribute('data-is-admin') === 'true';
+
+    const friendlyStage = (stage) => {
+        if (isAdmin || !stage) return stage || '';
+        if (stage.includes('Whisper') || stage.includes('OpenAI')) return 'Analyzing song vocals with AI...';
+        if (stage.includes('ASS') || stage.includes('subtitles') || stage.includes('FFmpeg')) return 'Styling synchronized lyrics...';
+        if (stage.includes('Encoding') || stage.includes('libass')) return 'Rendering lyric video...';
+        return stage;
+    };
+
     const videoEl = document.getElementById('mainVideo');
     const audioEl = document.getElementById('mainAudio');
     const overlayEl = document.getElementById('lyricOverlay');
@@ -1219,7 +1229,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         transcribeModalFooter.classList.add('d-none');
         transcribeProgressBar.style.width = '15%';
         transcribeProgressPct.textContent = '15%';
-        transcribeStageText.textContent = 'Preparing audio for OpenAI Whisper-1...';
+        transcribeStageText.textContent = isAdmin ? 'Preparing audio for OpenAI Whisper-1...' : 'Listening to song vocals & timing...';
         transcribeModal.show();
 
         let ticker = null;
@@ -1228,7 +1238,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (job && job.progress) {
                 transcribeProgressBar.style.width = `${job.progress}%`;
                 transcribeProgressPct.textContent = `${job.progress}%`;
-                if (job.stage) transcribeStageText.textContent = job.stage;
+                if (job.stage) transcribeStageText.textContent = friendlyStage(job.stage);
             }
         };
 
@@ -1236,12 +1246,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             const res = await LyricSyncAPI.triggerTranscription(projectId);
             if (!res.success) throw new Error(res.error?.message || "Failed to trigger transcription");
 
-            // Smooth progress ticker while Whisper-1 processes audio over the wire
-            const fakeStages = [
+            // Smooth progress ticker (technical for admin, friendly for normal users)
+            const fakeStages = isAdmin ? [
                 { pct: 30, text: 'Uploading audio stream to OpenAI Whisper API...' },
                 { pct: 55, text: 'Analyzing vocal phonemes & calculating word timestamps...' },
                 { pct: 75, text: 'Extracting speech tokens and millisecond boundaries...' },
                 { pct: 88, text: 'Aligning words into musical lyric lines...' }
+            ] : [
+                { pct: 30, text: 'Analyzing song audio and vocals...' },
+                { pct: 55, text: 'Detecting sung words and tempo rhythm...' },
+                { pct: 75, text: 'Synchronizing words with singing timing...' },
+                { pct: 88, text: 'Arranging lyrics into clean musical lines...' }
             ];
             let fIdx = 0;
             ticker = setInterval(() => {
@@ -1368,12 +1383,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (exportSpinner) exportSpinner.classList.remove('d-none');
             if (exportErrorBox) exportErrorBox.classList.add('d-none');
             if (exportQualityBadgeText) {
-                exportQualityBadgeText.textContent = chosenRes === '720' ? '720p Fast Draft MP4' : '1080p Studio Master MP4';
+                exportQualityBadgeText.textContent = chosenRes === '720' 
+                    ? (isAdmin ? '720p Fast Draft MP4' : '720p Fast Draft Video') 
+                    : (isAdmin ? '1080p Studio Master MP4' : '1080p Full HD Video');
             }
 
             exportProgressBar.style.width = '15%';
             exportProgressPct.textContent = '15%';
-            exportStageText.textContent = 'Queueing FFmpeg render job...';
+            exportStageText.textContent = isAdmin ? 'Queueing FFmpeg render job...' : 'Preparing high quality lyric video...';
 
             try {
                 // Apply latest style first
@@ -1401,7 +1418,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const job = e.detail;
                     exportProgressBar.style.width = `${job.progress}%`;
                     exportProgressPct.textContent = `${job.progress}%`;
-                    if (job.stage) exportStageText.textContent = job.stage;
+                    if (job.stage) exportStageText.textContent = friendlyStage(job.stage);
                 };
                 window.addEventListener('job-progress', progressHandler);
 

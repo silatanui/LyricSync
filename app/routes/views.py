@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, abort, current_app
+from flask_login import current_user
 from pathlib import Path
 from app.extensions import db
 from app.models import Project
@@ -54,7 +55,11 @@ def public_project_page(project_id: str):
 
 @views_bp.route("/health")
 def health_check():
-    """Health check endpoint (Section 20.3 of specification)."""
+    """Health check endpoint.
+    Deep technical diagnostic details (database tables, ffmpeg binary paths,
+    storage paths, AI model, rendering engine) are restricted to admin silatanuikipngetich@gmail.com.
+    Normal users receive a clean operational status without server internals.
+    """
     # Check DB
     db_ok = True
     db_error = None
@@ -81,7 +86,24 @@ def health_check():
         storage_ok = False
         storage_error = str(se)
 
-    # Check database tables
+    all_ok = db_ok and storage_ok
+
+    is_admin = bool(
+        current_user.is_authenticated and
+        current_user.email and
+        current_user.email.strip().lower() == "silatanuikipngetich@gmail.com"
+    )
+
+    if not is_admin:
+        # Clean, human-friendly status for normal users without internal details
+        return {
+            "status": "healthy" if all_ok else "unhealthy",
+            "database": "connected" if db_ok else "disconnected",
+            "service": "LyricSync Studio",
+            "message": "LyricSync Studio is operational." if all_ok else "Service temporarily degraded."
+        }, (200 if all_ok else 503)
+
+    # Check database tables only for admin
     tables = []
     try:
         inspector = db.inspect(db.engine)
@@ -89,8 +111,7 @@ def health_check():
     except Exception:
         pass
 
-    all_ok = db_ok and storage_ok
-
+    # Full technical diagnostics for admin silatanuikipngetich@gmail.com
     return {
         "status": "healthy" if all_ok else "unhealthy",
         "database": "connected" if db_ok else "disconnected",
@@ -100,5 +121,9 @@ def health_check():
         "storage_error": storage_error,
         "storage_path": str(current_app.config.get("MEDIA_ROOT")),
         "ffmpeg": "available" if ffmpeg_ok else "not_found",
-        "ffmpeg_binary": ffmpeg_path
-    }
+        "ffmpeg_binary": ffmpeg_path,
+        "ai_model": current_app.config.get("OPENAI_TRANSCRIPTION_MODEL", "whisper-1"),
+        "rendering_engine": "FFmpeg (libass + h264 + aac)",
+        "admin_access": True
+    }, (200 if all_ok else 503)
+

@@ -30,6 +30,15 @@ def create_app(config_class=Config):
         from app.models import User
         return db.session.get(User, user_id)
 
+    @flask_app.context_processor
+    def inject_admin_context():
+        from flask_login import current_user
+        is_admin = bool(current_user.is_authenticated and getattr(current_user, "is_admin", False))
+        return {
+            "is_admin": is_admin,
+            "admin_email": "silatanuikipngetich@gmail.com"
+        }
+
     # Register blueprints
     from app.routes import views_bp, uploads_bp, projects_bp, lyrics_bp, renders_bp, auth_bp
     flask_app.register_blueprint(views_bp)

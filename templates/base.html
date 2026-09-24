@@ -97,12 +97,21 @@
                                 <span class="text-secondary small text-truncate font-mono" style="font-size: 0.75rem;">
                                     {{ current_user.email }}
                                 </span>
+                                {% if is_admin %}
+                                <div class="d-flex align-items-center gap-1.5 mt-1">
+                                    <span class="badge bg-danger text-white border border-danger fw-semibold" style="font-size: 0.65rem; padding: 2px 6px;">
+                                        <i class="bi bi-shield-lock-fill me-0.5"></i> System Admin
+                                    </span>
+                                    <span class="text-danger-emphasis small" style="font-size: 0.68rem;">Full Access</span>
+                                </div>
+                                {% else %}
                                 <div class="d-flex align-items-center gap-1.5 mt-1">
                                     <span class="badge bg-burgundy-subtle text-burgundy border border-burgundy-subtle fw-semibold" style="font-size: 0.65rem; padding: 2px 6px;">
                                         <i class="bi bi-stars me-0.5"></i> Studio Creator
                                     </span>
-                                    <span class="text-muted" style="font-size: 0.68rem;">• Pro Sync</span>
+                                    <span class="text-muted" style="font-size: 0.68rem;">• {{ current_user.projects|length }} Project{% if current_user.projects|length != 1 %}s{% endif %}</span>
                                 </div>
+                                {% endif %}
                             </div>
                         </div>
 
@@ -132,21 +141,33 @@
                             </a>
                         </div>
 
-                        <!-- Dropdown Section 2: Account & System -->
-                        <div class="p-2 border-bottom">
-                            <span class="dropdown-section-title px-2 py-1 text-uppercase text-secondary fw-bold d-block" style="font-size: 0.68rem; letter-spacing: 0.05em;">Account &amp; System</span>
-                            <button class="dropdown-item rounded-2 py-1.5 px-2.5 d-flex align-items-center justify-content-between text-start w-100 border-0 bg-transparent" type="button" data-bs-toggle="modal" data-bs-target="#userProfileModal">
-                                <span class="d-flex align-items-center gap-2 small text-dark">
-                                    <i class="bi bi-person-badge text-secondary"></i> Account Profile
-                                </span>
-                                <i class="bi bi-chevron-right text-muted" style="font-size: 0.7rem;"></i>
-                            </button>
+                        {% if is_admin %}
+                        <!-- Admin Technical Diagnostics (Restricted strictly to silatanuikipngetich@gmail.com) -->
+                        <div class="p-2 border-bottom bg-light">
+                            <span class="dropdown-section-title px-2 py-1 text-uppercase text-danger fw-bold d-block" style="font-size: 0.65rem; letter-spacing: 0.05em;">
+                                <i class="bi bi-cpu-fill me-1"></i> Admin Diagnostics
+                            </span>
+                            <div class="px-2 py-1 small text-secondary" style="font-size: 0.75rem;">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span>AI Model:</span>
+                                    <span class="fw-semibold text-dark font-mono">Whisper-1</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span>Render Engine:</span>
+                                    <span class="fw-semibold text-dark font-mono">FFmpeg (libass)</span>
+                                </div>
+                            </div>
                             <a class="dropdown-item rounded-2 py-1.5 px-2.5 d-flex align-items-center justify-content-between" href="{{ url_for('views.health_check') }}" target="_blank">
                                 <span class="d-flex align-items-center gap-2 small text-dark">
                                     <i class="bi bi-activity text-success"></i> System Health &amp; Storage
                                 </span>
-                                <span class="badge bg-success-subtle text-success small font-mono" style="font-size: 0.65rem;">Online</span>
+                                <span class="badge bg-success-subtle text-success small font-mono" style="font-size: 0.65rem;">Live</span>
                             </a>
+                        </div>
+                        {% endif %}
+
+                        <!-- Support & Help -->
+                        <div class="p-2 border-bottom">
                             <a class="dropdown-item rounded-2 py-1.5 px-2.5 d-flex align-items-center gap-2 small text-dark" href="https://tanuisila.dev/contact.php" target="_blank">
                                 <i class="bi bi-question-circle text-secondary"></i> Help &amp; Support
                             </a>
@@ -187,82 +208,6 @@
         <a href="{{ url_for('views.terms_page') }}">Terms</a>
         <button type="button" id="cookieSettingsBtn">Cookie settings</button>
     </footer>
-
-    {% if current_user.is_authenticated %}
-    <!-- Account Profile Modal -->
-    <div class="modal fade" id="userProfileModal" tabindex="-1" aria-labelledby="userProfileModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0 shadow-lg" style="border-top: 4px solid var(--brand-burgundy) !important; border-radius: 8px !important;">
-                <div class="modal-header border-bottom py-3">
-                    <h5 class="modal-title fw-bold text-dark d-flex align-items-center gap-2" id="userProfileModalLabel" style="font-size: 1.05rem;">
-                        <i class="bi bi-person-circle text-burgundy"></i> Creator Profile
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <div class="d-flex align-items-center gap-3 mb-4">
-                        <div class="user-avatar-wrapper-lg flex-shrink-0">
-                            {% if current_user.avatar_url %}
-                                <img src="{{ current_user.avatar_url }}" alt="{{ current_user.initials }}" class="rounded-circle shadow-sm" width="56" height="56">
-                            {% else %}
-                                <div class="user-avatar-initials-lg rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm" style="width: 56px; height: 56px; font-size: 1.3rem;">
-                                    {{ current_user.initials }}
-                                </div>
-                            {% endif %}
-                        </div>
-                        <div class="overflow-hidden">
-                            <h6 class="fw-bold mb-0 text-dark">{{ current_user.display_name or current_user.email.split('@')[0] }}</h6>
-                            <span class="text-secondary small font-mono">{{ current_user.email }}</span>
-                            <div class="mt-1">
-                                <span class="badge bg-success-subtle text-success border border-success-subtle fw-semibold" style="font-size: 0.7rem;">
-                                    <i class="bi bi-check-circle-fill me-1"></i> Active Member
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="row g-2 mb-3">
-                        <div class="col-6">
-                            <div class="p-3 bg-light border text-center">
-                                <span class="text-secondary small d-block">Projects Created</span>
-                                <span class="fs-4 fw-bold text-dark">{{ current_user.projects|length }}</span>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="p-3 bg-light border text-center">
-                                <span class="text-secondary small d-block">Plan &amp; Tier</span>
-                                <span class="fs-6 fw-bold text-burgundy d-block mt-1">Studio Pro</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="p-3 bg-light border small text-secondary">
-                        <div class="d-flex justify-content-between mb-1">
-                            <span>Account ID:</span>
-                            <span class="font-mono text-dark">{{ current_user.id[:16] }}...</span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-1">
-                            <span>Authentication:</span>
-                            <span class="text-dark">{% if current_user.google_id %}Google OAuth{% else %}Email &amp; Password{% endif %}</span>
-                        </div>
-                        {% if current_user.created_at %}
-                        <div class="d-flex justify-content-between">
-                            <span>Member Since:</span>
-                            <span class="text-dark">{{ current_user.created_at.strftime('%B %d, %Y') }}</span>
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
-                <div class="modal-footer border-top py-2 px-3 d-flex justify-content-between">
-                    <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-danger btn-sm">
-                        <i class="bi bi-box-arrow-right me-1"></i> Sign Out
-                    </a>
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
 
     <!-- Bootstrap JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

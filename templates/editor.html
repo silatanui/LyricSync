@@ -3,7 +3,7 @@
 {% block title %}{{ project.name }} - LyricSync Studio{% endblock %}
 
 {% block content %}
-<div class="editor-workspace d-flex flex-column container-fluid p-0" data-project-id="{{ project.id }}">
+<div class="editor-workspace d-flex flex-column container-fluid p-0" data-project-id="{{ project.id }}" data-is-admin="{{ 'true' if is_admin else 'false' }}">
     <!-- Studio Header (Square, Spacious, Zero Badges) -->
     <header class="editor-header d-flex justify-content-between align-items-center px-4 py-2.5 border-bottom bg-white">
         <div class="d-flex align-items-center gap-3">
@@ -688,7 +688,12 @@
         <div class="modal-content studio-box p-4 border">
             <div class="modal-header border-bottom pb-3">
                 <h5 class="modal-title fw-bold text-dark d-flex align-items-center gap-2 mb-0">
-                    <i class="bi bi-stars" style="color: var(--brand-burgundy);"></i> Transcribing with OpenAI Whisper
+                    <i class="bi bi-stars" style="color: var(--brand-burgundy);"></i>
+                    {% if is_admin %}
+                        Transcribing with OpenAI Whisper-1
+                    {% else %}
+                        Auto-Syncing Lyrics with Music
+                    {% endif %}
                 </h5>
             </div>
             <div class="modal-body py-4 text-center">
@@ -696,15 +701,33 @@
                 <div id="transcribeSuccessIcon" class="d-none text-success mb-2">
                     <i class="bi bi-check-circle-fill display-4" style="color: var(--brand-green-accent);"></i>
                 </div>
-                <h5 id="transcribeStageText" class="fw-bold text-dark mb-1">Sending audio to OpenAI Whisper-1...</h5>
-                <p class="text-secondary small mb-4" id="transcribeSubText">Extracting speech, syllable phonemes, and word-level timestamps.</p>
+                <h5 id="transcribeStageText" class="fw-bold text-dark mb-1">
+                    {% if is_admin %}
+                        Sending audio to OpenAI Whisper-1...
+                    {% else %}
+                        Listening to song vocals &amp; timing...
+                    {% endif %}
+                </h5>
+                <p class="text-secondary small mb-4" id="transcribeSubText">
+                    {% if is_admin %}
+                        Extracting speech tokens, syllable phonemes, and word-level timestamps.
+                    {% else %}
+                        Aligning each word with the vocal rhythm of your song.
+                    {% endif %}
+                </p>
 
                 <div class="progress mb-2" style="height: 8px;">
                     <div id="transcribeProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="background-color: var(--brand-burgundy); width: 15%;"></div>
                 </div>
                 <div class="d-flex justify-content-between text-secondary font-mono small">
                     <span id="transcribeProgressPct" class="fw-bold" style="color: var(--brand-burgundy);">15%</span>
-                    <span>Whisper-1 AI (Word Timestamps)</span>
+                    <span>
+                        {% if is_admin %}
+                            Whisper-1 AI (Word Timestamps)
+                        {% else %}
+                            AI Vocal Timing
+                        {% endif %}
+                    </span>
                 </div>
 
                 <div id="transcribeErrorBox" class="alert alert-danger mt-3 d-none"></div>
@@ -763,8 +786,20 @@
             <!-- Step 2: Render Progress Mode -->
             <div id="exportProgressView" class="modal-body py-4 text-center d-none">
                 <div class="spinner-border mb-3" style="color: var(--brand-burgundy); width: 2.5rem; height: 2.5rem;" id="exportSpinner" role="status"></div>
-                <h5 id="exportStageText" class="fw-bold text-dark mb-1">Queueing FFmpeg render job...</h5>
-                <p class="text-secondary small mb-4" id="exportSubText">Burning exact word-level timings into progressive streaming MP4.</p>
+                <h5 id="exportStageText" class="fw-bold text-dark mb-1">
+                    {% if is_admin %}
+                        Queueing FFmpeg render job...
+                    {% else %}
+                        Preparing your lyric video...
+                    {% endif %}
+                </h5>
+                <p class="text-secondary small mb-4" id="exportSubText">
+                    {% if is_admin %}
+                        Burning exact word-level timings via libass into progressive streaming MP4.
+                    {% else %}
+                        Creating your synchronized high-definition lyric video.
+                    {% endif %}
+                </p>
 
                 <div class="progress mb-2" style="height: 8px;">
                     <div id="exportProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="background-color: var(--brand-burgundy); width: 10%;"></div>

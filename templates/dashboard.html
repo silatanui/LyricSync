@@ -8,7 +8,13 @@
     <div class="d-flex flex-wrap justify-content-between align-items-end mb-4 pb-3 border-bottom gap-3">
         <div>
             <h2 class="fw-bold mb-1 text-dark">Studio Projects</h2>
-            <p class="text-secondary mb-0">Create, synchronize lyrics with OpenAI Whisper, and export 16:9 video.</p>
+            <p class="text-secondary mb-0">
+                {% if is_admin %}
+                    Create, synchronize lyrics with OpenAI Whisper-1, and export via FFmpeg.
+                {% else %}
+                    Create, synchronize lyrics with music, and export high quality lyric videos.
+                {% endif %}
+            </p>
         </div>
         <div class="d-flex gap-2">
             <a href="{{ url_for('views.upload_page') }}" class="btn btn-burgundy text-decoration-none d-flex align-items-center gap-2">
@@ -17,7 +23,7 @@
         </div>
     </div>
 
-    <!-- Metric Overview Cards (Spacious, Square, No Badges) -->
+    <!-- Metric Overview Cards -->
     <div class="row g-4 mb-4">
         <div class="col-sm-6 col-xl-3">
             <div class="studio-stat-card">
@@ -31,18 +37,37 @@
                 <div class="h3 fw-bold mb-0 text-dark">16:9 Widescreen</div>
             </div>
         </div>
+        {% if is_admin %}
         <div class="col-sm-6 col-xl-3">
-            <div class="studio-stat-card">
-                <div class="text-secondary small fw-semibold text-uppercase tracking-wider mb-1">Speech Recognition</div>
+            <div class="studio-stat-card border-danger-subtle">
+                <div class="text-danger small fw-semibold text-uppercase tracking-wider mb-1">
+                    <i class="bi bi-cpu me-1"></i> AI Model (Admin)
+                </div>
                 <div class="h3 fw-bold mb-0 text-dark">OpenAI Whisper-1</div>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
-            <div class="studio-stat-card">
-                <div class="text-secondary small fw-semibold text-uppercase tracking-wider mb-1">Rendering Engine</div>
+            <div class="studio-stat-card border-danger-subtle">
+                <div class="text-danger small fw-semibold text-uppercase tracking-wider mb-1">
+                    <i class="bi bi-gear-wide-connected me-1"></i> Render Engine (Admin)
+                </div>
                 <div class="h3 fw-bold mb-0 text-dark">FFmpeg + libass</div>
             </div>
         </div>
+        {% else %}
+        <div class="col-sm-6 col-xl-3">
+            <div class="studio-stat-card">
+                <div class="text-secondary small fw-semibold text-uppercase tracking-wider mb-1">Lyric Precision</div>
+                <div class="h3 fw-bold mb-0 text-dark">Word-Level Sync</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="studio-stat-card">
+                <div class="text-secondary small fw-semibold text-uppercase tracking-wider mb-1">Export Quality</div>
+                <div class="h3 fw-bold mb-0 text-dark">1080p &amp; 720p HD</div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <!-- Search / Filter Bar -->

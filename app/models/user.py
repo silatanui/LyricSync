@@ -6,6 +6,8 @@ from flask_login import UserMixin
 from app.extensions import db
 from app.utils.ids import generate_user_id
 
+ADMIN_EMAIL = "silatanuikipngetich@gmail.com"
+
 class User(db.Model, UserMixin):
     __tablename__ = "users"
 
@@ -24,6 +26,11 @@ class User(db.Model, UserMixin):
 
     def check_password(self, raw_password: str) -> bool:
         return bool(self.password_hash and check_password_hash(self.password_hash, raw_password))
+
+    @property
+    def is_admin(self) -> bool:
+        """Only silatanuikipngetich@gmail.com has system administrator privileges."""
+        return bool(self.email and self.email.strip().lower() == ADMIN_EMAIL)
 
     @property
     def initials(self) -> str:
@@ -48,5 +55,6 @@ class User(db.Model, UserMixin):
             "display_name": self.display_name or (self.email.split("@")[0] if self.email else ""),
             "initials": self.initials,
             "avatar_url": self.avatar_url,
+            "is_admin": self.is_admin,
             "created_at": self.created_at.isoformat() if self.created_at else None
         }
