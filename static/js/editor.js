@@ -1287,34 +1287,53 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             window.addEventListener('job-progress', progressHandler);
 
-            // Active smooth progress ticker to provide constant feedback while waiting for AI
-            ticker = setInterval(() => {
-                if (currentPct < 72) {
-                    // Smoothly increment by 2-3% every 800ms
-                    currentPct += 2;
-                    transcribeProgressBar.style.width = `${currentPct}%`;
-                    transcribeProgressPct.textContent = `${currentPct}%`;
+        // Asymptotic progress ticker: drifts toward ~88% while Whisper API runs.
+        // The bar always moves — users see progress even for 4-5 minute songs.
+        // Rate slows exponentially as it approaches the ceiling so it never stalls.
+        const TICKER_CEILING = 88;
+        ticker = setInterval(() => {
+            if (currentPct < TICKER_CEILING) {
+                // Slowing exponential decay: starts fast, slows as it approaches ceiling
+                const remaining = TICKER_CEILING - currentPct;
+                const increment = Math.max(0.3, remaining * 0.04);
+                currentPct = Math.min(TICKER_CEILING, currentPct + increment);
+                transcribeProgressBar.style.width = `${Math.round(currentPct)}%`;
+                transcribeProgressPct.textContent = `${Math.round(currentPct)}%`;
 
-                    if (currentPct >= 25 && currentPct < 45) {
-                        transcribeStageText.textContent = isAdmin
-                            ? 'Compressing audio stream with FFmpeg for fast upload...'
-                            : 'Analyzing audio frequency & tempo...';
-                    } else if (currentPct >= 45 && currentPct < 65) {
-                        transcribeStageText.textContent = isAdmin
-                            ? 'Uploading audio stream to OpenAI Whisper API...'
-                            : 'Listening to song vocals & timing...';
-                    } else if (currentPct >= 65 && currentPct < 72) {
-                        transcribeStageText.textContent = isAdmin
-                            ? 'Extracting speech tokens, syllable phonemes & word timestamps...'
-                            : 'Detecting sung words and tempo rhythm...';
-                    }
+                if (currentPct >= 20 && currentPct < 38) {
+                    transcribeStageText.textContent = isAdmin
+                        ? 'Compressing audio with FFmpeg for fast transfer...'
+                        : 'Preparing your song for analysis...';
+                } else if (currentPct >= 38 && currentPct < 55) {
+                    transcribeStageText.textContent = isAdmin
+                        ? 'Uploading compressed audio to OpenAI Whisper API...'
+                        : 'Sending audio to AI — this may take a minute...';
+                } else if (currentPct >= 55 && currentPct < 70) {
+                    transcribeStageText.textContent = isAdmin
+                        ? 'Whisper-1 is decoding speech tokens and phonemes...'
+                        : 'AI is listening to every word and beat...';
+                } else if (currentPct >= 70 && currentPct < 80) {
+                    transcribeStageText.textContent = isAdmin
+                        ? 'Extracting word-level timestamps from Whisper response...'
+                        : 'Identifying words and their exact timing...';
+                } else if (currentPct >= 80) {
+                    transcribeStageText.textContent = isAdmin
+                        ? 'Finalising Whisper token alignment — almost done...'
+                        : 'Wrapping up — this takes longer for full-length songs...';
                 }
-            }, 750);
+            }
+        }, 700);
 
-            await LyricSyncAPI.pollJob(res.job_id);
+        await LyricSyncAPI.pollJob(res.job_id);
 
             if (ticker) clearInterval(ticker);
             window.removeEventListener('job-progress', progressHandler);
+
+            // Jump to 95% — Whisper done, now loading lyrics from server
+            currentPct = 95;
+            transcribeProgressBar.style.width = '95%';
+            transcribeProgressPct.textContent = '95%';
+            transcribeStageText.textContent = isAdmin ? 'Loading aligned lyrics into studio...' : 'Almost there — loading your synced lyrics...';
 
             // Fetch newly generated canonical lyrics
             const lyricsRes = await LyricSyncAPI.getLyrics(projectId);
@@ -1331,19 +1350,28 @@ document.addEventListener('DOMContentLoaded', async () => {
             transcribeSuccessIcon.classList.remove('d-none');
             transcribeProgressBar.style.width = '100%';
             transcribeProgressPct.textContent = '100%';
-            transcribeStageText.textContent = 'Transcription Complete! Lyrics Loaded into Studio.';
+            transcribeStageText.textContent = isAdmin ? 'Transcription Complete. Lyrics loaded into Studio.' : 'Done! Your lyrics are synced and ready to edit.';
 
             setTimeout(() => {
                 transcribeModal.hide();
-            }, 900);
+            }, 1200);
         } catch (err) {
             if (ticker) clearInterval(ticker);
             window.removeEventListener('job-progress', progressHandler);
             transcribeSpinner.classList.add('d-none');
-            transcribeErrorBox.textContent = err.message || "An error occurred during transcription.";
+            const isTimeout = err.message?.toLowerCase().includes('took longer') || err.message?.toLowerCase().includes('timeout');
+            transcribeErrorBox.innerHTML = isTimeout
+                ? `<strong>The transcription is taking longer than expected.</strong><br><span class="small">This usually happens with long songs or slow connections. Click Retry below — the server may have already finished processing.</span>`
+                : (err.message || "An error occurred during transcription.");
             transcribeErrorBox.classList.remove('d-none');
             transcribeModalFooter.classList.remove('d-none');
         }
+    });
+
+    // Retry button: hide modal and re-trigger the transcription
+    document.getElementById('transcribeRetryBtn')?.addEventListener('click', () => {
+        transcribeModal.hide();
+        setTimeout(() => transcribeBtn.click(), 300);
     });
 
     if (new URLSearchParams(window.location.search).get('auto_transcribe') === '1') {

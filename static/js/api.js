@@ -108,40 +108,66 @@ const LyricSyncAPI = {
         return await response.json();
     },
 
-    pollJob(jobId, intervalMs = 1000, timeoutMs = 300000) {
+    pollJob(jobId, intervalMs = 1500, timeoutMs = 600000) {
+        // timeoutMs = 10 minutes — Whisper-1 can take up to 5-6 min for long songs
+        // intervalMs starts at 1.5s, increases gradually to avoid hammering the server
         return new Promise((resolve, reject) => {
             const startedAt = Date.now();
-            const timer = setInterval(async () => {
-                try {
-                    if (Date.now() - startedAt >= timeoutMs) {
-                        clearInterval(timer);
-                        return reject(new Error('Process took longer than expected. Please retry.'));
-                    }
+            let currentInterval = intervalMs;
+            let failCount = 0;
+            const MAX_CONSECUTIVE_FAILS = 8;
 
+            const poll = async () => {
+                const elapsed = Date.now() - startedAt;
+
+                if (elapsed >= timeoutMs) {
+                    return reject(new Error('The transcription took longer than expected. The server is still processing — please click Retry to check if it completed.'));
+                }
+
+                // Adaptive interval: slow down after 90s to reduce server pressure
+                if (elapsed > 90000 && currentInterval < 4000) {
+                    currentInterval = 4000;
+                } else if (elapsed > 30000 && currentInterval < 2500) {
+                    currentInterval = 2500;
+                }
+
+                try {
                     const res = await LyricSyncAPI.getJobStatus(jobId);
+                    failCount = 0;
+
                     if (!res.success) {
-                        if (res.error?.retryable) return;
-                        clearInterval(timer);
+                        if (res.error?.retryable) {
+                            setTimeout(poll, currentInterval);
+                            return;
+                        }
                         return reject(new Error(res.error?.message || "Failed to poll job status"));
                     }
+
                     const job = res.job;
                     window.dispatchEvent(new CustomEvent('job-progress', { detail: job }));
 
                     if (job.status === 'completed') {
-                        clearInterval(timer);
                         resolve(job);
                     } else if (job.status === 'failed' || job.status === 'cancelled') {
-                        clearInterval(timer);
                         reject(new Error(job.error_message || "Job execution failed"));
+                    } else {
+                        // Still running — poll again
+                        setTimeout(poll, currentInterval);
                     }
                 } catch (err) {
-                    // A recycled cPanel connection is transient while the worker continues.
-                    if (!err.message?.includes('fetch')) {
-                        clearInterval(timer);
-                        reject(err);
+                    // Network hiccup — retry a few times before giving up
+                    failCount++;
+                    if (failCount >= MAX_CONSECUTIVE_FAILS) {
+                        return reject(new Error('Connection lost. The server may still be processing — please retry.'));
                     }
+                    // Exponential backoff on network errors
+                    const backoffMs = Math.min(currentInterval * Math.pow(1.5, failCount), 12000);
+                    setTimeout(poll, backoffMs);
                 }
-            }, intervalMs);
+            };
+
+            // Start polling immediately
+            setTimeout(poll, 800);
         });
     },
 

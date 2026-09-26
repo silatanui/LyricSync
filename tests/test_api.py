@@ -2,6 +2,10 @@ import io
 import json
 import pytest
 from app.tasks.transcription_tasks import run_transcription_pipeline
+from app.models.user import User
+from app.extensions import db
+
+ADMIN_EMAIL = "silatanuikipngetich@gmail.com"
 
 def test_health_check(client):
     res = client.get("/health")
@@ -84,7 +88,16 @@ def test_project_crud_and_canonical_flow(client, test_media_dir, app):
     assert style_res["style"]["font"] == "Impact"
     assert style_res["render"]["aspect_ratio"] == "9:16"
 
-    # 9. Delete project
+    # 9. Delete project — must be admin; create and log in as admin first
+    with app.app_context():
+        if not db.session.query(User).filter_by(email=ADMIN_EMAIL).first():
+            admin = User(email=ADMIN_EMAIL, display_name="System Admin")
+            admin.set_password("AdminPass1!")
+            admin.email_verified = True
+            db.session.add(admin)
+            db.session.commit()
+    client.post("/api/auth/login", json={"email": ADMIN_EMAIL, "password": "AdminPass1!"})
+
     res = client.delete(f"/api/projects/{project_id}")
     assert res.status_code == 200
     res = client.get(f"/api/projects/{project_id}")

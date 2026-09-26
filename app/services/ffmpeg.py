@@ -74,7 +74,15 @@ class FFmpegRenderer:
         scale_crop = self.build_scale_crop_filter(aspect_ratio, width, height)
         vf_filter = f"{scale_crop},fps=30,ass='{ass_escaped}'"
 
-        cmd = [self.ffmpeg_bin, "-y"]
+        # Shared hosting often has a strict per-process thread limit. Keep the
+        # render deterministic and leave capacity for the web worker.
+        cmd = [
+            self.ffmpeg_bin,
+            "-y",
+            "-threads", "1",
+            "-filter_threads", "1",
+            "-filter_complex_threads", "1",
+        ]
 
         # Duration policy & Looping
         # If input is a static image or template, loop it seamlessly across the audio duration

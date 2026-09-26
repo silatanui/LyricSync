@@ -704,21 +704,21 @@
                 </div>
                 <h5 id="transcribeStageText" class="fw-bold text-dark mb-1">
                     {% if is_admin %}
-                        Sending audio to OpenAI Whisper-1...
+                        Preparing audio for upload...
                     {% else %}
-                        Listening to song vocals &amp; timing...
+                        Preparing your song for analysis...
                     {% endif %}
                 </h5>
                 <p class="text-secondary small mb-4" id="transcribeSubText">
                     {% if is_admin %}
-                        Extracting speech tokens, syllable phonemes, and word-level timestamps.
+                        Full-length songs can take 2-5 minutes. The bar keeps moving while AI processes.
                     {% else %}
-                        Aligning each word with the vocal rhythm of your song.
+                        This works best with clear vocals. Longer songs take more time — stay on this page.
                     {% endif %}
                 </p>
 
-                <div class="progress mb-2" style="height: 8px;">
-                    <div id="transcribeProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="background-color: var(--brand-burgundy); width: 15%;"></div>
+                <div class="progress mb-2" style="height: 10px; border-radius: 3px;">
+                    <div id="transcribeProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="background-color: var(--brand-burgundy); width: 15%; transition: width 0.7s ease;"></div>
                 </div>
                 <div class="d-flex justify-content-between text-secondary font-mono small">
                     <span id="transcribeProgressPct" class="fw-bold" style="color: var(--brand-burgundy);">15%</span>
@@ -731,14 +731,16 @@
                     </span>
                 </div>
 
-                <div id="transcribeErrorBox" class="alert alert-danger mt-3 d-none"></div>
+                <div id="transcribeErrorBox" class="alert alert-warning mt-3 d-none text-start"></div>
             </div>
             <div class="modal-footer border-top pt-3 d-none" id="transcribeModalFooter">
                 <button type="button" class="btn btn-outline-secondary px-3" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-burgundy px-4" id="transcribeRetryBtn">Retry</button>
             </div>
         </div>
     </div>
 </div>
+
 
 <!-- Export Modal with Quality Tier Selection & Progress Tracking -->
 <div class="modal fade" id="exportModal" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">

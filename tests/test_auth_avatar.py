@@ -35,6 +35,7 @@ def test_logout_routes_and_normal_user_ui(client, app):
     with app.app_context():
         user = User(email="artist@lyricsync.studio", display_name="Studio Artist")
         user.set_password("Secret123!")
+        user.email_verified = True  # Pre-verify so login isn't blocked by activation check
         db.session.add(user)
         db.session.commit()
 

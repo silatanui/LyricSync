@@ -88,17 +88,22 @@ def run_transcription_pipeline(app, project_id: str, job_id: str = None):
 
             if job:
                 job.status = "transcribing"
-                job.stage = "Optimizing audio & uploading to OpenAI Whisper-1"
-                job.progress = 30
+                job.stage = "Compressing audio for upload"
+                job.progress = 20
                 db.session.commit()
 
             project.status = "transcribing"
             db.session.commit()
 
+            if job:
+                job.stage = "Uploading audio to OpenAI Whisper-1"
+                job.progress = 30
+                db.session.commit()
+
             # Temporarily release DB connection before external network call to prevent MySQL timeout
             db.session.remove()
 
-            # Transcribe with Whisper-1 (using 16kHz mono audio optimization)
+            # Transcribe with Whisper-1 — temperature=0 and language="en" for fastest processing
             transcriber = OpenAITranscriber()
             tx_result = transcriber.transcribe_word_timestamps(str(audio_path))
 
@@ -110,8 +115,8 @@ def run_transcription_pipeline(app, project_id: str, job_id: str = None):
 
             if job:
                 job.status = "aligning"
-                job.stage = "Aligning words into musical lyric lines"
-                job.progress = 75
+                job.stage = "Received Whisper response — normalizing words"
+                job.progress = 78
                 db.session.commit()
 
             raw_words = tx_result.get("words", [])
@@ -122,6 +127,11 @@ def run_transcription_pipeline(app, project_id: str, job_id: str = None):
                 line["text"] = line["text"].strip().capitalize()
                 if line.get("words"):
                     line["words"][0]["text"] = line["words"][0]["text"].strip().capitalize()
+
+            if job:
+                job.stage = "Saving lyrics to database"
+                job.progress = 88
+                db.session.commit()
 
             # Persist raw transcription
             raw_text = str(tx_result.get("text", "")).encode("utf-8", errors="replace").decode("utf-8")
