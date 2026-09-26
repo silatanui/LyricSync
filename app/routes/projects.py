@@ -111,7 +111,10 @@ def stream_project_media(project_id: str, kind: str):
     if not project:
         return "Project not found", 404
 
-    path = resolve_project_media(project, kind)
+    if kind in ("rendered", "output"):
+        path = resolve_rendered_video(project)
+    else:
+        path = resolve_project_media(project, kind)
     if not path or not path.exists():
         return f"Media file not found for kind '{kind}'", 404
 

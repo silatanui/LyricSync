@@ -1,3 +1,193 @@
 {% extends "base.html" %}
 {% block title %}{{ project.name }} | LyricSync Studio{% endblock %}
-{% block content %}<div class="public-project-page container"><a class="home-text-link" href="{{ url_for('views.home') }}"><i class="bi bi-arrow-left"></i> Back to LyricSync</a><div class="public-project-hero"><video controls preload="metadata"><source src="{{ url_for('projects.stream_project_media', project_id=project.id, kind='video') }}" type="video/mp4"></video></div><div class="public-project-heading"><div><div class="home-section-label">Shared project</div><h1>{{ project.name }}</h1><p>{{ canonical.get('meta', {}).get('description', 'Synchronized lyric video project') }}</p></div><a class="btn btn-burgundy" href="{{ url_for('views.upload_page') }}">Make your own</a></div><div class="public-lyrics"><div class="home-section-label">Lyrics</div>{% for line in canonical.get('lyrics', []) %}<p>{{ line.text }}</p>{% endfor %}</div></div>{% endblock %}
+
+{% block content %}
+<div class="public-project-page container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <a class="home-text-link" href="{{ url_for('views.home') }}">
+            <i class="bi bi-arrow-left"></i> Back to LyricSync
+        </a>
+        {% if has_render %}
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('projects.download_project_render', project_id=project.id) }}">
+            <i class="bi bi-download me-1"></i> Download MP4
+        </a>
+        {% endif %}
+    </div>
+
+    <!-- Main Player Stage -->
+    <div class="public-project-hero position-relative rounded overflow-hidden shadow-sm" style="background: #12050B; aspect-ratio: 16 / 9;">
+        {% if has_render %}
+            <!-- Rendered Video Player with Burned-In Typography -->
+            <video id="sharedMedia" controls playsinline preload="auto" class="w-100 h-100 object-fit-contain" style="display: block; background: #000;">
+                <source src="{{ url_for('projects.stream_project_media', project_id=project.id, kind='rendered') }}" type="video/mp4">
+                Your browser does not support HTML5 video.
+            </video>
+        {% elif is_video_bg %}
+            <!-- Synchronized Video Background Player -->
+            <video id="sharedMedia" playsinline loop preload="auto" class="w-100 h-100 object-fit-cover position-absolute top-0 start-0">
+                <source src="{{ url_for('projects.stream_project_media', project_id=project.id, kind='video') }}" type="video/mp4">
+            </video>
+            <div class="shared-lyric-overlay position-absolute top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center align-items-center p-4 text-center pointer-events-none" style="background: rgba(0,0,0,0.35);">
+                <div id="sharedActiveLyric" class="display-6 fw-bold text-white px-4 py-3 rounded" style="background: rgba(15,10,14,0.75); backdrop-filter: blur(8px); max-width: 90%; transition: opacity 0.2s ease;">
+                    {{ project.name }}
+                </div>
+            </div>
+        {% else %}
+            <!-- Template / Image Background with Synchronized Lyric Overlay -->
+            <img id="sharedBgImg" 
+                 src="{{ url_for('projects.stream_project_media', project_id=project.id, kind='video') }}" 
+                 class="w-100 h-100 object-fit-cover position-absolute top-0 start-0" 
+                 alt="Project Artwork">
+            <div class="shared-lyric-overlay position-absolute top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center align-items-center p-4 text-center pointer-events-none" style="background: rgba(0,0,0,0.35);">
+                <div id="sharedActiveLyric" class="display-6 fw-bold text-white px-4 py-3 rounded" style="background: rgba(15,10,14,0.75); backdrop-filter: blur(8px); max-width: 90%; transition: opacity 0.2s ease;">
+                    {{ project.name }}
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Master Audio Bar for non-rendered projects -->
+    {% if not has_render and has_audio %}
+    <div class="bg-white border rounded p-3 mt-3 shadow-sm d-flex align-items-center gap-3">
+        <audio id="sharedAudio" controls preload="auto" class="w-100" style="accent-color: var(--brand-burgundy);">
+            <source src="{{ url_for('projects.stream_project_media', project_id=project.id, kind='audio') }}" type="audio/mpeg">
+            Your browser does not support HTML5 audio.
+        </audio>
+    </div>
+    {% endif %}
+
+    <!-- Project Heading & Metadata -->
+    <div class="public-project-heading mt-4">
+        <div>
+            <div class="home-section-label">Shared project</div>
+            <h1>{{ project.name }}</h1>
+            <p>{{ canonical.get('meta', {}).get('description', '') or 'Synchronized lyric video project' }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-burgundy" href="{{ url_for('views.upload_page') }}">
+                <i class="bi bi-plus-lg me-1"></i> Make your own
+            </a>
+        </div>
+    </div>
+
+    <!-- Interactive Lyrics Sheet -->
+    <div class="public-lyrics mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="home-section-label mb-0">Synchronized lyrics</div>
+            <span class="small text-muted font-mono">{{ canonical.get('lyrics', [])|length }} lines</span>
+        </div>
+
+        <div class="public-lyrics-container bg-white border rounded p-4 shadow-sm" style="max-height: 480px; overflow-y: auto;">
+            {% if canonical.get('lyrics') %}
+                {% for line in canonical.get('lyrics', []) %}
+                <div class="public-lyric-row d-flex align-items-baseline p-2 rounded" 
+                     data-start="{{ line.start }}" 
+                     data-end="{{ line.end }}"
+                     style="cursor: pointer; transition: background 0.15s ease;">
+                    <span class="font-mono text-muted me-3" style="font-size: 0.8rem; min-width: 48px;">
+                        {{ '%02d:%02d' | format((line.start // 60)|int, (line.start % 60)|int) }}
+                    </span>
+                    <span class="public-lyric-text" style="font-size: 1.05rem; line-height: 1.4;">
+                        {{ line.text }}
+                    </span>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p class="text-muted fst-italic mb-0">No synchronized lyrics transcribed for this project yet.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const hasRender = {{ 'true' if has_render else 'false' }};
+    const isVideoBg = {{ 'true' if is_video_bg else 'false' }};
+    const mediaEl = document.getElementById('sharedMedia');
+    const audioEl = document.getElementById('sharedAudio');
+    const activeLyricEl = document.getElementById('sharedActiveLyric');
+    const lyricRows = document.querySelectorAll('.public-lyric-row');
+
+    // Primary timing source is audio element if present, otherwise video element
+    const primaryTimer = (!hasRender && audioEl) ? audioEl : mediaEl;
+
+    if (!primaryTimer) return;
+
+    // Synchronize background video with audio playback if both are active
+    if (audioEl && mediaEl && isVideoBg) {
+        audioEl.addEventListener('play', () => {
+            mediaEl.currentTime = audioEl.currentTime;
+            mediaEl.play().catch(() => {});
+        });
+        audioEl.addEventListener('pause', () => mediaEl.pause());
+        audioEl.addEventListener('seeking', () => {
+            mediaEl.currentTime = audioEl.currentTime;
+        });
+    }
+
+    // Interactive lyric synchronization on timeupdate
+    const lyricData = [];
+    lyricRows.forEach((row) => {
+        const start = parseFloat(row.dataset.start);
+        const end = parseFloat(row.dataset.end);
+        const text = row.querySelector('.public-lyric-text')?.textContent.trim() || '';
+        lyricData.push({ row, start, end, text });
+
+        // Click lyric line to seek and play
+        row.addEventListener('click', () => {
+            primaryTimer.currentTime = start;
+            primaryTimer.play().catch(() => {});
+        });
+    });
+
+    primaryTimer.addEventListener('timeupdate', () => {
+        const t = primaryTimer.currentTime;
+        let activeFound = false;
+
+        for (let i = 0; i < lyricData.length; i++) {
+            const item = lyricData[i];
+            if (t >= item.start && t <= (item.end + 0.35)) {
+                if (activeLyricEl) {
+                    activeLyricEl.textContent = item.text;
+                    activeLyricEl.style.opacity = '1';
+                }
+                lyricRows.forEach(r => r.classList.remove('active-sync-line'));
+                item.row.classList.add('active-sync-line');
+
+                // Smoothly scroll active line into view inside container
+                const container = item.row.parentElement;
+                if (container) {
+                    const offsetTop = item.row.offsetTop - container.offsetTop;
+                    const halfHeight = container.clientHeight / 2;
+                    container.scrollTo({ top: offsetTop - halfHeight, behavior: 'smooth' });
+                }
+                activeFound = true;
+                break;
+            }
+        }
+
+        if (!activeFound && activeLyricEl && t < (lyricData[0]?.start || 0)) {
+            activeLyricEl.textContent = {{ project.name|tojson }};
+        }
+    });
+});
+</script>
+
+<style>
+.public-lyric-row:hover {
+    background-color: #F8F4F5;
+}
+.public-lyric-row.active-sync-line {
+    background-color: #E8F5E9 !important;
+}
+.public-lyric-row.active-sync-line .public-lyric-text {
+    font-weight: 700;
+    color: var(--brand-burgundy, #210914);
+}
+.public-lyric-row.active-sync-line .font-mono {
+    color: #10B981 !important;
+    font-weight: 700;
+}
+</style>
+{% endblock %}
+

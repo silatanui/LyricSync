@@ -105,20 +105,23 @@ class FFmpegRenderer:
         cmd.extend(["-map", "0:v:0", "-map", "1:a:0"])
 
         # Quality profiles: 720p Draft (faster, smaller download for low bandwidth) vs 1080p Studio
+        # Always use libx264 with yuv420p so rendered MP4s play on all modern browsers (Chrome/Safari/Edge/Firefox)
         if str(resolution) == "720":
             cmd.extend([
-                "-c:v", "mpeg4",
+                "-c:v", "libx264",
+                "-preset", "veryfast",
+                "-crf", "26",
                 "-r", "30",
-                "-q:v", "6",
                 "-pix_fmt", "yuv420p",
                 "-c:a", "aac",
                 "-b:a", "128k",
             ])
         else:
             cmd.extend([
-                "-c:v", "mpeg4",
+                "-c:v", "libx264",
+                "-preset", "veryfast",
+                "-crf", "22",
                 "-r", "30",
-                "-q:v", "3",
                 "-pix_fmt", "yuv420p",
                 "-c:a", "aac",
                 "-b:a", "192k",

@@ -94,11 +94,15 @@
         {% set project_canonical = p.get_canonical_json() %}
         <div class="col-md-6 col-lg-3 project-item" data-title="{{ p.name|lower }}" data-background="{{ project_canonical.get('meta', {}).get('background_template', 'burgundy_studio') }}">
             <div class="project-card">
-                <div class="project-preview">
-                    <video muted loop preload="metadata" poster="{{ url_for('static', filename='img/templates/burgundy_studio.png') }}">
+                <div class="project-preview position-relative overflow-hidden">
+                    {% if p.is_video_background %}
+                    <video muted loop preload="metadata" playsinline class="w-100 h-100 object-fit-cover">
                         <source src="{{ url_for('projects.stream_project_media', project_id=p.id, kind='video') }}" type="video/mp4">
                     </video>
-                    <div class="project-preview-overlay"><i class="bi bi-play-circle"></i> Studio preview</div>
+                    {% else %}
+                    <img src="{{ url_for('projects.stream_project_media', project_id=p.id, kind='video') }}" alt="{{ p.name }}" class="w-100 h-100 object-fit-cover" loading="lazy">
+                    {% endif %}
+                    <div class="project-preview-overlay"><i class="bi bi-play-circle"></i> Open studio</div>
                 </div>
                 <div class="d-flex justify-content-between align-items-center mb-3 text-secondary small">
                     <span class="fw-semibold text-uppercase text-dark">{{ p.status }}</span>

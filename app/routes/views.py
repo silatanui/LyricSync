@@ -60,7 +60,18 @@ def public_project_page(project_id: str):
     project = db.session.get(Project, project_id)
     if not project or project.get_canonical_json().get("meta", {}).get("is_public") is not True:
         abort(404)
-    return render_template("public_project.html", project=project, canonical=project.get_canonical_json())
+    from app.utils.files import resolve_rendered_video, resolve_project_media
+    rendered_path = resolve_rendered_video(project)
+    has_render = bool(rendered_path and rendered_path.exists())
+    has_audio = bool(resolve_project_media(project, "audio"))
+    return render_template(
+        "public_project.html",
+        project=project,
+        canonical=project.get_canonical_json(),
+        has_render=has_render,
+        has_audio=has_audio,
+        is_video_bg=project.is_video_background,
+    )
 
 @views_bp.route("/health")
 def health_check():
