@@ -80,10 +80,10 @@ class LyricTimeline {
             const actionsGroup = document.createElement('div');
             actionsGroup.className = 'd-flex align-items-center gap-1.5';
             actionsGroup.innerHTML = `
-                <button class="btn btn-light btn-sm border py-1 px-2 nudge-btn" data-dir="-1" title="Nudge 100ms earlier"><i class="bi bi-dash"></i>100ms</button>
-                <button class="btn btn-light btn-sm border py-1 px-2 nudge-btn" data-dir="1" title="Nudge 100ms later"><i class="bi bi-plus"></i>100ms</button>
-                <button class="btn btn-light btn-sm border py-1 px-2 split-btn" title="Split line in half"><i class="bi bi-scissors me-1"></i>Split</button>
-                ${idx < this.lines.length - 1 ? '<button class="btn btn-light btn-sm border py-1 px-2 merge-btn" title="Merge with next line"><i class="bi bi-arrow-down-up me-1"></i>Merge</button>' : ''}
+                <button class="btn btn-player-skip btn-sm py-1 px-2 nudge-btn" data-dir="-1" title="Nudge 100ms earlier"><i class="bi bi-dash"></i>100ms</button>
+                <button class="btn btn-player-skip btn-sm py-1 px-2 nudge-btn" data-dir="1" title="Nudge 100ms later"><i class="bi bi-plus"></i>100ms</button>
+                <button class="btn btn-player-skip btn-sm py-1 px-2 split-btn" title="Split line in half"><i class="bi bi-scissors me-1"></i>Split</button>
+                ${idx < this.lines.length - 1 ? '<button class="btn btn-player-skip btn-sm py-1 px-2 merge-btn" title="Merge with next line"><i class="bi bi-arrow-down-up me-1"></i>Merge</button>' : ''}
                 <button class="btn btn-outline-danger btn-sm py-1 px-2 delete-btn" title="Delete line"><i class="bi bi-trash3"></i></button>
             `;
 
@@ -93,7 +93,7 @@ class LyricTimeline {
             // Text input row (Spacious & Clean)
             const textInput = document.createElement('input');
             textInput.type = 'text';
-            textInput.className = 'form-control bg-white text-dark border line-text-input py-2 px-3 fw-semibold';
+            textInput.className = 'form-control studio-input text-dark border line-text-input py-2 px-3 fw-semibold';
             textInput.value = line.text;
 
             const effectSelect = document.createElement('select');

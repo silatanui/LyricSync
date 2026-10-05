@@ -42,6 +42,7 @@ class FFmpegRenderer:
         audio_policy: str = "replace",
         video_policy: str = "loop",
         resolution: str = "1080",
+        fonts_dir: Optional[Path] = None,
         progress_callback: Optional[Callable[[int, str], None]] = None,
     ) -> Path:
         """
@@ -72,7 +73,11 @@ class FFmpegRenderer:
         # Build video filter chain: scale/crop -> constant 30fps -> ASS burn-in
         ass_escaped = escape_ass_path(ass_path)
         scale_crop = self.build_scale_crop_filter(aspect_ratio, width, height)
-        vf_filter = f"{scale_crop},fps=30,ass='{ass_escaped}'"
+        if fonts_dir:
+            fonts_escaped = escape_ass_path(Path(fonts_dir))
+            vf_filter = f"{scale_crop},fps=30,ass='{ass_escaped}':fontsdir='{fonts_escaped}'"
+        else:
+            vf_filter = f"{scale_crop},fps=30,ass='{ass_escaped}'"
 
         # Shared hosting often has a strict per-process thread limit. Keep the
         # render deterministic and leave capacity for the web worker.

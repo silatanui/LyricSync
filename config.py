@@ -26,6 +26,9 @@ class Config:
     _temp_root = os.getenv("TEMP_ROOT", "data/temp")
     TEMP_ROOT = Path(_temp_root) if Path(_temp_root).is_absolute() else (BASE_DIR / _temp_root).resolve()
 
+    _fonts_root = os.getenv("FONTS_ROOT", "data/fonts")
+    FONTS_ROOT = Path(_fonts_root) if Path(_fonts_root).is_absolute() else (BASE_DIR / _fonts_root).resolve()
+
     # Database
     MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
     MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
@@ -57,6 +60,9 @@ class Config:
     # OpenAI
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     OPENAI_TRANSCRIPTION_MODEL = os.getenv("OPENAI_TRANSCRIPTION_MODEL", "whisper-1")
+    OPENAI_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
+    OPENAI_IMAGE_MODEL = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-1")
+    OPENAI_IMAGE_QUALITY = os.getenv("OPENAI_IMAGE_QUALITY", "medium")
     OPENAI_TIMEOUT_SECONDS = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "360"))
     OPENAI_TRANSCRIPTION_RETRIES = int(os.getenv("OPENAI_TRANSCRIPTION_RETRIES", "1"))
 
@@ -64,6 +70,23 @@ class Config:
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
     GOOGLE_DISCOVERY_URL = "https://accounts.google.com/.well-known/openid-configuration"
+
+    # Freemium AI image credits (OpenAI image cost control)
+    # New signed-in users get IMAGE_FREE_CREDITS; admin is unlimited.
+    IMAGE_FREE_CREDITS = int(os.getenv("IMAGE_FREE_CREDITS", "2"))
+    IMAGE_PREMIUM_CREDITS = int(os.getenv("IMAGE_PREMIUM_CREDITS", "100"))
+    IMAGE_PREMIUM_PRICE_CENTS = int(os.getenv("IMAGE_PREMIUM_PRICE_CENTS", "500"))  # $5.00
+    IMAGE_PREMIUM_PRICE_LABEL = os.getenv("IMAGE_PREMIUM_PRICE_LABEL", "$5/month")
+    IMAGE_PREMIUM_PRODUCT_NAME = os.getenv(
+        "IMAGE_PREMIUM_PRODUCT_NAME",
+        "LyricSync Premium — 100 AI images / month",
+    )
+
+    # Stripe (optional — leave blank until you enable card payments)
+    STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+    STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
+    STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    STRIPE_PRICE_ID = os.getenv("STRIPE_PRICE_ID", "")  # optional recurring Price id
 
     # Upload and media constraints
     MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", 600 * 1024 * 1024))  # 600MB

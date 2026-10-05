@@ -2,6 +2,10 @@ import re
 from difflib import SequenceMatcher
 from typing import List, Dict, Any, Optional
 
+# Terminal punctuation across Latin, CJK, Arabic, and Indic scripts.
+_LINE_BREAK_PUNCT = re.compile(r"[.!?…。！？؟؛;،,]$")
+
+
 class AlignmentEngine:
     @staticmethod
     def align_custom_lines(lines: List[Dict[str, Any]], transcript_words: List[Dict[str, Any]], total_duration: float) -> List[Dict[str, Any]]:
@@ -10,14 +14,15 @@ class AlignmentEngine:
             return lines
 
         def clean(value: str) -> str:
-            return re.sub(r"[^a-z0-9']", "", value.lower())
+            # Keep letters/numbers from any script; strip marks and punctuation.
+            return re.sub(r"[^\w']", "", value.lower(), flags=re.UNICODE)
 
         audio_words = [w for w in transcript_words if clean(str(w.get("text", "")))]
         audio_tokens = [clean(str(w.get("text", ""))) for w in audio_words]
         cursor = 0
         aligned = []
         for line in lines:
-            line["text"] = str(line.get("text", "")).strip().capitalize()
+            line["text"] = AlignmentEngine.polish_lyric_text(str(line.get("text", "")).strip())
             lyric_tokens = [clean(token) for token in str(line.get("text", "")).split() if clean(token)]
             best_start, best_score = cursor, 0.0
             search_end = min(len(audio_tokens), cursor + 80)
@@ -32,12 +37,13 @@ class AlignmentEngine:
                 end_index = min(len(audio_words), best_start + len(lyric_tokens))
                 start_time = float(audio_words[best_start].get("start", line["start"]))
                 end_time = float(audio_words[end_index - 1].get("end", line["end"]))
+                original_tokens = str(line.get("text", "")).split()
                 word_timings = []
                 for index, token in enumerate(lyric_tokens):
                     source = audio_words[min(best_start + index, end_index - 1)]
-                    word_text = line["text"].split()[index]
+                    word_text = original_tokens[index] if index < len(original_tokens) else token
                     if index == 0:
-                        word_text = word_text.capitalize()
+                        word_text = AlignmentEngine.polish_lyric_text(word_text)
                     word_timings.append({"text": word_text, "start": source.get("start", start_time), "end": source.get("end", end_time)})
                 line["start"], line["end"], line["words"] = round(start_time, 3), round(max(start_time + 0.1, end_time), 3), word_timings
                 line["confidence"] = round(min(1.0, 0.55 + best_score * 0.45), 2)
@@ -94,11 +100,24 @@ class AlignmentEngine:
         return normalized
 
     @staticmethod
+    def line_limits_for_language(language: str | None = None) -> Dict[str, float | int]:
+        """Tune on-screen line length for scripts that pack more meaning per glyph."""
+        code = (language or "").strip().lower()
+        if code in {"zh", "ja", "ko"}:
+            return {"max_words": 8, "max_chars": 28, "pause_threshold": 0.45}
+        if code in {"th", "lo", "km", "my"}:
+            return {"max_words": 9, "max_chars": 36, "pause_threshold": 0.5}
+        if code in {"ar", "fa", "ur", "he"}:
+            return {"max_words": 9, "max_chars": 48, "pause_threshold": 0.55}
+        return {"max_words": 10, "max_chars": 56, "pause_threshold": 0.65}
+
+    @staticmethod
     def segment_lines(
         words: List[Dict[str, Any]],
         max_words: int = 10,
         max_chars: int = 56,
-        pause_threshold: float = 0.65
+        pause_threshold: float = 0.65,
+        language: str | None = None,
     ) -> List[Dict[str, Any]]:
         """
         Stage B: Deterministic line segmentation heuristics.
@@ -106,10 +125,16 @@ class AlignmentEngine:
         - Maximum words per line
         - Maximum visible characters
         - Pause gaps (> pause_threshold seconds)
-        - Punctuation cues (. ! ? , ;)
+        - Punctuation cues across Latin, CJK, and Arabic scripts
         """
         if not words:
             return []
+
+        if language:
+            limits = AlignmentEngine.line_limits_for_language(language)
+            max_words = int(limits["max_words"])
+            max_chars = int(limits["max_chars"])
+            pause_threshold = float(limits["pause_threshold"])
 
         lines = []
         current_line_words = []
@@ -130,7 +155,7 @@ class AlignmentEngine:
             punctuation_break = False
             if current_line_words:
                 prev_text = current_line_words[-1]["text"]
-                if re.search(r"[.!?]$", prev_text):
+                if _LINE_BREAK_PUNCT.search(prev_text):
                     punctuation_break = True
 
             # Check threshold constraints
@@ -264,3 +289,22 @@ class AlignmentEngine:
             else:
                 hi = mid - 1
         return ans
+
+    @staticmethod
+    def polish_lyric_text(text: str) -> str:
+        """Uppercase the first Latin letter without lowercasing the rest of the line.
+
+        Full ``str.capitalize()`` rewrites the remainder of the string and damages
+        non-English lyrics. Scripts that are not Latin are left unchanged.
+        """
+        cleaned = re.sub(r"\s+", " ", str(text or "")).strip()
+        if not cleaned:
+            return cleaned
+        chars = list(cleaned)
+        for index, char in enumerate(chars):
+            if not char.isalpha():
+                continue
+            if char.isascii():
+                chars[index] = char.upper()
+            break
+        return "".join(chars)

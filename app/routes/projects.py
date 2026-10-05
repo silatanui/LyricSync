@@ -161,17 +161,104 @@ def download_project_render(project_id: str):
 @projects_bp.route("/templates", methods=["GET"])
 def get_background_templates():
     """Returns the list of available studio background templates."""
+    mood = (request.args.get("mood") or "").strip().lower()
+    q = (request.args.get("q") or "").strip().lower()
+    media = (request.args.get("media") or "").strip().lower()  # image|video|all
+    templates = BackgroundGenerator.get_templates()
+    if mood and mood != "all":
+        templates = [t for t in templates if mood in (t.get("moods") or [])]
+    if media in ("image", "video"):
+        templates = [t for t in templates if (t.get("media_type") or "image") == media]
+    if q:
+        templates = [
+            t for t in templates
+            if q in (t.get("name") or "").lower()
+            or q in (t.get("tagline") or "").lower()
+            or any(q in m for m in (t.get("moods") or []))
+        ]
     return jsonify({
         "success": True,
-        "templates": BackgroundGenerator.get_templates()
+        "templates": templates,
+        "moods": BackgroundGenerator.get_moods(),
+        "count": len(templates),
     })
+
+
+@projects_bp.route("/templates/preview/<template_id>", methods=["GET"])
+def preview_background_template(template_id: str):
+    """On-demand thumbnail for theme cards (cached under static/img/templates/)."""
+    from io import BytesIO
+    from config import BASE_DIR
+    theme_id = (template_id or "").strip().lower()
+    cache_dir = Path(BASE_DIR) / "static" / "img" / "templates"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_path = cache_dir / f"{theme_id}.webp"
+    legacy_png = cache_dir / f"{theme_id}.png"
+    if cache_path.exists():
+        return send_file(cache_path, mimetype="image/webp", max_age=86400)
+    if legacy_png.exists():
+        return send_file(legacy_png, mimetype="image/png", max_age=86400)
+    try:
+        BackgroundGenerator.generate_template_asset(
+            pattern_type=theme_id,
+            output_path=cache_path,
+            width=640,
+            height=360,
+            fmt="WEBP",
+        )
+        return send_file(cache_path, mimetype="image/webp", max_age=86400)
+    except Exception:
+        img = BackgroundGenerator.generate_pattern_image(theme_id, 640, 360)
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        return send_file(buf, mimetype="image/png", max_age=3600)
+
+
+def _apply_background_file(project, bg_file: Path, template_id: str, aspect_ratio: str, w: int, h: int, is_image: bool, extra_meta: dict | None = None):
+    """Persist a generated/uploaded background onto the project + canonical JSON."""
+    project.video_path = str(bg_file.resolve())
+    project.video_duration = project.audio_duration
+    project.width = w
+    project.height = h
+
+    canonical = project.get_canonical_json()
+    canonical["media"]["video_path"] = str(bg_file.resolve())
+    canonical["media"]["video_duration"] = project.audio_duration
+    canonical["media"]["width"] = w
+    canonical["media"]["height"] = h
+    canonical.setdefault("meta", {})["background_template"] = template_id
+    canonical.setdefault("meta", {})["background_media_type"] = "image" if is_image else "video"
+    if extra_meta:
+        canonical["meta"].update(extra_meta)
+    canonical.setdefault("render", {})["aspect_ratio"] = aspect_ratio
+    canonical.setdefault("style", {})["aspectRatio"] = aspect_ratio
+    project.set_canonical_json(canonical)
+
+    video_asset = db.session.query(MediaAsset).filter_by(project_id=project.id, kind="video").first()
+    if video_asset:
+        video_asset.file_path = str(bg_file.resolve())
+        video_asset.storage_key = bg_file.name
+        video_asset.duration = project.audio_duration
+        try:
+            video_asset.size_bytes = bg_file.stat().st_size
+        except Exception:
+            pass
+
+    db.session.commit()
+    return canonical
+
 
 @projects_bp.route("/<project_id>/background", methods=["POST"])
 def update_project_background(project_id: str):
     """
-    Re-generates the background video for an existing project using a chosen template.
-    Fast execution (~1-2s) with ultrafast 1fps x264 muxing.
+    Re-generates the background for an existing project using a chosen template.
+    Image themes produce WebP stills; video themes produce short looping MP4 beds.
+    The special `ai_lyric_scene` theme builds a custom still from the song lyrics via OpenAI.
     """
+    from app.services.theme_catalog import get_theme
+    from app.services.ai_background import AI_THEME_ID, generate_ai_background
+
     project = db.session.get(Project, project_id)
     if not project:
         return jsonify({
@@ -184,6 +271,8 @@ def update_project_background(project_id: str):
     canonical = project.get_canonical_json()
     aspect_ratio = data.get("aspect_ratio") or canonical.get("render", {}).get("aspect_ratio", "16:9")
     w, h = BackgroundGenerator.get_dimensions(aspect_ratio)
+    theme = get_theme(template_id) or {}
+    is_video_theme = (theme.get("media_type") == "video")
 
     audio_path = resolve_project_media(project, "audio")
     if not audio_path or not audio_path.exists():
@@ -192,33 +281,152 @@ def update_project_background(project_id: str):
             "error": {"code": "AUDIO_MISSING", "message": "Project audio file not found on disk.", "retryable": False}
         }), 400
 
-
     proj_dir = get_project_dir(project_id)
-    bg_file = proj_dir / f"background_{template_id}.webp"
+    is_image = True
+
+    # —— AI lyric scene: chat prompt from lyrics + gpt-image still ——
+    if template_id == AI_THEME_ID or (theme.get("extras") or {}).get("ai"):
+        from app.services.image_credits import (
+            consume_image_credit,
+            credits_payload,
+            ensure_user_can_generate,
+        )
+
+        if not current_user.is_authenticated:
+            return jsonify({
+                "success": False,
+                "error": {
+                    "code": "AUTH_REQUIRED",
+                    "message": "Sign in to generate AI lyric scenes. New accounts get free image credits.",
+                    "retryable": False,
+                    "credits": credits_payload(None),
+                },
+            }), 401
+
+        ok, credit_err = ensure_user_can_generate(current_user)
+        if not ok:
+            return jsonify({"success": False, "error": credit_err}), 402
+
+        try:
+            meta = canonical.get("meta") or {}
+            credit = project.preview_credit()
+            title = credit.get("title") or meta.get("title") or project.name or "Untitled Song"
+            artist = credit.get("artist") or meta.get("artist") or ""
+            language = (
+                (canonical.get("transcription") or {}).get("language")
+                or meta.get("preferred_language")
+                or ""
+            )
+            bg_file = proj_dir / f"background_{AI_THEME_ID}.webp"
+            ai_meta = generate_ai_background(
+                output_path=bg_file,
+                title=title,
+                artist=artist,
+                lyrics=canonical.get("lyrics") or [],
+                language=language,
+                aspect_ratio=aspect_ratio,
+                width=w,
+                height=h,
+            )
+            _apply_background_file(
+                project,
+                bg_file,
+                AI_THEME_ID,
+                aspect_ratio,
+                w,
+                h,
+                True,
+                extra_meta={
+                    "ai_background": {
+                        "prompt": ai_meta.get("prompt"),
+                        "model": ai_meta.get("model"),
+                        "chat_model": ai_meta.get("chat_model"),
+                        "api_size": ai_meta.get("api_size"),
+                        "generated_at": ai_meta.get("generated_at"),
+                    }
+                },
+            )
+            # Charge a credit only after a successful OpenAI image write.
+            credits = consume_image_credit(current_user)
+            return jsonify({
+                "success": True,
+                "template": AI_THEME_ID,
+                "video_url": url_for(
+                    "projects.stream_project_media",
+                    project_id=project_id,
+                    kind="video",
+                    t=int(time.time() * 1000),
+                ),
+                "is_image": True,
+                "media_type": "image",
+                "ai": {
+                    "prompt": ai_meta.get("prompt"),
+                    "model": ai_meta.get("model"),
+                    "api_size": ai_meta.get("api_size"),
+                },
+                "credits": credits,
+            })
+        except Exception as e:
+            current_app.logger.exception("AI lyric background failed: %s", e)
+            return jsonify({
+                "success": False,
+                "error": {
+                    "code": "AI_BACKGROUND_FAILED",
+                    "message": f"Could not generate AI lyric scene: {e}",
+                    "retryable": True,
+                    "credits": credits_payload(current_user),
+                },
+            }), 500
 
     try:
-        BackgroundGenerator.generate_template_asset(
-            pattern_type=template_id,
-            output_path=bg_file,
-            width=w,
-            height=h,
-            fmt="WEBP"
-        )
-    except Exception as e:
-        bg_file = proj_dir / f"background_{template_id}.png"
-        try:
-            BackgroundGenerator.generate_template_asset(
+        if is_video_theme:
+            bg_file = proj_dir / f"background_{template_id}.mp4"
+            motion = (theme.get("motion") or "visualizer").lower()
+            loop_seconds = 5.0 if motion == "visualizer" else 6.0
+            BackgroundGenerator.generate_theme_video_loop(
                 pattern_type=template_id,
                 output_path=bg_file,
                 width=w,
                 height=h,
-                fmt="PNG"
+                seconds=loop_seconds,
             )
-        except Exception as e2:
-            return jsonify({
-                "success": False,
-                "error": {"code": "BACKGROUND_GENERATION_FAILED", "message": f"Failed to generate background: {e2}", "retryable": True}
-            }), 500
+            # Keep a still poster next to the motion bed so reloads always have an image fallback.
+            try:
+                BackgroundGenerator.generate_template_asset(
+                    pattern_type=template_id,
+                    output_path=proj_dir / f"background_{template_id}.webp",
+                    width=w,
+                    height=h,
+                    fmt="WEBP",
+                )
+            except Exception:
+                pass
+            is_image = False
+        else:
+            bg_file = proj_dir / f"background_{template_id}.webp"
+            try:
+                BackgroundGenerator.generate_template_asset(
+                    pattern_type=template_id,
+                    output_path=bg_file,
+                    width=w,
+                    height=h,
+                    fmt="WEBP",
+                )
+            except Exception:
+                bg_file = proj_dir / f"background_{template_id}.png"
+                BackgroundGenerator.generate_template_asset(
+                    pattern_type=template_id,
+                    output_path=bg_file,
+                    width=w,
+                    height=h,
+                    fmt="PNG",
+                )
+            is_image = True
+    except Exception as e2:
+        return jsonify({
+            "success": False,
+            "error": {"code": "BACKGROUND_GENERATION_FAILED", "message": f"Failed to generate background: {e2}", "retryable": True}
+        }), 500
 
     # Update Project record
     project.video_path = str(bg_file.resolve())
@@ -232,6 +440,7 @@ def update_project_background(project_id: str):
     canonical["media"]["width"] = w
     canonical["media"]["height"] = h
     canonical.setdefault("meta", {})["background_template"] = template_id
+    canonical.setdefault("meta", {})["background_media_type"] = "video" if not is_image else "image"
     canonical.setdefault("render", {})["aspect_ratio"] = aspect_ratio
     canonical.setdefault("style", {})["aspectRatio"] = aspect_ratio
     project.set_canonical_json(canonical)
@@ -253,6 +462,92 @@ def update_project_background(project_id: str):
         "success": True,
         "template": template_id,
         "video_url": url_for("projects.stream_project_media", project_id=project_id, kind="video", t=int(time.time() * 1000)),
-        "is_image": True
+        "is_image": is_image,
+        "media_type": "image" if is_image else "video",
+    })
+
+
+@projects_bp.route("/<project_id>/background/video", methods=["POST"])
+def upload_custom_background_video(project_id: str):
+    """Upload a custom video background that overrides the aesthetic theme."""
+    from app.services.media_probe import MediaProbe
+    from app.utils.validation import validate_video_file
+
+    project = db.session.get(Project, project_id)
+    if not project:
+        return jsonify({
+            "success": False,
+            "error": {"code": "PROJECT_NOT_FOUND", "message": "Project not found.", "retryable": False}
+        }), 404
+
+    video_file = request.files.get("video")
+    if not video_file or not video_file.filename:
+        return jsonify({
+            "success": False,
+            "error": {"code": "VIDEO_REQUIRED", "message": "Please choose a video file.", "retryable": False}
+        }), 400
+
+    video_bytes = video_file.read()
+    video_file.seek(0)
+    is_valid_video, err = validate_video_file(video_file.filename, len(video_bytes))
+    if not is_valid_video:
+        return jsonify({
+            "success": False,
+            "error": {"code": "VIDEO_INVALID", "message": err, "retryable": False}
+        }), 400
+
+    proj_dir = get_project_dir(project_id)
+    video_ext = Path(video_file.filename).suffix.lower() or ".mp4"
+    bg_file = proj_dir / f"background_custom{video_ext}"
+    video_file.save(str(bg_file))
+
+    try:
+        v_probe = MediaProbe.probe(bg_file)
+    except Exception:
+        v_probe = {
+            "duration": project.audio_duration or 0,
+            "width": project.width or 1920,
+            "height": project.height or 1080,
+            "fps": project.fps or 30.0,
+        }
+
+    project.video_path = str(bg_file.resolve())
+    project.video_duration = v_probe.get("duration", project.audio_duration)
+    if v_probe.get("width"):
+        project.width = v_probe["width"]
+    if v_probe.get("height"):
+        project.height = v_probe["height"]
+    if v_probe.get("fps"):
+        project.fps = v_probe["fps"]
+
+    canonical = project.get_canonical_json()
+    canonical.setdefault("media", {})
+    canonical["media"]["video_path"] = str(bg_file.resolve())
+    canonical["media"]["video_duration"] = project.video_duration
+    canonical["media"]["width"] = project.width
+    canonical["media"]["height"] = project.height
+    canonical.setdefault("meta", {})["background_template"] = "custom_video"
+    canonical.setdefault("meta", {})["background_media_type"] = "video"
+    project.set_canonical_json(canonical)
+
+    video_asset = db.session.query(MediaAsset).filter_by(project_id=project_id, kind="video").first()
+    if video_asset:
+        video_asset.file_path = str(bg_file.resolve())
+        video_asset.storage_key = bg_file.name
+        video_asset.duration = project.video_duration
+        try:
+            video_asset.size_bytes = bg_file.stat().st_size
+        except Exception:
+            pass
+
+    db.session.commit()
+
+    return jsonify({
+        "success": True,
+        "template": "custom_video",
+        "video_url": url_for("projects.stream_project_media", project_id=project_id, kind="video", t=int(time.time() * 1000)),
+        "is_image": False,
+        "media_type": "video",
+        "filename": video_file.filename,
     })
 

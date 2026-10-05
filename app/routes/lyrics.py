@@ -1,10 +1,45 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, Response, stream_with_context
+import json
+import time
 from app.extensions import db
 from app.models import Project, RenderJob, LyricLine, LyricWord
 from app.tasks.job_queue import submit_task
 from app.tasks.transcription_tasks import run_transcription_pipeline
+from app.services.openai_transcription import normalize_language_code, language_display_name
 
 lyrics_bp = Blueprint("lyrics", __name__, url_prefix="/api/projects")
+
+
+def _stream_payload(project: Project, transcription: dict | None = None) -> dict:
+    canonical = project.get_canonical_json()
+    transcription = transcription if transcription is not None else (canonical.get("transcription") or {})
+    meta = canonical.get("meta") or {}
+    recognition = meta.get("recognition") or {}
+    return {
+        "partial": bool(transcription.get("partial")),
+        "preview": bool(transcription.get("preview") or transcription.get("partial")),
+        "language": transcription.get("language") or "",
+        "language_name": transcription.get("language_name") or "",
+        "transcribed_until": transcription.get("transcribed_until") or 0,
+        "duration": transcription.get("duration") or project.audio_duration or 0,
+        "chunk_index": transcription.get("chunk_index") or 0,
+        "chunk_count": transcription.get("chunk_count") or 0,
+        "source": transcription.get("provider") or meta.get("lyrics_source") or "",
+        "artist": meta.get("artist") or recognition.get("artist") or "",
+        "title": meta.get("title") or recognition.get("title") or "",
+        "synced": bool(recognition.get("synced")),
+    }
+
+
+def _active_transcription_job(project_id: str):
+    return (
+        db.session.query(RenderJob)
+        .filter_by(project_id=project_id)
+        .filter(RenderJob.status.in_(["queued", "transcribing"]))
+        .order_by(RenderJob.created_at.desc())
+        .first()
+    )
+
 
 @lyrics_bp.route("/<project_id>/transcribe", methods=["POST"])
 def trigger_transcription(project_id: str):
@@ -36,16 +71,44 @@ def trigger_transcription(project_id: str):
         sj.status = "failed"
         sj.error_message = "Superseded by new transcription request"
 
+    body = request.get_json(silent=True) or {}
+    language = normalize_language_code(body.get("language"))
+
     # Create RenderJob record to track progress
     job = RenderJob(
         project_id=project.id,
         status="queued",
-        stage="Connecting to OpenAI Whisper API",
-        progress=10,
+        stage="Preparing opening preview",
+        progress=6,
+        detail_json=json.dumps({
+            "partial": True,
+            "preview": True,
+            "language": language or "",
+            "language_name": language_display_name(language) if language else "",
+            "transcribed_until": 0,
+            "duration": float(project.audio_duration or 0),
+            "chunk_index": 0,
+            "chunk_count": 0,
+        }),
     )
     try:
         db.session.add(job)
         project.status = "transcribing"
+        canonical = project.get_canonical_json()
+        canonical.setdefault("meta", {})
+        if language:
+            canonical["meta"]["preferred_language"] = language
+        elif "preferred_language" in body and not body.get("language"):
+            canonical["meta"].pop("preferred_language", None)
+        canonical.setdefault("transcription", {})
+        canonical["transcription"]["partial"] = True
+        canonical["transcription"]["preview"] = True
+        canonical["transcription"]["transcribed_until"] = 0
+        canonical["transcription"]["duration"] = float(project.audio_duration or 0)
+        if language:
+            canonical["transcription"]["language"] = language
+            canonical["transcription"]["language_name"] = language_display_name(language)
+        project.set_canonical_json(canonical)
         db.session.commit()
     except Exception:
         db.session.rollback()
@@ -57,12 +120,13 @@ def trigger_transcription(project_id: str):
 
     # Launch background task
     app = current_app._get_current_object()
-    submit_task(run_transcription_pipeline, app, project.id, job.id)
+    submit_task(run_transcription_pipeline, app, project.id, job.id, language)
 
     return jsonify({
         "success": True,
         "job_id": job.id,
-        "message": "Transcription job queued successfully."
+        "language": language or "auto",
+        "message": "Transcription job queued. Opening preview unlocks as soon as the first lines land."
     }), 202
 
 @lyrics_bp.route("/<project_id>/lyrics", methods=["GET"])
@@ -76,12 +140,74 @@ def get_canonical_lyrics(project_id: str):
         }), 404
 
     canonical = project.get_canonical_json()
+    active_job = _active_transcription_job(project.id)
     return jsonify({
         "success": True,
         "lyrics": canonical.get("lyrics", []),
         "revision": project.current_revision,
-        "style": canonical.get("style", {})
+        "style": canonical.get("style", {}),
+        "stream": _stream_payload(project),
+        "active_job_id": active_job.id if active_job else None,
+        "preferred_language": (canonical.get("meta") or {}).get("preferred_language") or "",
     })
+
+
+@lyrics_bp.route("/<project_id>/lyrics/events", methods=["GET"])
+def stream_lyrics_events(project_id: str):
+    """Server-sent events for progressive lyric snapshots while transcription runs."""
+    project = db.session.get(Project, project_id)
+    if not project:
+        return jsonify({
+            "success": False,
+            "error": {"code": "PROJECT_NOT_FOUND", "message": "Project not found.", "retryable": False}
+        }), 404
+
+    app = current_app._get_current_object()
+
+    def event_stream():
+        last_until = -1.0
+        last_partial = True
+        idle_ticks = 0
+        with app.app_context():
+            while idle_ticks < 450:
+                db.session.remove()
+                project_row = db.session.get(Project, project_id)
+                if not project_row:
+                    yield "event: error\ndata: {\"message\":\"Project missing\"}\n\n"
+                    break
+                canonical = project_row.get_canonical_json()
+                stream = _stream_payload(project_row, canonical.get("transcription") or {})
+                until = float(stream.get("transcribed_until") or 0)
+                partial = bool(stream.get("partial"))
+                changed = until != last_until or partial != last_partial
+                if changed:
+                    last_until = until
+                    last_partial = partial
+                    idle_ticks = 0
+                    payload = {
+                        "success": True,
+                        "lyrics": canonical.get("lyrics", []),
+                        "revision": project_row.current_revision,
+                        "stream": stream,
+                    }
+                    yield f"event: lyrics\ndata: {json.dumps(payload)}\n\n"
+                    if not partial and until > 0:
+                        yield "event: done\ndata: {\"partial\":false}\n\n"
+                        break
+                else:
+                    idle_ticks += 1
+                    yield ": keepalive\n\n"
+                time.sleep(0.85)
+
+    return Response(
+        stream_with_context(event_stream()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 @lyrics_bp.route("/<project_id>/lyrics", methods=["PUT"])
 def update_canonical_lyrics(project_id: str):
@@ -207,7 +333,11 @@ def import_custom_lyrics_route(project_id: str):
                 from app.services.openai_transcription import OpenAITranscriber
                 from app.services.alignment import AlignmentEngine
                 transcriber = OpenAITranscriber()
-                transcript = transcriber.transcribe_word_timestamps(project.audio_path)
+                preferred = normalize_language_code(
+                    (request.get_json(silent=True) or {}).get("language")
+                    or (project.get_canonical_json().get("meta") or {}).get("preferred_language")
+                )
+                transcript = transcriber.transcribe_word_timestamps(project.audio_path, language=preferred)
                 ordered_text = transcriber.order_uploaded_lyrics(content, transcript.get("text", ""))
                 if ordered_text.strip() != content.strip():
                     new_lyrics = LyricsImporter.import_lyrics(ordered_text, total_duration=total_dur)
@@ -234,6 +364,8 @@ def import_custom_lyrics_route(project_id: str):
 @lyrics_bp.route("/<project_id>/style", methods=["PUT"])
 def update_project_style(project_id: str):
     """Update style configuration in canonical document."""
+    from app.services.style_normalize import normalize_style_payload
+
     project = db.session.get(Project, project_id)
     if not project:
         return jsonify({
@@ -242,12 +374,25 @@ def update_project_style(project_id: str):
         }), 404
 
     data = request.get_json() or {}
-    style_data = data.get("style", {})
+    style_data = normalize_style_payload(data.get("style", {}))
     render_data = data.get("render", {})
 
     canonical = project.get_canonical_json()
     if style_data:
-        canonical.setdefault("style", {}).update(style_data)
+        # Drop stale camelCase keys so export always reads snake_case fields.
+        style_block = canonical.setdefault("style", {})
+        for camel in (
+            "fontSize", "lineHeight", "letterSpacing", "fontWeight", "fontStyle",
+            "textCase", "effectStrength", "primaryColor", "highlightColor", "textAlign",
+            "outlineEnabled", "outlineColor", "outlineSoftness",
+            "shadowEnabled", "shadowColor", "shadowOpacity", "shadowDistance",
+            "shadowAngle", "shadowBlur", "bevelEnabled", "bevelSize",
+            "bevelSoftness", "bevelAngle", "bevelHighlightColor",
+            "bevelHighlightOpacity", "bevelShadowColor", "bevelShadowOpacity",
+            "aspectRatio",
+        ):
+            style_block.pop(camel, None)
+        style_block.update(style_data)
     if render_data:
         canonical.setdefault("render", {}).update(render_data)
 

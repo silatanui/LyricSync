@@ -33,20 +33,23 @@ def create_app(config_class=Config):
     @flask_app.context_processor
     def inject_admin_context():
         from flask_login import current_user
+        from app.services.image_credits import credits_payload
         is_admin = bool(current_user.is_authenticated and getattr(current_user, "is_admin", False))
         return {
             "is_admin": is_admin,
-            "admin_email": "silatanuikipngetich@gmail.com"
+            "admin_email": "silatanuikipngetich@gmail.com",
+            "image_credits_status": credits_payload(),
         }
 
     # Register blueprints
-    from app.routes import views_bp, uploads_bp, projects_bp, lyrics_bp, renders_bp, auth_bp
+    from app.routes import views_bp, uploads_bp, projects_bp, lyrics_bp, renders_bp, auth_bp, billing_bp
     flask_app.register_blueprint(views_bp)
     flask_app.register_blueprint(uploads_bp)
     flask_app.register_blueprint(projects_bp)
     flask_app.register_blueprint(lyrics_bp)
     flask_app.register_blueprint(renders_bp)
     flask_app.register_blueprint(auth_bp)
+    flask_app.register_blueprint(billing_bp)
 
     # Create tables automatically for development
     with flask_app.app_context():
@@ -59,8 +62,29 @@ def create_app(config_class=Config):
                 if "email_verified" not in user_cols:
                     db.session.execute(db.text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT 0"))
                     db.session.commit()
+                free_credits = int(flask_app.config.get("IMAGE_FREE_CREDITS", 2))
+                if "image_credits" not in user_cols:
+                    db.session.execute(db.text(
+                        f"ALTER TABLE users ADD COLUMN image_credits INTEGER NOT NULL DEFAULT {free_credits}"
+                    ))
+                    db.session.commit()
+                if "is_premium" not in user_cols:
+                    db.session.execute(db.text(
+                        "ALTER TABLE users ADD COLUMN is_premium BOOLEAN NOT NULL DEFAULT 0"
+                    ))
+                    db.session.commit()
+                if "stripe_customer_id" not in user_cols:
+                    db.session.execute(db.text(
+                        "ALTER TABLE users ADD COLUMN stripe_customer_id VARCHAR(128) NULL"
+                    ))
+                    db.session.commit()
                 db.session.execute(db.text("UPDATE users SET email_verified = 1 WHERE email = 'silatanuikipngetich@gmail.com' OR google_id IS NOT NULL"))
                 db.session.commit()
+            if "render_jobs" in inspector.get_table_names():
+                job_cols = [c["name"] for c in inspector.get_columns("render_jobs")]
+                if "detail_json" not in job_cols:
+                    db.session.execute(db.text("ALTER TABLE render_jobs ADD COLUMN detail_json TEXT"))
+                    db.session.commit()
         except Exception as db_err:
             db.session.rollback()
             flask_app.logger.warning(f"Database schema migration warning on startup: {db_err}")

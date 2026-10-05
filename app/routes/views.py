@@ -49,7 +49,11 @@ def editor_page(project_id: str):
     project = db.session.get(Project, project_id)
     if not project:
         abort(404)
-    from app.utils.files import resolve_rendered_video
+    from app.utils.files import resolve_rendered_video, resolve_project_media
+    # Heal / regenerate missing theme media before the page paints.
+    resolve_project_media(project, "audio")
+    resolve_project_media(project, "video")
+    db.session.refresh(project)
     has_render = resolve_rendered_video(project) is not None
     return render_template("editor.html", project=project, canonical=project.get_canonical_json(), has_render=has_render)
 

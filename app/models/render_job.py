@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import json
 from typing import Optional
 from sqlalchemy import String, Integer, DateTime, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -22,6 +23,7 @@ class RenderJob(db.Model):
     
     error_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    detail_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
@@ -41,4 +43,16 @@ class RenderJob(db.Model):
             "error_message": self.error_message,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
+            "stream": self.stream_detail(),
         }
+
+    def stream_detail(self):
+        if not self.detail_json:
+            return None
+        try:
+            parsed = json.loads(self.detail_json)
+        except Exception:
+            return None
+        if not isinstance(parsed, dict) or "transcribed_until" not in parsed:
+            return None
+        return parsed

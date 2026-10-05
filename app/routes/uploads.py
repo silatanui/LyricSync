@@ -25,13 +25,20 @@ def derive_title_from_filename(filename: str) -> str:
     stem = re.sub(r'^\s*\d{1,3}\s*[-._]\s*', '', stem)
     # Remove common audio tags like (Official Audio), [Lyrics], etc.
     stem = re.sub(r'[\(\[\{].*?[\)\]\}]', '', stem)
+    # Drop trailing genre/marketing clauses after commas.
+    stem = re.sub(
+        r'[,|]\s*(?:gospel|thanksgiving|anthem|worship|praise|lyric|official|live|skiza)\b.*$',
+        '',
+        stem,
+        flags=re.IGNORECASE,
+    )
     # Replace separators with spaces
     stem = re.sub(r'[-_]+', ' ', stem)
-    stem = re.sub(r'\s+', ' ', stem).strip()
+    stem = re.sub(r'\s+', ' ', stem).strip(" -_|,")
     generic_words = {"audio", "track", "recording", "voice", "sound", "master", "master_audio", "input", "sample", "song"}
     if not stem or stem.lower() in generic_words:
         return "Untitled Song"
-    return stem.title()
+    return stem
 
 @uploads_bp.route("/projects", methods=["POST"])
 def create_project():

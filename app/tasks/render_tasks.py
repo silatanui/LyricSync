@@ -27,9 +27,23 @@ def run_render_pipeline(app, project_id: str, job_id: str):
             job.stage = "Generating stylized ASS subtitles"
             db.session.commit()
 
+            from app.services.lyric_fonts import ensure_font_files
+            from app.services.style_normalize import normalize_style_payload
+
             canonical = project.get_canonical_json()
             canonical.setdefault("project", {})["name"] = project.name
+            # Normalize any legacy camelCase keys before burn-in.
+            canonical["style"] = normalize_style_payload(canonical.get("style") or {})
             out_dir = get_project_output_dir(project.id)
+
+            style_cfg = canonical.get("style") or {}
+            job.stage = "Preparing lyric fonts for burn-in"
+            db.session.commit()
+            fonts_dir = ensure_font_files(
+                style_cfg.get("font", "Caveat"),
+                font_weight=int(style_cfg.get("font_weight", 600) or 600),
+                font_style=str(style_cfg.get("font_style", "normal") or "normal"),
+            )
 
             # Generate ASS file
             ass_path = out_dir / f"lyrics_rev_{project.current_revision}.ass"
@@ -70,6 +84,7 @@ def run_render_pipeline(app, project_id: str, job_id: str):
                 audio_policy=audio_policy,
                 video_policy=video_policy,
                 resolution=resolution,
+                fonts_dir=fonts_dir,
                 progress_callback=progress_cb
             )
 

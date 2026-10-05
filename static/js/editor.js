@@ -7,9 +7,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const projectId = workspace.getAttribute('data-project-id');
     const isAdmin = workspace.getAttribute('data-is-admin') === 'true';
+    let activeStream = null;
+    let resumeWhenStreamAdvances = false;
+    let streamCursor = -1;
 
     const friendlyStage = (stage) => {
-        if (isAdmin || !stage) return stage || '';
+        if (!stage) return '';
+        if (stage.includes('already known') || stage.includes('Known lyrics') || stage.includes('Found ')) return stage;
+        if (stage.includes('catalog') || stage.includes('identify the song') || stage.includes('Matching opening')) return stage;
+        if (isAdmin) return stage;
+        if (stage.includes('·') || stage.includes('preview') || stage.includes('Sync') || stage.includes('Detect')) return stage;
         if (stage.includes('Whisper') || stage.includes('OpenAI')) return 'Analyzing song vocals with AI...';
         if (stage.includes('ASS') || stage.includes('subtitles') || stage.includes('FFmpeg')) return 'Styling synchronized lyrics...';
         if (stage.includes('Encoding') || stage.includes('libass')) return 'Rendering lyric video...';
@@ -20,6 +27,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     const audioEl = document.getElementById('mainAudio');
     const overlayEl = document.getElementById('lyricOverlay');
     const videoContainer = document.getElementById('videoContainer');
+    const mainBgImage = document.getElementById('mainBgImage');
+
+    // Restore theme media after reload (never leave an empty broken <img>).
+    function ensureBackgroundMedia() {
+        if (!videoContainer) return;
+        const hasVideo = videoContainer.getAttribute('data-has-video') === 'true';
+        const streamUrl = videoContainer.getAttribute('data-bg-stream') || '';
+        const posterUrl = videoContainer.getAttribute('data-bg-poster') || '';
+        if (mainBgImage) {
+            const src = mainBgImage.getAttribute('src') || '';
+            if (!src && posterUrl) mainBgImage.src = posterUrl;
+            else if (!src && streamUrl && !hasVideo) mainBgImage.src = streamUrl;
+        }
+        if (hasVideo && videoEl) {
+            const current = videoEl.currentSrc || videoEl.getAttribute('src') || '';
+            if (!current && streamUrl) {
+                videoEl.src = streamUrl;
+                videoEl.load();
+            }
+            videoEl.classList.remove('d-none');
+            if (mainBgImage) mainBgImage.classList.add('d-none');
+        } else if (mainBgImage) {
+            mainBgImage.classList.remove('d-none');
+            if (videoEl) videoEl.classList.add('d-none');
+        }
+    }
+    ensureBackgroundMedia();
 
     // UI Elements
     const playPauseBtn = document.getElementById('playPauseBtn');
@@ -27,6 +61,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const scrubber = document.getElementById('playbackScrubber');
     const currentTimeDisplay = document.getElementById('currentTimeDisplay');
     const totalDurationDisplay = document.getElementById('totalDurationDisplay');
+    // Song length for the scrubber — never the short looping theme-bed duration.
+    let masterDurationSec = 0;
     const speedSelect = document.getElementById('playbackSpeed');
     const replay5Btn = document.getElementById('replay5Btn');
     const forward5Btn = document.getElementById('forward5Btn');
@@ -69,6 +105,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const styleLetterSpacing = document.getElementById('styleLetterSpacing');
     const styleFontWeight = document.getElementById('styleFontWeight');
     const styleFontStyle = document.getElementById('styleFontStyle');
+    const styleTextCase = document.getElementById('styleTextCase');
     const styleEffect = document.getElementById('styleEffect');
     const renderResolution = document.getElementById('renderResolution');
     const audioVolume = document.getElementById('audioVolume');
@@ -78,6 +115,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     const styleMode = document.getElementById('styleMode');
     const styleFormat = document.getElementById('styleFormat');
     const renderAspectRatio = document.getElementById('renderAspectRatio');
+
+    // Text effect controls (outline / drop shadow / bevel)
+    const styleOutlineEnabled = document.getElementById('styleOutlineEnabled');
+    const styleOutlineColor = document.getElementById('styleOutlineColor');
+    const styleOutlineSize = document.getElementById('styleOutlineSize');
+    const styleOutlineSoftness = document.getElementById('styleOutlineSoftness');
+    const styleShadowEnabled = document.getElementById('styleShadowEnabled');
+    const styleShadowColor = document.getElementById('styleShadowColor');
+    const styleShadowOpacity = document.getElementById('styleShadowOpacity');
+    const styleShadowDistance = document.getElementById('styleShadowDistance');
+    const styleShadowBlur = document.getElementById('styleShadowBlur');
+    const styleShadowAngle = document.getElementById('styleShadowAngle');
+    const styleBevelEnabled = document.getElementById('styleBevelEnabled');
+    const styleBevelSize = document.getElementById('styleBevelSize');
+    const styleBevelSoftness = document.getElementById('styleBevelSoftness');
+    const styleBevelAngle = document.getElementById('styleBevelAngle');
+    const styleBevelHighlightColor = document.getElementById('styleBevelHighlightColor');
+    const styleBevelHighlightOpacity = document.getElementById('styleBevelHighlightOpacity');
+    const styleBevelShadowColor = document.getElementById('styleBevelShadowColor');
+    const styleBevelShadowOpacity = document.getElementById('styleBevelShadowOpacity');
+    const shadowDirPad = document.getElementById('shadowDirPad');
 
     // Canvas Interactive Text Box & Micro-Toolbar Elements
     const activeLineContainer = document.getElementById('activeLineContainer');
@@ -99,9 +157,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     const drawerLyricsAlert = document.getElementById('drawerLyricsAlert');
 
     // Background Template Controls
-    const templateCards = document.querySelectorAll('.template-visual-card');
     const themeApplyStatus = document.getElementById('themeApplyStatus');
+    const drawerTemplatesList = document.getElementById('drawerTemplatesList');
+    const themeMoodChips = document.getElementById('themeMoodChips');
+    const themeSearchInput = document.getElementById('themeSearchInput');
+    const themeCountLabel = document.getElementById('themeCountLabel');
     let selectedBackgroundTemplate = 'burgundy_studio';
+    let allThemes = [];
+    let activeMood = 'all';
+    let activeMediaFilter = 'all';
+    let themeSearchQuery = '';
 
     // Canvas Aspect Ratio Controls
     const ratioBtns = document.querySelectorAll('.canvas-ratio-choice-btn');
@@ -115,21 +180,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     const timelineContainer = document.getElementById('timelineContainer');
     const toggleDetailTimelineBtn = document.getElementById('toggleDetailTimelineBtn');
 
-    // Export Modal Elements
+    // Export modal (quality pick) + background progress dock
     const exportModalEl = document.getElementById('exportModal');
     const exportModal = new bootstrap.Modal(exportModalEl);
     const exportSelectView = document.getElementById('exportSelectView');
-    const exportProgressView = document.getElementById('exportProgressView');
     const startExportActionBtn = document.getElementById('startExportActionBtn');
     const exportQualityBadgeText = document.getElementById('exportQualityBadgeText');
     const exportTierLabel720 = document.getElementById('exportTierLabel720');
     const exportTierLabel1080 = document.getElementById('exportTierLabel1080');
     const exportStageText = document.getElementById('exportStageText');
+    const exportSubText = document.getElementById('exportSubText');
     const exportProgressBar = document.getElementById('exportProgressBar');
     const exportProgressPct = document.getElementById('exportProgressPct');
     const exportSpinner = document.getElementById('exportSpinner');
     const exportErrorBox = document.getElementById('exportErrorBox');
     const downloadFinalVideoBtn = document.getElementById('downloadFinalVideoBtn');
+    const exportJobDock = document.getElementById('exportJobDock');
+    const exportDockCard = document.getElementById('exportDockCard');
+    const exportDockCollapsed = document.getElementById('exportDockCollapsed');
+    const exportDockPillText = document.getElementById('exportDockPillText');
+    const exportDockPillPct = document.getElementById('exportDockPillPct');
+    const minimizeExportDockBtn = document.getElementById('minimizeExportDockBtn');
+    const dismissExportDockBtn = document.getElementById('dismissExportDockBtn');
+    const hideExportDockBtn = document.getElementById('hideExportDockBtn');
+    let exportInProgress = false;
+    let exportIdleLabel = exportBtnLabel ? exportBtnLabel.textContent : 'Export';
 
     // Preview Quality Switcher Elements
     const previewQualityDropdown = document.getElementById('previewQualityDropdown');
@@ -184,7 +259,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             confidenceHeatmap.appendChild(empty);
             return;
         }
-        const duration = videoEl.duration || audioEl.duration || 1;
+        const duration = masterDurationSec || audioEl.duration || player.duration || 1;
         (lines || []).forEach((line, index) => {
             const segment = document.createElement('button');
             const confidence = Number(line.confidence ?? 0.9);
@@ -193,7 +268,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             segment.style.left = `${Math.max(0, line.start / duration) * 100}%`;
             segment.style.width = `${Math.max(0.6, (line.end - line.start) / duration * 100)}%`;
             segment.title = `Line ${index + 1}: ${Math.round(confidence * 100)}% confidence. Click to seek.`;
-            segment.addEventListener('click', () => player.seekTo(line.start));
+            segment.addEventListener('click', () => seekWithinStream(line.start));
             confidenceHeatmap.appendChild(segment);
         });
     }
@@ -267,10 +342,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     function updateFontPickerDisplay(fontName) {
         if (!fontPickerLabel) return;
         fontPickerLabel.textContent = fontName;
-        let fontFamily = `"${fontName}", sans-serif`;
-        if (fontName === 'Caveat') fontFamily = `'Caveat', cursive, sans-serif`;
-        else if (['Playfair Display', 'Cinzel', 'Merriweather', 'Georgia', 'Libre Baskerville'].includes(fontName)) fontFamily = `"${fontName}", serif`;
-        fontPickerLabel.style.fontFamily = fontFamily;
+        fontPickerLabel.style.fontFamily = (window.LyricSyncFonts && typeof window.LyricSyncFonts.resolve === 'function')
+            ? window.LyricSyncFonts.resolve(fontName)
+            : `"${fontName}", sans-serif`;
 
         fontPreviewItems.forEach(item => {
             if (item.getAttribute('data-font') === fontName) {
@@ -306,7 +380,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (styleFontFamily) styleFontFamily.value = fontVal;
                 updateFontPickerDisplay(fontVal);
 
-                const fontSizeVal = s.font_size || 28;
+                const fontSizeVal = s.font_size || 36;
                 if (styleFontSize) styleFontSize.value = fontSizeVal;
                 if (fontSizeDisplay) fontSizeDisplay.textContent = `${fontSizeVal}px`;
 
@@ -316,11 +390,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (s.primary_color && stylePrimaryColor) stylePrimaryColor.value = s.primary_color;
                 if (s.highlight_color && styleHighlightColor) styleHighlightColor.value = s.highlight_color;
-                if (s.mode && styleMode) styleMode.value = s.mode;
+                if (s.mode && styleMode) {
+                    // Keep legacy classic/karaoke; accept new tracking modes.
+                    styleMode.value = s.mode;
+                }
                 if (s.letter_spacing !== undefined && styleLetterSpacing) styleLetterSpacing.value = s.letter_spacing;
                 if (s.font_weight && styleFontWeight) styleFontWeight.value = s.font_weight;
                 if (s.effect && styleEffect) styleEffect.value = s.effect;
+                if (s.effect_strength != null) {
+                    const strengthEl = document.getElementById('styleEffectStrength');
+                    if (strengthEl) strengthEl.value = s.effect_strength;
+                }
                 if (s.font_style && styleFontStyle) styleFontStyle.value = s.font_style;
+                if (s.text_case && styleTextCase) styleTextCase.value = s.text_case;
+                applyTextEffectsFromCanonical(s);
+                // Card UI sync runs after helpers are initialized (see syncEffectCards below).
+                window.__pendingLyricEffect = s.effect || 'none';
+                window.__pendingEffectStrength = s.effect_strength;
 
                 const posVal = s.position || 'center';
                 const rPos = document.querySelector(`input[name="positionRadio"][value="${posVal}"]`);
@@ -330,14 +416,43 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const rAlign = document.querySelector(`input[name="alignRadio"][value="${alignVal}"]`);
                 if (rAlign) rAlign.checked = true;
 
-                player.setStyle({ ...s, font: fontVal, fontSize: fontSizeVal, lineHeight: lineHeightVal, fontWeight: s.font_weight || 600, fontStyle: s.font_style || 'normal', letterSpacing: s.letter_spacing || 0, effect: s.effect || 'none', position: posVal, textAlign: alignVal });
+                player.setStyle({
+                    font: fontVal,
+                    fontSize: fontSizeVal,
+                    lineHeight: lineHeightVal,
+                    fontWeight: s.font_weight || 600,
+                    fontStyle: s.font_style || 'normal',
+                    textCase: s.text_case || 'as_is',
+                    letterSpacing: s.letter_spacing || 0,
+                    effect: s.effect || 'none',
+                    effectStrength: s.effect_strength,
+                    primaryColor: s.primary_color || '#FFFFFF',
+                    highlightColor: s.highlight_color || '#10B981',
+                    mode: s.mode || 'karaoke',
+                    format: s.format || currentLyricsFormat,
+                    position: posVal,
+                    textAlign: alignVal,
+                    ...collectTextEffectStyleCamel(),
+                });
             }
 
             // Load lyrics into timeline, player, and right sidebar lyrics sheet
-            timeline.setLines(canonical.lyrics || []);
-            player.setLyrics(canonical.lyrics || []);
-            renderLyricsSheet(canonical.lyrics || []);
-            renderConfidenceHeatmap(canonical.lyrics || []);
+            applyStreamLyrics(canonical.lyrics || [], canonical.transcription || null);
+            const preferredLanguage = canonical.meta?.preferred_language;
+            const languageSelect = document.getElementById('transcribeLanguage');
+            if (languageSelect) {
+                const saved = preferredLanguage || localStorage.getItem('lyricsync_language') || 'auto';
+                if ([...languageSelect.options].some((opt) => opt.value === saved)) {
+                    languageSelect.value = saved;
+                }
+                languageSelect.addEventListener('change', () => {
+                    localStorage.setItem('lyricsync_language', languageSelect.value);
+                });
+            }
+            if (canonical.transcription?.partial || res.project?.status === 'transcribing') {
+                watchPartialLyrics();
+                if (canonical.transcription?.partial) setStreamBanner('playing');
+            }
 
             // Apply render aspect ratio
             if (canonical.render?.aspect_ratio) {
@@ -353,11 +468,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             const songTitle = canonical.project?.name || res.project?.name || editorProjectName?.value || 'Untitled Song';
             player.setSongTitle(songTitle);
 
-            // Pre-seed total duration from canonical media metadata
+            // Pre-seed total duration from canonical media metadata (never theme-bed length)
             if (canonical.media?.audio_duration && canonical.media.audio_duration > 0) {
                 const dur = Number(canonical.media.audio_duration);
+                masterDurationSec = dur;
                 scrubber.max = dur;
                 totalDurationDisplay.textContent = formatTime(dur);
+                if (player && typeof player.setFallbackDuration === 'function') {
+                    player.setFallbackDuration(dur);
+                }
             }
 
             // If a rendered video is already available, reveal header download button immediately
@@ -379,66 +498,76 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Video & Audio metadata loaded
-    const updateDuration = () => {
-        const pDur = player.duration;
-        const vDur = (videoEl && !isNaN(videoEl.duration)) ? videoEl.duration : 0;
-        const aDur = (audioEl && !isNaN(audioEl.duration)) ? audioEl.duration : 0;
-        const dur = (pDur && !isNaN(pDur) && pDur > 0) ? pDur : Math.max(vDur, aDur);
-        if (dur > 0 && !isNaN(dur)) {
-            scrubber.max = dur;
-            totalDurationDisplay.textContent = formatTime(dur);
+    const resolveMasterDuration = () => {
+        const aDur = (audioEl && !isNaN(audioEl.duration) && audioEl.duration > 0) ? audioEl.duration : 0;
+        const next = Math.max(masterDurationSec || 0, aDur || 0);
+        if (next > 0 && Math.abs(next - (masterDurationSec || 0)) > 0.01) {
+            masterDurationSec = next;
+            scrubber.max = next;
+            totalDurationDisplay.textContent = formatTime(next);
+            if (player && typeof player.setFallbackDuration === 'function') {
+                player.setFallbackDuration(next);
+            }
         }
+        return masterDurationSec;
     };
-    videoEl.addEventListener('loadedmetadata', updateDuration);
-    audioEl.addEventListener('loadedmetadata', updateDuration);
-    if ((audioEl && audioEl.readyState >= 1) || (videoEl && videoEl.readyState >= 1)) {
-        updateDuration();
+
+    audioEl.addEventListener('loadedmetadata', resolveMasterDuration);
+    audioEl.addEventListener('durationchange', resolveMasterDuration);
+    if (audioEl && audioEl.readyState >= 1) {
+        resolveMasterDuration();
     }
 
-
-    // Playback time tracking via player unified events
+    // Playback time tracking — audio / player clock only (theme video is wallpaper).
     const onTimeTick = (cur, dur) => {
+        const master = resolveMasterDuration();
+        let safeDur = master > 0 ? master : (dur > 0 ? dur : 0);
+        // Ignore wallpaper/theme-bed durations (e.g. 5–8s visualizer loops).
+        if (dur > 0 && master > 0 && dur < master * 0.5) {
+            safeDur = master;
+        }
+
+        const frontier = streamFrontierSeconds();
+        if (frontier != null && cur >= frontier - 0.08) {
+            if (!player.isPaused) {
+                resumeWhenStreamAdvances = true;
+                player.pause();
+            }
+            setStreamBanner('waiting');
+            cur = Math.min(cur, Math.max(0, frontier - 0.05));
+        }
+        if (safeDur > 0) {
+            cur = Math.max(0, Math.min(cur, safeDur));
+        }
         if (!scrubber.matches(':active')) {
             scrubber.value = cur;
         }
         currentTimeDisplay.textContent = formatTime(cur);
-        if (dur && scrubber.max != dur) {
-            scrubber.max = dur;
-            totalDurationDisplay.textContent = formatTime(dur);
+        if (safeDur > 0 && Math.abs(Number(scrubber.max) - safeDur) > 0.01) {
+            scrubber.max = safeDur;
+            totalDurationDisplay.textContent = formatTime(safeDur);
         }
     };
 
     window.addEventListener('player-timeupdate', (e) => {
-        onTimeTick(e.detail?.currentTime ?? player.currentTime, e.detail?.duration ?? player.duration);
-    });
-    videoEl.addEventListener('timeupdate', () => {
-        onTimeTick(videoEl.currentTime, videoEl.duration);
+        onTimeTick(e.detail?.currentTime ?? player.currentTime, resolveMasterDuration());
     });
     audioEl.addEventListener('timeupdate', () => {
-        if (!player.hasVideo) {
-            onTimeTick(audioEl.currentTime, audioEl.duration);
-        }
+        onTimeTick(audioEl.currentTime, resolveMasterDuration());
     });
 
-    // Play/Pause icon sync
+    // Play/Pause icon sync (ignore theme-video play/pause/loop events)
     window.addEventListener('player-play', () => {
         playIcon.className = 'bi bi-pause-fill fs-4';
     });
     window.addEventListener('player-pause', () => {
         playIcon.className = 'bi bi-play-fill fs-4';
     });
-    videoEl.addEventListener('play', () => {
+    audioEl.addEventListener('play', () => {
         playIcon.className = 'bi bi-pause-fill fs-4';
     });
-    videoEl.addEventListener('pause', () => {
-        playIcon.className = 'bi bi-play-fill fs-4';
-    });
-    audioEl.addEventListener('play', () => {
-        if (!player.hasVideo) playIcon.className = 'bi bi-pause-fill fs-4';
-    });
     audioEl.addEventListener('pause', () => {
-        if (!player.hasVideo) playIcon.className = 'bi bi-play-fill fs-4';
+        playIcon.className = 'bi bi-play-fill fs-4';
     });
 
     // Play/Pause toggle
@@ -461,7 +590,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentTimeDisplay.textContent = formatTime(t);
     });
     scrubber.addEventListener('change', (e) => {
-        player.seekTo(parseFloat(e.target.value));
+        const landed = seekWithinStream(parseFloat(e.target.value));
+        scrubber.value = landed;
     });
 
     // Replay / Forward 5s
@@ -469,7 +599,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         player.seekTo(Math.max(0, player.currentTime - 5));
     });
     forward5Btn.addEventListener('click', () => {
-        player.seekTo(player.currentTime + 5);
+        seekWithinStream(player.currentTime + 5);
     });
 
     // Playback Speed
@@ -589,12 +719,134 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (tbPosBottom) tbPosBottom.classList.toggle('active', posVal === 'bottom');
     }
 
+    function numOr(el, fallback) {
+        if (!el) return fallback;
+        const n = parseFloat(el.value);
+        return Number.isFinite(n) ? n : fallback;
+    }
+
+    function syncEffectControlState() {
+        const outlineOn = !styleOutlineEnabled || styleOutlineEnabled.checked;
+        const shadowOn = !styleShadowEnabled || styleShadowEnabled.checked;
+        const bevelOn = styleBevelEnabled && styleBevelEnabled.checked;
+        document.getElementById('outlineControls')?.closest('.typo-effect-group')?.classList.toggle('is-disabled', !outlineOn);
+        document.getElementById('shadowControls')?.closest('.typo-effect-group')?.classList.toggle('is-disabled', !shadowOn);
+        document.getElementById('bevelControls')?.closest('.typo-effect-group')?.classList.toggle('is-disabled', !bevelOn);
+
+        const setTxt = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+        setTxt('outlineSizeDisplay', `${numOr(styleOutlineSize, 2)}px`);
+        setTxt('outlineSoftnessDisplay', `${numOr(styleOutlineSoftness, 0)}px`);
+        setTxt('shadowOpacityDisplay', `${Math.round(numOr(styleShadowOpacity, 70))}%`);
+        setTxt('shadowDistanceDisplay', `${numOr(styleShadowDistance, 3)}px`);
+        setTxt('shadowBlurDisplay', `${numOr(styleShadowBlur, 2)}px`);
+        setTxt('shadowAngleDisplay', `${Math.round(numOr(styleShadowAngle, 45))}°`);
+        setTxt('bevelSizeDisplay', `${numOr(styleBevelSize, 2)}px`);
+        setTxt('bevelSoftnessDisplay', `${numOr(styleBevelSoftness, 1)}px`);
+        setTxt('bevelAngleDisplay', `${Math.round(numOr(styleBevelAngle, 135))}°`);
+        setTxt('bevelHighlightOpacityDisplay', `${Math.round(numOr(styleBevelHighlightOpacity, 55))}%`);
+        setTxt('bevelShadowOpacityDisplay', `${Math.round(numOr(styleBevelShadowOpacity, 45))}%`);
+
+        document.querySelectorAll('.style-color-hex').forEach((span) => {
+            const input = document.getElementById(span.dataset.for);
+            if (input) span.textContent = (input.value || '').toUpperCase();
+        });
+
+        if (shadowDirPad && styleShadowAngle) {
+            const angle = Math.round(numOr(styleShadowAngle, 45));
+            shadowDirPad.querySelectorAll('.typo-dir-btn').forEach((btn) => {
+                btn.classList.toggle('is-active', Number(btn.dataset.angle) === angle);
+            });
+        }
+    }
+
+    function collectTextEffectStyleCamel() {
+        return {
+            outlineEnabled: styleOutlineEnabled ? styleOutlineEnabled.checked : true,
+            outline: numOr(styleOutlineSize, 2),
+            outlineColor: styleOutlineColor ? styleOutlineColor.value : '#000000',
+            outlineSoftness: numOr(styleOutlineSoftness, 0),
+            shadowEnabled: styleShadowEnabled ? styleShadowEnabled.checked : true,
+            shadow: numOr(styleShadowDistance, 3),
+            shadowColor: styleShadowColor ? styleShadowColor.value : '#000000',
+            shadowOpacity: numOr(styleShadowOpacity, 70),
+            shadowAngle: numOr(styleShadowAngle, 45),
+            shadowBlur: numOr(styleShadowBlur, 2),
+            bevelEnabled: styleBevelEnabled ? styleBevelEnabled.checked : false,
+            bevelSize: numOr(styleBevelSize, 2),
+            bevelSoftness: numOr(styleBevelSoftness, 1),
+            bevelAngle: numOr(styleBevelAngle, 135),
+            bevelHighlightColor: styleBevelHighlightColor ? styleBevelHighlightColor.value : '#FFFFFF',
+            bevelHighlightOpacity: numOr(styleBevelHighlightOpacity, 55),
+            bevelShadowColor: styleBevelShadowColor ? styleBevelShadowColor.value : '#000000',
+            bevelShadowOpacity: numOr(styleBevelShadowOpacity, 45),
+        };
+    }
+
+    function collectTextEffectStyleSnake() {
+        const c = collectTextEffectStyleCamel();
+        return {
+            outline_enabled: c.outlineEnabled,
+            outline: c.outline,
+            outline_color: c.outlineColor,
+            outline_softness: c.outlineSoftness,
+            shadow_enabled: c.shadowEnabled,
+            shadow: c.shadow,
+            shadow_color: c.shadowColor,
+            shadow_opacity: c.shadowOpacity,
+            shadow_angle: c.shadowAngle,
+            shadow_blur: c.shadowBlur,
+            bevel_enabled: c.bevelEnabled,
+            bevel_size: c.bevelSize,
+            bevel_softness: c.bevelSoftness,
+            bevel_angle: c.bevelAngle,
+            bevel_highlight_color: c.bevelHighlightColor,
+            bevel_highlight_opacity: c.bevelHighlightOpacity,
+            bevel_shadow_color: c.bevelShadowColor,
+            bevel_shadow_opacity: c.bevelShadowOpacity,
+        };
+    }
+
+    function applyTextEffectsFromCanonical(s = {}) {
+        const setCheck = (el, val, fallback = true) => {
+            if (!el) return;
+            el.checked = val === undefined || val === null ? fallback : !!val;
+        };
+        const setVal = (el, val, fallback) => {
+            if (!el) return;
+            el.value = val !== undefined && val !== null ? val : fallback;
+        };
+
+        setCheck(styleOutlineEnabled, s.outline_enabled, true);
+        setVal(styleOutlineColor, s.outline_color, '#000000');
+        setVal(styleOutlineSize, s.outline, 2);
+        setVal(styleOutlineSoftness, s.outline_softness, 0);
+
+        setCheck(styleShadowEnabled, s.shadow_enabled, true);
+        setVal(styleShadowColor, s.shadow_color, '#000000');
+        setVal(styleShadowOpacity, s.shadow_opacity, 70);
+        // Prefer new distance key; fall back to legacy ASS `shadow` size
+        setVal(styleShadowDistance, s.shadow_distance ?? s.shadow, 3);
+        setVal(styleShadowBlur, s.shadow_blur, 2);
+        setVal(styleShadowAngle, s.shadow_angle, 45);
+
+        setCheck(styleBevelEnabled, s.bevel_enabled, false);
+        setVal(styleBevelSize, s.bevel_size, 2);
+        setVal(styleBevelSoftness, s.bevel_softness, 1);
+        setVal(styleBevelAngle, s.bevel_angle, 135);
+        setVal(styleBevelHighlightColor, s.bevel_highlight_color, '#FFFFFF');
+        setVal(styleBevelHighlightOpacity, s.bevel_highlight_opacity, 55);
+        setVal(styleBevelShadowColor, s.bevel_shadow_color, '#000000');
+        setVal(styleBevelShadowOpacity, s.bevel_shadow_opacity, 45);
+        syncEffectControlState();
+    }
+
     function applyCurrentStyle() {
         const alignVal = getSelectedAlignment();
         const posVal = getSelectedPosition();
         const fontVal = styleFontFamily ? styleFontFamily.value : 'Caveat';
-        const fontSizeVal = styleFontSize ? parseInt(styleFontSize.value) : 28;
+        const fontSizeVal = styleFontSize ? parseInt(styleFontSize.value) : 36;
         const lineHeightVal = styleLineHeight ? parseFloat(styleLineHeight.value) : 0.9;
+        syncEffectControlState();
 
         const styleConfig = {
             format: currentLyricsFormat,
@@ -609,9 +861,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             letterSpacing: styleLetterSpacing ? parseFloat(styleLetterSpacing.value) : 0,
             fontWeight: styleFontWeight ? parseInt(styleFontWeight.value) : 600,
             effect: styleEffect ? styleEffect.value : 'none',
+            effectStrength: styleEffectStrength ? parseFloat(styleEffectStrength.value) : 0.7,
             fontStyle: styleFontStyle ? styleFontStyle.value : 'normal',
+            textCase: styleTextCase ? styleTextCase.value : 'as_is',
+            ...collectTextEffectStyleCamel(),
         };
         player.setStyle(styleConfig);
+        if (styleEffectStrength) applyEffectStrength(styleEffectStrength.value);
         updateCanvasToolbarButtons(alignVal, posVal);
         scheduleAutoSaveStyle();
         return styleConfig;
@@ -636,26 +892,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    function buildStylePayloadForSave() {
+        // Canonical snake_case payload used by export / autosave / API.
+        // Preview uses camelCase via applyCurrentStyle(); never send that to the server.
+        syncEffectControlState();
+        return {
+            format: currentLyricsFormat,
+            font: styleFontFamily ? styleFontFamily.value : 'Caveat',
+            font_size: styleFontSize ? parseInt(styleFontSize.value) : 36,
+            line_height: styleLineHeight ? parseFloat(styleLineHeight.value) : 0.9,
+            letter_spacing: styleLetterSpacing ? parseFloat(styleLetterSpacing.value) : 0,
+            font_weight: styleFontWeight ? parseInt(styleFontWeight.value) : 600,
+            effect: styleEffect ? styleEffect.value : 'none',
+            effect_strength: styleEffectStrength ? parseFloat(styleEffectStrength.value) : 0.7,
+            font_style: styleFontStyle ? styleFontStyle.value : 'normal',
+            text_case: styleTextCase ? styleTextCase.value : 'as_is',
+            primary_color: stylePrimaryColor ? stylePrimaryColor.value : '#FFFFFF',
+            highlight_color: styleHighlightColor ? styleHighlightColor.value : '#10B981',
+            position: getSelectedPosition(),
+            text_align: getSelectedAlignment(),
+            mode: styleMode ? styleMode.value : 'karaoke',
+            ...collectTextEffectStyleSnake(),
+        };
+    }
+
     let autoSaveTimer = null;
     function scheduleAutoSaveStyle() {
         if (autoSaveTimer) clearTimeout(autoSaveTimer);
         autoSaveTimer = setTimeout(async () => {
             try {
-                const styleConfig = {
-                    format: currentLyricsFormat,
-                    font: styleFontFamily ? styleFontFamily.value : 'Caveat',
-                    font_size: styleFontSize ? parseInt(styleFontSize.value) : 28,
-                    line_height: styleLineHeight ? parseFloat(styleLineHeight.value) : 0.9,
-                    letter_spacing: styleLetterSpacing ? parseFloat(styleLetterSpacing.value) : 0,
-                    font_weight: styleFontWeight ? parseInt(styleFontWeight.value) : 600,
-                    effect: styleEffect ? styleEffect.value : 'none',
-                    font_style: styleFontStyle ? styleFontStyle.value : 'normal',
-                    primary_color: stylePrimaryColor ? stylePrimaryColor.value : '#FFFFFF',
-                    highlight_color: styleHighlightColor ? styleHighlightColor.value : '#10B981',
-                    position: getSelectedPosition(),
-                    text_align: getSelectedAlignment(),
-                    mode: styleMode ? styleMode.value : 'karaoke',
-                };
+                const styleConfig = buildStylePayloadForSave();
                 await LyricSyncAPI.updateStyle(projectId, styleConfig, { aspect_ratio: currentAspectRatio, lyrics_format: currentLyricsFormat });
             } catch (e) {
                 console.warn("Auto-saving style note:", e);
@@ -667,6 +933,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (stylePrimaryColor) stylePrimaryColor.addEventListener('input', () => applyCurrentStyle());
     if (styleHighlightColor) styleHighlightColor.addEventListener('input', () => applyCurrentStyle());
     if (styleMode) styleMode.addEventListener('change', () => applyCurrentStyle());
+
+    const textEffectInputs = [
+        styleOutlineEnabled, styleOutlineColor, styleOutlineSize, styleOutlineSoftness,
+        styleShadowEnabled, styleShadowColor, styleShadowOpacity, styleShadowDistance,
+        styleShadowBlur, styleShadowAngle,
+        styleBevelEnabled, styleBevelSize, styleBevelSoftness, styleBevelAngle,
+        styleBevelHighlightColor, styleBevelHighlightOpacity, styleBevelShadowColor, styleBevelShadowOpacity,
+    ];
+    textEffectInputs.forEach((el) => {
+        if (!el) return;
+        const evt = el.type === 'checkbox' ? 'change' : 'input';
+        el.addEventListener(evt, () => applyCurrentStyle());
+    });
+    shadowDirPad?.querySelectorAll('.typo-dir-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            if (!styleShadowAngle) return;
+            styleShadowAngle.value = btn.dataset.angle || '45';
+            applyCurrentStyle();
+        });
+    });
+    syncEffectControlState();
     if (styleFormat) {
         styleFormat.addEventListener('change', (e) => {
             currentLyricsFormat = e.target.value;
@@ -697,11 +984,78 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (styleLetterSpacing) styleLetterSpacing.addEventListener('input', () => applyCurrentStyle());
     if (styleFontWeight) styleFontWeight.addEventListener('change', () => applyCurrentStyle());
+    const effectCardGrid = document.getElementById('effectCardGrid');
+    const styleEffectStrength = document.getElementById('styleEffectStrength');
+    const effectStrengthDisplay = document.getElementById('effectStrengthDisplay');
+
+    function syncEffectCards(effect) {
+        const value = effect || 'none';
+        const grid = document.getElementById('effectCardGrid');
+        if (styleEffect && styleEffect.value !== value) styleEffect.value = value;
+        if (!grid) return;
+        grid.querySelectorAll('.effect-card').forEach((card) => {
+            const active = card.dataset.effect === value;
+            card.classList.toggle('active', active);
+            card.setAttribute('aria-selected', active ? 'true' : 'false');
+            if (active) {
+                const preview = card.querySelector('.effect-preview-text');
+                if (preview && value !== 'none') {
+                    preview.style.animation = 'none';
+                    void preview.offsetWidth;
+                    preview.style.animation = '';
+                }
+            }
+        });
+    }
+
+    function applyEffectStrength(strength) {
+        const value = Math.max(0.2, Math.min(1.5, Number(strength) || 0.7));
+        const activeTextEl = document.getElementById('displayActiveText');
+        const grid = document.getElementById('effectCardGrid');
+        const strengthLabel = document.getElementById('effectStrengthDisplay');
+        if (videoContainer) videoContainer.style.setProperty('--lyric-effect-strength', String(value));
+        if (activeTextEl) activeTextEl.style.setProperty('--lyric-effect-strength', String(value));
+        if (grid) grid.style.setProperty('--lyric-effect-strength', String(value));
+        if (strengthLabel) strengthLabel.textContent = `${Math.round(value * 100)}%`;
+        if (player?.style) {
+            player.style.effectStrength = value;
+            player.renderActiveFrame(player.currentTime);
+        }
+    }
+
+    syncEffectCards(window.__pendingLyricEffect || (styleEffect ? styleEffect.value : 'none'));
+    if (window.__pendingEffectStrength != null && styleEffectStrength) {
+        styleEffectStrength.value = window.__pendingEffectStrength;
+    }
+    applyEffectStrength(styleEffectStrength ? styleEffectStrength.value : 0.7);
+    delete window.__pendingLyricEffect;
+    delete window.__pendingEffectStrength;
+
+    if (effectCardGrid) {
+        effectCardGrid.querySelectorAll('.effect-card').forEach((card) => {
+            card.addEventListener('click', () => {
+                const effect = card.dataset.effect || 'none';
+                syncEffectCards(effect);
+                applyCurrentStyle();
+                applyEffectToAllLines(effect);
+            });
+        });
+    }
+
     if (styleEffect) styleEffect.addEventListener('change', () => {
+        syncEffectCards(styleEffect.value);
         applyCurrentStyle();
         applyEffectToAllLines(styleEffect.value);
     });
+
+    if (styleEffectStrength) {
+        styleEffectStrength.addEventListener('input', (e) => {
+            applyEffectStrength(e.target.value);
+        });
+    }
+
     if (styleFontStyle) styleFontStyle.addEventListener('change', () => applyCurrentStyle());
+    if (styleTextCase) styleTextCase.addEventListener('change', () => applyCurrentStyle());
 
     // ================= CANVAS TEXT BOX & MICRO-TOOLBAR =================
     if (activeLineContainer) {
@@ -779,7 +1133,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         videoContainer.classList.add(cls);
 
         if (renderAspectRatio) renderAspectRatio.value = aspect;
-        if (exportBtnLabel) exportBtnLabel.textContent = `Export ${aspect} Video`;
+        exportIdleLabel = `Export ${aspect} Video`;
+        if (exportBtnLabel && !exportInProgress) exportBtnLabel.textContent = exportIdleLabel;
 
         ratioBtns.forEach(btn => {
             if (btn.getAttribute('data-ratio') === aspect) {
@@ -796,19 +1151,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateAspectContainer(aspect);
 
             try {
-                const styleConfig = applyCurrentStyle();
+                const styleConfig = buildStylePayloadForSave();
                 await LyricSyncAPI.updateStyle(projectId, styleConfig, { aspect_ratio: aspect });
                 const res = await LyricSyncAPI.updateBackgroundTemplate(projectId, selectedBackgroundTemplate, aspect);
                 if (res.success && res.video_url) {
-                    const curTime = player.currentTime;
-                    const wasPlaying = player.isPlaying;
-                    if (res.is_image !== false) {
-                        player.setMediaMode({ hasVideo: false, imageSrc: res.video_url });
-                    } else {
-                        player.setMediaMode({ hasVideo: true, videoSrc: res.video_url });
-                    }
-                    player.seekTo(curTime);
-                    if (wasPlaying) player.play();
+                    await applyBackgroundResponse(res);
                 }
             } catch (e) {
                 console.warn("Could not update aspect background video:", e);
@@ -825,70 +1172,453 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ================= BACKGROUND TEMPLATE SWITCHER =================
     function selectTemplate(templateId) {
         selectedBackgroundTemplate = templateId;
-        templateCards.forEach(card => {
-            if (card.getAttribute('data-template-id') === templateId) {
-                card.classList.add('active');
-            } else {
-                card.classList.remove('active');
+        document.querySelectorAll('.template-visual-card').forEach((card) => {
+            card.classList.toggle('active', card.getAttribute('data-template-id') === templateId);
+        });
+    }
+
+    function themeMatchesFilters(theme) {
+        if (activeMood !== 'all' && !(theme.moods || []).includes(activeMood)) return false;
+        if (activeMediaFilter === 'video' && !theme.is_video) return false;
+        if (activeMediaFilter === 'image' && theme.is_video) return false;
+        if (themeSearchQuery) {
+            const hay = `${theme.name} ${theme.tagline} ${(theme.moods || []).join(' ')}`.toLowerCase();
+            if (!hay.includes(themeSearchQuery)) return false;
+        }
+        return true;
+    }
+
+    function renderThemeMoodChips(moods) {
+        if (!themeMoodChips) return;
+        themeMoodChips.innerHTML = '';
+        (moods || ['all']).forEach((mood) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = `theme-mood-chip${mood === activeMood ? ' active' : ''}`;
+            btn.dataset.mood = mood;
+            btn.textContent = mood === 'all' ? 'All moods' : mood;
+            btn.addEventListener('click', () => {
+                activeMood = mood;
+                themeMoodChips.querySelectorAll('.theme-mood-chip').forEach((el) => {
+                    el.classList.toggle('active', el.dataset.mood === mood);
+                });
+                renderThemeGrid();
+            });
+            themeMoodChips.appendChild(btn);
+        });
+    }
+
+    function renderThemeGrid() {
+        if (!drawerTemplatesList) return;
+        const filtered = allThemes
+            .filter(themeMatchesFilters)
+            .sort((a, b) => Number(!!b.is_ai) - Number(!!a.is_ai));
+        if (themeCountLabel) {
+            themeCountLabel.textContent = `${filtered.length} theme${filtered.length === 1 ? '' : 's'}`
+                + (activeMood !== 'all' ? ` · ${activeMood}` : '')
+                + (activeMediaFilter !== 'all' ? ` · ${activeMediaFilter}` : '');
+        }
+        drawerTemplatesList.innerHTML = '';
+        if (!filtered.length) {
+            drawerTemplatesList.innerHTML = `<div class="col-12 text-secondary small py-3">No themes match that mood/search.</div>`;
+            return;
+        }
+        filtered.forEach((theme) => {
+            const col = document.createElement('div');
+            col.className = 'col-6';
+            const color = theme.preview_color || '#334155';
+            const thumb = theme.thumbnail || `/api/projects/templates/preview/${theme.id}`;
+            col.innerHTML = `
+                <div class="template-visual-card p-1${theme.id === selectedBackgroundTemplate ? ' active' : ''}" data-template-id="${theme.id}">
+                    <div class="template-thumb-box position-relative" style="background:${color};">
+                        <img src="${thumb}" alt="${theme.name}" loading="lazy"
+                             onerror="this.style.opacity=0">
+                        ${theme.is_ai ? '<span class="theme-video-badge theme-ai-badge">AI</span>'
+                            : theme.is_visualizer ? '<span class="theme-video-badge theme-viz-badge">Visualizer</span>'
+                            : theme.is_video ? '<span class="theme-video-badge">Video</span>'
+                            : theme.is_photo ? '<span class="theme-video-badge theme-photo-badge">Photo</span>' : ''}
+                    </div>
+                    <div class="p-1 text-center">
+                        <div class="fw-bold small text-dark text-truncate" style="font-size: 0.74rem;">${theme.name}</div>
+                        <div class="text-secondary text-truncate" style="font-size: 0.62rem;">${theme.is_ai ? 'From your lyrics' : (theme.moods || []).slice(0, 2).join(' · ')}</div>
+                    </div>
+                </div>`;
+            const card = col.querySelector('.template-visual-card');
+            card.addEventListener('click', () => applyThemeCard(card, theme.id));
+            drawerTemplatesList.appendChild(col);
+        });
+    }
+
+    async function applyBackgroundResponse(res) {
+        const keepTime = (player.audio && !isNaN(player.audio.currentTime))
+            ? player.audio.currentTime
+            : player.currentTime;
+        const wasPlaying = player.isPlaying;
+        const isVideoBg = res.media_type === 'video' || res.is_image === false;
+        const posterUrl = videoContainer?.getAttribute('data-bg-poster')
+            || `/api/projects/templates/preview/${res.template || selectedBackgroundTemplate || 'burgundy_studio'}`;
+        if (videoContainer) {
+            videoContainer.setAttribute('data-has-video', isVideoBg ? 'true' : 'false');
+            if (res.video_url) videoContainer.setAttribute('data-bg-stream', res.video_url);
+            if (res.template) {
+                videoContainer.setAttribute('data-bg-template', res.template);
+                videoContainer.setAttribute('data-bg-poster', `/api/projects/templates/preview/${res.template}`);
+            }
+        }
+        await player.setMediaMode({
+            hasVideo: isVideoBg,
+            videoSrc: isVideoBg ? res.video_url : undefined,
+            imageSrc: isVideoBg ? posterUrl : res.video_url,
+            preserveTime: keepTime,
+        });
+        player.seekTo(keepTime);
+        if (wasPlaying) {
+            player.play();
+        } else {
+            player.pause();
+            player.renderActiveFrame(keepTime);
+        }
+        videoContainer.style.backgroundImage = '';
+    }
+
+    async function applyThemeCard(card, tid) {
+        selectTemplate(tid);
+        const isAiTheme = tid === 'ai_lyric_scene';
+        const previewImage = card?.querySelector?.('img');
+        if (previewImage && previewImage.src && !isAiTheme) {
+            videoContainer.style.backgroundImage = `url("${previewImage.src}")`;
+            videoContainer.classList.add('theme-preview-loading');
+        } else {
+            videoContainer.classList.add('theme-preview-loading');
+        }
+        if (themeApplyStatus) {
+            themeApplyStatus.classList.remove('d-none', 'text-danger');
+            themeApplyStatus.classList.add('text-success');
+            themeApplyStatus.innerHTML = isAiTheme
+                ? '<span class="spinner-border spinner-border-sm me-1"></span> Painting AI lyric scene from your song…'
+                : '<span class="spinner-border spinner-border-sm me-1"></span> Applying theme...';
+        }
+        const aiPromptPreview = document.getElementById('aiThemePromptPreview');
+        try {
+            const res = await LyricSyncAPI.updateBackgroundTemplate(projectId, tid, currentAspectRatio);
+            if (!res.success) {
+                const fail = new Error(res.error?.message || 'Theme apply failed');
+                fail.code = res.error?.code;
+                fail.credits = res.error?.credits || res.credits;
+                fail.error = res.error;
+                throw fail;
+            }
+            if (res.video_url) {
+                await applyBackgroundResponse(res);
+            }
+            if (isAiTheme && res.ai?.prompt && aiPromptPreview) {
+                aiPromptPreview.classList.remove('d-none');
+                aiPromptPreview.textContent = res.ai.prompt;
+            }
+            if (isAiTheme && res.credits) {
+                syncAiCreditUi(res.credits);
+            }
+        } catch (err) {
+            console.warn('Background update error:', err);
+            const errCredits = err?.credits || err?.error?.credits;
+            if (errCredits) syncAiCreditUi(errCredits);
+            if (isAiTheme && (err?.code === 'IMAGE_CREDITS_EXHAUSTED' || err?.error?.code === 'IMAGE_CREDITS_EXHAUSTED')) {
+                openPremiumUpgradeModal();
+            }
+            if (themeApplyStatus) {
+                themeApplyStatus.classList.remove('text-success');
+                themeApplyStatus.classList.add('text-danger');
+                themeApplyStatus.textContent = err.message || 'Could not apply theme';
+                setTimeout(() => themeApplyStatus.classList.add('d-none'), 5000);
+                return;
+            }
+        } finally {
+            videoContainer.classList.remove('theme-preview-loading');
+            videoContainer.style.backgroundImage = '';
+            if (themeApplyStatus && !themeApplyStatus.classList.contains('text-danger')) {
+                themeApplyStatus.classList.add('d-none');
+            }
+        }
+    }
+
+    const generateAiThemeBtn = document.getElementById('generateAiThemeBtn');
+    const aiCreditChip = document.getElementById('aiCreditChip');
+    const aiThemeGenerateWrap = document.getElementById('aiThemeGenerateWrap');
+    const aiThemeLockedState = document.getElementById('aiThemeLockedState');
+    const aiThemeSignInLink = document.getElementById('aiThemeSignInLink');
+    const upgradePremiumBtn = document.getElementById('upgradePremiumBtn');
+    const payWithCardBtn = document.getElementById('payWithCardBtn');
+    const premiumCheckoutHint = document.getElementById('premiumCheckoutHint');
+    const premiumCheckoutStatus = document.getElementById('premiumCheckoutStatus');
+
+    let imageCreditState = {
+        authenticated: workspace.getAttribute('data-auth-required-ai') !== 'true',
+        unlimited: workspace.getAttribute('data-image-unlimited') === 'true',
+        can_generate: workspace.getAttribute('data-can-generate-ai') === 'true',
+        image_credits: Number(workspace.getAttribute('data-image-credits') || 0),
+        premium_price_label: workspace.getAttribute('data-premium-price') || '$5/month',
+        premium_credits: Number(workspace.getAttribute('data-premium-credits') || 100),
+        stripe_enabled: workspace.getAttribute('data-stripe-enabled') === 'true',
+    };
+
+    function syncAiCreditUi(credits) {
+        if (!credits) return;
+        imageCreditState = { ...imageCreditState, ...credits };
+        const authenticated = !!imageCreditState.authenticated;
+        const unlimited = !!imageCreditState.unlimited;
+        const canGenerate = !!imageCreditState.can_generate;
+        const remaining = Number(imageCreditState.image_credits ?? 0);
+
+        if (aiCreditChip) {
+            aiCreditChip.classList.toggle('is-empty', authenticated && !unlimited && remaining <= 0);
+            if (unlimited) aiCreditChip.textContent = 'Unlimited';
+            else if (!authenticated) aiCreditChip.textContent = 'Sign in';
+            else aiCreditChip.textContent = `${Math.max(0, remaining)} left`;
+        }
+
+        const showLocked = !canGenerate;
+        if (aiThemeGenerateWrap) aiThemeGenerateWrap.classList.toggle('d-none', showLocked);
+        if (aiThemeLockedState) aiThemeLockedState.classList.toggle('d-none', !showLocked);
+        if (aiThemeSignInLink) aiThemeSignInLink.classList.toggle('d-none', authenticated);
+        if (upgradePremiumBtn) upgradePremiumBtn.classList.toggle('d-none', !authenticated);
+        if (generateAiThemeBtn) {
+            generateAiThemeBtn.disabled = showLocked;
+        }
+        if (premiumCheckoutHint && typeof imageCreditState.stripe_enabled === 'boolean') {
+            premiumCheckoutHint.textContent = imageCreditState.stripe_enabled
+                ? 'Secure checkout opens in Stripe. Credits are added automatically after payment.'
+                : 'Card payments activate when Stripe keys are set on the server. Until then, contact the admin to upgrade manually.';
+        }
+    }
+
+    syncAiCreditUi(imageCreditState);
+    if (typeof LyricSyncAPI !== 'undefined' && LyricSyncAPI.getImageCredits) {
+        LyricSyncAPI.getImageCredits().then((res) => {
+            if (res?.success && res.credits) syncAiCreditUi(res.credits);
+        }).catch(() => {});
+    }
+
+    function openPremiumUpgradeModal() {
+        const modalEl = document.getElementById('premiumUpgradeModal');
+        if (!modalEl || typeof bootstrap === 'undefined') return;
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+
+    async function startCardCheckout() {
+        if (premiumCheckoutStatus) {
+            premiumCheckoutStatus.classList.remove('d-none', 'text-success');
+            premiumCheckoutStatus.classList.add('text-secondary');
+            premiumCheckoutStatus.textContent = 'Starting secure checkout…';
+        }
+        try {
+            const res = await LyricSyncAPI.startPremiumCheckout();
+            if (res?.checkout_url) {
+                window.location.href = res.checkout_url;
+                return;
+            }
+            if (res?.skipped) {
+                syncAiCreditUi(res.credits || imageCreditState);
+                if (premiumCheckoutStatus) {
+                    premiumCheckoutStatus.classList.remove('text-secondary');
+                    premiumCheckoutStatus.classList.add('text-success');
+                    premiumCheckoutStatus.textContent = res.message || 'Admin accounts are unlimited.';
+                }
+                return;
+            }
+            const msg = res?.error?.message || 'Could not start checkout.';
+            if (premiumCheckoutStatus) {
+                premiumCheckoutStatus.classList.remove('text-secondary');
+                premiumCheckoutStatus.classList.add('text-danger');
+                premiumCheckoutStatus.textContent = msg;
+            }
+        } catch (err) {
+            if (premiumCheckoutStatus) {
+                premiumCheckoutStatus.classList.remove('text-secondary');
+                premiumCheckoutStatus.classList.add('text-danger');
+                premiumCheckoutStatus.textContent = err.message || 'Checkout failed.';
+            }
+        }
+    }
+
+    if (generateAiThemeBtn) {
+        generateAiThemeBtn.addEventListener('click', () => {
+            if (!imageCreditState.can_generate) {
+                if (!imageCreditState.authenticated) {
+                    window.location.href = '/login';
+                    return;
+                }
+                openPremiumUpgradeModal();
+                return;
+            }
+            applyThemeCard(null, 'ai_lyric_scene');
+        });
+    }
+    if (upgradePremiumBtn) {
+        upgradePremiumBtn.addEventListener('click', openPremiumUpgradeModal);
+    }
+    if (payWithCardBtn) {
+        payWithCardBtn.addEventListener('click', startCardCheckout);
+    }
+
+    // Custom video upload under Themes drawer
+    const studioVideoDropzone = document.getElementById('studioVideoDropzone');
+    const studioVideoFileInput = document.getElementById('studioVideoFileInput');
+    const studioVideoLabel = document.getElementById('studioVideoLabel');
+    const studioVideoFileInfo = document.getElementById('studioVideoFileInfo');
+    const studioVideoFileName = document.getElementById('studioVideoFileName');
+    const studioRemoveVideoBtn = document.getElementById('studioRemoveVideoBtn');
+    const studioVideoUploadStatus = document.getElementById('studioVideoUploadStatus');
+
+    function formatStudioBytes(bytes) {
+        if (!bytes) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+    }
+
+    async function uploadStudioCustomVideo(file) {
+        if (!file) return;
+        if (studioVideoUploadStatus) {
+            studioVideoUploadStatus.classList.remove('d-none', 'text-danger');
+            studioVideoUploadStatus.classList.add('text-secondary');
+            studioVideoUploadStatus.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Uploading custom video…';
+        }
+        try {
+            const res = await LyricSyncAPI.uploadCustomBackgroundVideo(projectId, file);
+            if (!res.success || !res.video_url) {
+                throw new Error(res.error?.message || 'Upload failed');
+            }
+            selectedBackgroundTemplate = 'custom_video';
+            if (studioVideoLabel) studioVideoLabel.classList.add('d-none');
+            if (studioVideoFileInfo) studioVideoFileInfo.classList.remove('d-none');
+            if (studioVideoFileName) {
+                studioVideoFileName.textContent = res.filename || file.name;
+                studioVideoFileName.title = `${file.name} · ${formatStudioBytes(file.size)}`;
+            }
+            await applyBackgroundResponse(res);
+            if (studioVideoUploadStatus) {
+                studioVideoUploadStatus.classList.remove('text-secondary');
+                studioVideoUploadStatus.classList.add('text-success');
+                studioVideoUploadStatus.textContent = 'Custom video applied.';
+            }
+        } catch (err) {
+            if (studioVideoUploadStatus) {
+                studioVideoUploadStatus.classList.remove('text-secondary', 'text-success');
+                studioVideoUploadStatus.classList.add('text-danger');
+                studioVideoUploadStatus.textContent = err.message || 'Could not upload video.';
+            }
+        }
+    }
+
+    if (studioVideoDropzone && studioVideoFileInput) {
+        studioVideoDropzone.addEventListener('click', (e) => {
+            if (studioRemoveVideoBtn && (e.target === studioRemoveVideoBtn || studioRemoveVideoBtn.contains(e.target))) return;
+            studioVideoFileInput.click();
+        });
+        studioVideoFileInput.addEventListener('change', (e) => uploadStudioCustomVideo(e.target.files?.[0]));
+        studioVideoDropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            studioVideoDropzone.style.borderColor = 'var(--brand-burgundy)';
+        });
+        studioVideoDropzone.addEventListener('dragleave', () => {
+            studioVideoDropzone.style.borderColor = '';
+        });
+        studioVideoDropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            studioVideoDropzone.style.borderColor = '';
+            if (e.dataTransfer.files?.[0]) uploadStudioCustomVideo(e.dataTransfer.files[0]);
+        });
+    }
+
+    if (studioRemoveVideoBtn) {
+        studioRemoveVideoBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const fallbackTheme = (allThemes.find((t) => t.id === 'burgundy_studio') || allThemes[0] || {}).id || 'burgundy_studio';
+            if (studioVideoUploadStatus) {
+                studioVideoUploadStatus.classList.remove('d-none', 'text-danger', 'text-success');
+                studioVideoUploadStatus.classList.add('text-secondary');
+                studioVideoUploadStatus.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Restoring theme…';
+            }
+            try {
+                const res = await LyricSyncAPI.updateBackgroundTemplate(projectId, fallbackTheme, currentAspectRatio);
+                if (!res.success) throw new Error(res.error?.message || 'Could not restore theme');
+                selectedBackgroundTemplate = fallbackTheme;
+                selectTemplate(fallbackTheme);
+                if (studioVideoFileInput) studioVideoFileInput.value = '';
+                if (studioVideoLabel) studioVideoLabel.classList.remove('d-none');
+                if (studioVideoFileInfo) studioVideoFileInfo.classList.add('d-none');
+                await applyBackgroundResponse(res);
+                if (studioVideoUploadStatus) {
+                    studioVideoUploadStatus.classList.add('text-success');
+                    studioVideoUploadStatus.textContent = 'Theme background restored.';
+                }
+            } catch (err) {
+                if (studioVideoUploadStatus) {
+                    studioVideoUploadStatus.classList.add('text-danger');
+                    studioVideoUploadStatus.textContent = err.message || 'Could not restore theme.';
+                }
             }
         });
     }
 
-    templateCards.forEach(card => {
-        card.addEventListener('click', async () => {
-            const tid = card.getAttribute('data-template-id');
-            selectTemplate(tid);
+    async function loadThemeCatalog() {
+        try {
+            const res = await LyricSyncAPI.getBackgroundTemplates();
+            if (!res.success) throw new Error('Failed to load themes');
+            allThemes = res.templates || [];
+            renderThemeMoodChips(res.moods || ['all']);
+            renderThemeGrid();
+            selectTemplate(selectedBackgroundTemplate);
+        } catch (err) {
+            console.warn('Theme catalog load failed', err);
+            if (themeCountLabel) themeCountLabel.textContent = 'Could not load themes';
+        }
+    }
 
-            // Show the selected artwork immediately while the server prepares the looped video.
-            const previewImage = card.querySelector('img');
-            if (previewImage) {
-                videoContainer.style.backgroundImage = `url("${previewImage.src}")`;
-                videoContainer.classList.add('theme-preview-loading');
-            }
-            if (themeApplyStatus) themeApplyStatus.classList.remove('d-none');
-
-            try {
-                const res = await LyricSyncAPI.updateBackgroundTemplate(projectId, tid, currentAspectRatio);
-                if (res.success && res.video_url) {
-                    const curTime = player.currentTime;
-                    const wasPlaying = player.isPlaying;
-                    if (res.is_image !== false) {
-                        player.setMediaMode({ hasVideo: false, imageSrc: res.video_url });
-                    } else {
-                        player.setMediaMode({ hasVideo: true, videoSrc: res.video_url });
-                    }
-                    player.seekTo(curTime);
-                    if (wasPlaying) {
-                        player.play();
-                    }
-                }
-            } catch (err) {
-                console.warn("Background update error:", err);
-            } finally {
-                videoContainer.classList.remove('theme-preview-loading');
-                if (themeApplyStatus) themeApplyStatus.classList.add('d-none');
-            }
+    themeSearchInput?.addEventListener('input', (e) => {
+        themeSearchQuery = (e.target.value || '').trim().toLowerCase();
+        renderThemeGrid();
+    });
+    document.querySelectorAll('.theme-media-filter').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            activeMediaFilter = btn.dataset.media || 'all';
+            document.querySelectorAll('.theme-media-filter').forEach((el) => {
+                el.classList.toggle('active', el === btn);
+            });
+            renderThemeGrid();
         });
     });
+    loadThemeCatalog();
 
     // ================= CUSTOM LYRICS IMPORT =================
+    function showLyricsImportStatus(type, message) {
+        if (!drawerLyricsAlert) return;
+        const icons = {
+            success: 'bi-check-circle-fill',
+            warning: 'bi-exclamation-triangle-fill',
+            danger: 'bi-x-circle-fill',
+            info: 'bi-info-circle-fill',
+        };
+        const icon = icons[type] || icons.info;
+        drawerLyricsAlert.className = `studio-status studio-status-${type}`;
+        drawerLyricsAlert.innerHTML = `<i class="bi ${icon}" aria-hidden="true"></i><span>${message}</span>`;
+        drawerLyricsAlert.classList.remove('d-none');
+    }
+
     if (drawerImportLyricsBtn) {
         drawerImportLyricsBtn.addEventListener('click', async () => {
             const textVal = drawerLyricsTextarea ? drawerLyricsTextarea.value.trim() : '';
             const file = drawerLyricsFileInput && drawerLyricsFileInput.files ? drawerLyricsFileInput.files[0] : null;
 
             if (!textVal && !file) {
-                if (drawerLyricsAlert) {
-                    drawerLyricsAlert.className = 'alert alert-warning small py-2';
-                    drawerLyricsAlert.textContent = 'Please choose a .txt / .lrc file or paste lyrics text.';
-                    drawerLyricsAlert.classList.remove('d-none');
-                }
+                showLyricsImportStatus('warning', 'Choose a .txt / .lrc file or paste lyrics text first.');
                 return;
             }
 
             const origHtml = drawerImportLyricsBtn.innerHTML;
             drawerImportLyricsBtn.disabled = true;
-            drawerImportLyricsBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Importing...';
+            drawerImportLyricsBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span><span>Importing…</span>';
 
             try {
                 let payload;
@@ -908,22 +1638,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                     renderLyricsSheet(res.lyrics);
                     renderConfidenceHeatmap(res.lyrics);
 
-                    if (drawerLyricsAlert) {
-                        drawerLyricsAlert.className = 'alert alert-success small py-2';
-                        drawerLyricsAlert.textContent = `Imported ${res.lyrics.length} custom lyric lines successfully!`;
-                        drawerLyricsAlert.classList.remove('d-none');
-                    }
+                    showLyricsImportStatus(
+                        'success',
+                        `Imported ${res.lyrics.length} custom lyric line${res.lyrics.length === 1 ? '' : 's'} successfully.`
+                    );
                     if (drawerLyricsTextarea) drawerLyricsTextarea.value = '';
                     if (drawerLyricsFileInput) drawerLyricsFileInput.value = '';
                 } else {
                     throw new Error(res.error?.message || "Failed to parse or import custom lyrics.");
                 }
             } catch (err) {
-                if (drawerLyricsAlert) {
-                    drawerLyricsAlert.className = 'alert alert-danger small py-2';
-                    drawerLyricsAlert.textContent = 'Import error: ' + err.message;
-                    drawerLyricsAlert.classList.remove('d-none');
-                }
+                showLyricsImportStatus('danger', `Import failed: ${err.message || 'Unknown error'}`);
             } finally {
                 drawerImportLyricsBtn.disabled = false;
                 drawerImportLyricsBtn.innerHTML = origHtml;
@@ -980,22 +1705,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         lyricsSheetList.innerHTML = '';
 
         if (!lines || lines.length === 0) {
-            lyricsSheetList.innerHTML = `
+            const listening = activeStream?.partial;
+            const until = formatTime(Number(activeStream?.transcribed_until) || 0);
+            lyricsSheetList.innerHTML = listening ? `
+                <div class="text-center py-5 text-secondary">
+                    <div class="spinner-border spinner-border-sm mb-2" style="color: var(--brand-burgundy);"></div>
+                    <p class="fw-bold mb-1 text-dark">Streaming opening preview</p>
+                    <p class="small text-secondary mb-0">Language detection + first lines land soon. Audio is playable; lyrics fill in as each slice finishes${Number(activeStream?.transcribed_until) > 0 ? ` (ready to ${until})` : ''}.</p>
+                </div>
+            ` : `
                 <div class="text-center py-5 text-secondary">
                     <i class="bi bi-music-note-beamed fs-1 d-block mb-2" style="color: #94A3B8; opacity: 0.4;"></i>
                     <p class="fw-bold mb-1 text-dark">No Lyrics Detected Yet</p>
-                    <p class="small text-secondary mb-3">Transcribe audio with Whisper to extract synchronized lyrics.</p>
+                    <p class="small text-secondary mb-3">Transcribe audio to extract synchronized lyrics in the song's language.</p>
                     <button class="btn btn-outline-burgundy btn-sm px-3 py-1.5" onclick="document.getElementById('transcribeBtn').click()">
                         <i class="bi bi-stars me-1"></i> Transcribe AI
                     </button>
                 </div>
             `;
-            if (lyricsSheetLineCount) lyricsSheetLineCount.textContent = '0 lines';
+            if (lyricsSheetLineCount) lyricsSheetLineCount.textContent = listening ? 'Syncing…' : '0 lines';
             return;
         }
 
         if (lyricsSheetLineCount) {
-            lyricsSheetLineCount.textContent = `${lines.length} lines`;
+            lyricsSheetLineCount.textContent = activeStream?.partial ? `${lines.length} lines · still syncing` : `${lines.length} lines`;
         }
 
         // Always render as clean, structured plain text song sheet
@@ -1021,7 +1754,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 lineEl.title = `Click to seek to line ${line.originalIndex + 1} (${formatTime(line.start)})`;
 
                 lineEl.addEventListener('click', () => {
-                    player.seekTo(line.start);
+                    seekWithinStream(line.start);
                     highlightLyricsSheetLine(line.originalIndex);
                 });
 
@@ -1031,6 +1764,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             block.appendChild(linesCol);
             lyricsSheetList.appendChild(block);
         });
+
+        if (activeStream?.partial) {
+            const pending = document.createElement('div');
+            pending.className = 'small text-secondary fst-italic px-2 py-2';
+            pending.textContent = 'Still listening — more lines appear as this part finishes.';
+            lyricsSheetList.appendChild(pending);
+        }
 
         // Highlight active line if playback is in progress
         if (player && player.activeLineIndex >= 0) {
@@ -1067,7 +1807,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         player.setStyle({ format });
 
         // Persist to project
-        const styleConfig = applyCurrentStyle();
+        const styleConfig = buildStylePayloadForSave();
         LyricSyncAPI.updateStyle(projectId, styleConfig, { lyrics_format: format }).catch(e => console.warn(e));
     }
 
@@ -1242,6 +1982,198 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     }
+    function streamFrontierSeconds() {
+        if (!activeStream?.partial) return null;
+        const until = Number(activeStream.transcribed_until);
+        if (!Number.isFinite(until) || until <= 0.2) return null;
+        return until;
+    }
+
+    function seekWithinStream(seconds) {
+        let time = Math.max(0, Number(seconds) || 0);
+        const frontier = streamFrontierSeconds();
+        if (frontier != null && time > frontier - 0.05) {
+            time = Math.max(0, frontier - 0.05);
+            resumeWhenStreamAdvances = false;
+            setStreamBanner('blocked');
+        }
+        player.seekTo(time);
+        return time;
+    }
+
+    function paintStreamScrubber() {
+        if (!scrubber) return;
+        const frontier = streamFrontierSeconds();
+        const duration = Number(activeStream?.duration) || Number(scrubber.max) || 0;
+        if (frontier == null || duration <= 0) {
+            scrubber.classList.remove('stream-active');
+            scrubber.style.removeProperty('--stream-track');
+            return;
+        }
+        const pct = Math.max(0, Math.min(100, (frontier / duration) * 100));
+        scrubber.classList.add('stream-active');
+        scrubber.style.setProperty('--stream-track', `linear-gradient(90deg, rgba(122, 46, 62, 0.72) ${pct}%, #E5E7EB ${pct}%)`);
+    }
+
+    function setStreamBanner(mode) {
+        const banner = document.getElementById('streamBanner');
+        const text = document.getElementById('streamBannerText');
+        const spinner = document.getElementById('streamBannerSpinner');
+        const meter = document.getElementById('streamBannerMeterFill');
+        const playPreviewBtn = document.getElementById('streamPlayPreviewBtn');
+        if (!banner || !text) return;
+        const name = activeStream?.language_name || 'Detecting language';
+        const until = formatTime(Number(activeStream?.transcribed_until) || 0);
+        const total = formatTime(Number(activeStream?.duration) || 0);
+        const duration = Number(activeStream?.duration) || 0;
+        const synced = Number(activeStream?.transcribed_until) || 0;
+        const pct = duration > 0 ? Math.max(0, Math.min(100, (synced / duration) * 100)) : 0;
+        banner.classList.remove('d-none');
+        banner.classList.add('d-flex');
+        if (spinner) spinner.classList.toggle('d-none', mode === 'done');
+        if (meter) meter.style.width = `${pct}%`;
+        if (playPreviewBtn) {
+            const showPlay = mode !== 'done' && synced > 0.2 && player.isPaused;
+            playPreviewBtn.classList.toggle('d-none', !showPlay);
+        }
+        if (mode === 'waiting') {
+            text.textContent = `Paused at ${until}. Next lines are still streaming in.`;
+        } else if (mode === 'blocked') {
+            text.textContent = `Preview ends at ${until}. Scrub back or wait for more sync.`;
+        } else if (mode === 'done') {
+            text.textContent = activeStream?.language_name
+                ? `Sync finished · ${activeStream.language_name}.`
+                : 'Sync finished. The full song is ready.';
+            if (meter) meter.style.width = '100%';
+        } else if (synced > 0.2) {
+            const chunkHint = activeStream?.chunk_index && activeStream?.chunk_count
+                ? ` · slice ${activeStream.chunk_index}/${activeStream.chunk_count}`
+                : '';
+            text.textContent = `${name} preview · synced to ${until} of ${total}${chunkHint}. Play until the ready part, then it waits.`;
+        } else {
+            text.textContent = 'Listening for language + opening lines. Audio is ready — lyrics stream in as each slice finishes.';
+        }
+    }
+
+    function hideStreamBanner() {
+        const banner = document.getElementById('streamBanner');
+        const playPreviewBtn = document.getElementById('streamPlayPreviewBtn');
+        if (playPreviewBtn) playPreviewBtn.classList.add('d-none');
+        if (!banner) return;
+        banner.classList.add('d-none');
+        banner.classList.remove('d-flex');
+    }
+
+    function applyStreamLyrics(lyrics, stream) {
+        const partial = !!(stream && (stream.partial === true || stream.partial === 1));
+        activeStream = stream ? { ...stream, partial, preview: partial || !!stream.preview } : null;
+        if (!partial) streamCursor = -1;
+        timeline.setLines(lyrics || []);
+        player.setLyrics(lyrics || []);
+        renderLyricsSheet(lyrics || []);
+        renderConfidenceHeatmap(lyrics || []);
+        paintStreamScrubber();
+        if (partial) {
+            setStreamBanner('playing');
+            maybeResumeAfterStream();
+        }
+    }
+
+    function maybeResumeAfterStream() {
+        if (!resumeWhenStreamAdvances) return;
+        const frontier = streamFrontierSeconds();
+        if (frontier == null || frontier > player.currentTime + 0.45) {
+            resumeWhenStreamAdvances = false;
+            player.play();
+        }
+    }
+
+    let partialWatchTimer = null;
+    let lyricsEventSource = null;
+    let autoPlayedPreview = false;
+
+    function stopLyricsStreamWatch() {
+        if (partialWatchTimer) {
+            clearTimeout(partialWatchTimer);
+            partialWatchTimer = null;
+        }
+        if (lyricsEventSource) {
+            lyricsEventSource.close();
+            lyricsEventSource = null;
+        }
+    }
+
+    function watchPartialLyrics() {
+        if (lyricsEventSource || partialWatchTimer) return;
+
+        const handlePayload = (lyricsRes) => {
+            if (!lyricsRes?.success) return;
+            const until = Number(lyricsRes.stream?.transcribed_until) || 0;
+            if (until !== streamCursor || !lyricsRes.stream?.partial) {
+                streamCursor = until;
+                applyStreamLyrics(lyricsRes.lyrics || [], lyricsRes.stream);
+            }
+            if (until > 0.2 && !autoPlayedPreview && player.isPaused && player.currentTime < 0.35) {
+                autoPlayedPreview = true;
+                player.play();
+            }
+            if (lyricsRes.stream && lyricsRes.stream.partial === false) {
+                stopLyricsStreamWatch();
+                setStreamBanner('done');
+                setTimeout(hideStreamBanner, 2400);
+            }
+        };
+
+        const live = LyricSyncAPI.watchLyricsStream(projectId, {
+            onUpdate: handlePayload,
+            onDone: () => {
+                stopLyricsStreamWatch();
+            },
+            onError: () => {
+                // Fall back to polling if SSE drops.
+                if (lyricsEventSource) {
+                    lyricsEventSource.close();
+                    lyricsEventSource = null;
+                }
+                if (!partialWatchTimer && activeStream?.partial) {
+                    startPartialPoll();
+                }
+            },
+        });
+
+        if (live.supported) {
+            lyricsEventSource = live;
+            return;
+        }
+        startPartialPoll();
+
+        function startPartialPoll() {
+            if (partialWatchTimer) return;
+            const tick = async () => {
+                partialWatchTimer = null;
+                if (!activeStream?.partial) return;
+                try {
+                    const lyricsRes = await LyricSyncAPI.getLyrics(projectId);
+                    handlePayload(lyricsRes);
+                } catch (err) {
+                    console.warn('Lyric stream refresh failed', err);
+                }
+                if (activeStream?.partial) partialWatchTimer = setTimeout(tick, 900);
+            };
+            partialWatchTimer = setTimeout(tick, 700);
+        }
+    }
+
+    document.getElementById('streamPlayPreviewBtn')?.addEventListener('click', () => {
+        const frontier = streamFrontierSeconds();
+        if (frontier != null && player.currentTime >= frontier - 0.1) {
+            seekWithinStream(Math.max(0, frontier - Math.min(4, frontier * 0.4)));
+        }
+        resumeWhenStreamAdvances = false;
+        player.play();
+        setStreamBanner('playing');
+    });
+
     const transcribeModalEl = document.getElementById('transcribeModal');
     const transcribeModal = new bootstrap.Modal(transcribeModalEl);
     const transcribeStageText = document.getElementById('transcribeStageText');
@@ -1251,120 +2183,147 @@ document.addEventListener('DOMContentLoaded', async () => {
     const transcribeSuccessIcon = document.getElementById('transcribeSuccessIcon');
     const transcribeErrorBox = document.getElementById('transcribeErrorBox');
     const transcribeModalFooter = document.getElementById('transcribeModalFooter');
+    const transcribeSubText = document.getElementById('transcribeSubText');
+    const transcribeRetryBtn = document.getElementById('transcribeRetryBtn');
 
-    // Transcribe AI Button with Dedicated Progress Modal
+    // Streamed sync: unlock the studio on the first playable slice; keep loading the rest.
     transcribeBtn.addEventListener('click', async () => {
+        stopLyricsStreamWatch();
+        autoPlayedPreview = false;
         transcribeSpinner.classList.remove('d-none');
         transcribeSuccessIcon.classList.add('d-none');
         transcribeErrorBox.classList.add('d-none');
-        transcribeModalFooter.classList.add('d-none');
-        
-        let currentPct = 15;
-        transcribeProgressBar.style.width = '15%';
-        transcribeProgressPct.textContent = '15%';
-        transcribeStageText.textContent = isAdmin ? 'Preparing audio for OpenAI Whisper-1...' : 'Listening to song vocals & timing...';
-        transcribeModal.show();
+        if (transcribeRetryBtn) transcribeRetryBtn.classList.add('d-none');
+        if (transcribeModalFooter) transcribeModalFooter.classList.remove('d-none');
 
-        let ticker = null;
-        const progressHandler = (e) => {
+        let currentPct = 6;
+        let studioUnlocked = false;
+        transcribeProgressBar.style.width = '6%';
+        transcribeProgressPct.textContent = '6%';
+        transcribeStageText.textContent = 'Checking if this song is already known…';
+        if (transcribeSubText) {
+            transcribeSubText.textContent = 'If the track is recognized, published lyrics load instantly. Otherwise AI transcribes a short opening preview first.';
+        }
+        transcribeModal.show();
+        streamCursor = -1;
+        resumeWhenStreamAdvances = false;
+
+        const unlockStudio = () => {
+            if (studioUnlocked) return;
+            studioUnlocked = true;
+            transcribeModal.hide();
+            setStreamBanner('playing');
+        };
+
+        const progressHandler = async (e) => {
             const job = e.detail;
-            if (job) {
-                // Advance progress monotonically (never jump backward to 25%)
-                if (typeof job.progress === 'number' && job.progress > currentPct) {
-                    currentPct = job.progress;
-                    transcribeProgressBar.style.width = `${currentPct}%`;
-                    transcribeProgressPct.textContent = `${currentPct}%`;
-                }
-                if (job.stage) {
-                    transcribeStageText.textContent = friendlyStage(job.stage);
-                }
+            if (!job) return;
+            if (typeof job.progress === 'number' && job.progress > currentPct) {
+                currentPct = job.progress;
+                transcribeProgressBar.style.width = `${currentPct}%`;
+                transcribeProgressPct.textContent = `${currentPct}%`;
+            }
+            if (job.stage) transcribeStageText.textContent = friendlyStage(job.stage);
+            const until = Number(job.stream?.transcribed_until) || 0;
+            if (job.stream) {
+                activeStream = { ...(activeStream || {}), ...job.stream, partial: job.stream.partial !== false };
+                setStreamBanner(until > 0.2 ? 'playing' : 'playing');
+            }
+            const streamMoved = job.stream && (until !== streamCursor || job.stream.partial === false);
+            if (!streamMoved || (until <= 0 && job.stream?.partial !== false)) return;
+            try {
+                const lyricsRes = await LyricSyncAPI.getLyrics(projectId);
+                if (!lyricsRes.success) return;
+                streamCursor = Number(lyricsRes.stream?.transcribed_until) || until;
+                applyStreamLyrics(lyricsRes.lyrics || [], lyricsRes.stream || job.stream);
+                if (streamCursor > 0.2) unlockStudio();
+            } catch (err) {
+                console.warn('Could not load partial lyrics', err);
             }
         };
 
         try {
-            const res = await LyricSyncAPI.triggerTranscription(projectId);
+            const languageSelect = document.getElementById('transcribeLanguage');
+            const language = languageSelect?.value || 'auto';
+            localStorage.setItem('lyricsync_language', language);
+            const res = await LyricSyncAPI.triggerTranscription(projectId, language);
             if (!res.success) throw new Error(res.error?.message || "Failed to trigger transcription");
 
             window.addEventListener('job-progress', progressHandler);
+            activeStream = {
+                partial: true,
+                preview: true,
+                transcribed_until: 0,
+                duration: Number(scrubber.max) || 0,
+                language_name: language !== 'auto' ? (languageSelect?.selectedOptions?.[0]?.text || '') : '',
+                language: language === 'auto' ? '' : language,
+            };
+            setStreamBanner('playing');
+            watchPartialLyrics();
 
-        // Asymptotic progress ticker: drifts toward ~88% while Whisper API runs.
-        // The bar always moves — users see progress even for 4-5 minute songs.
-        // Rate slows exponentially as it approaches the ceiling so it never stalls.
-        const TICKER_CEILING = 88;
-        ticker = setInterval(() => {
-            if (currentPct < TICKER_CEILING) {
-                // Slowing exponential decay: starts fast, slows as it approaches ceiling
-                const remaining = TICKER_CEILING - currentPct;
-                const increment = Math.max(0.3, remaining * 0.04);
-                currentPct = Math.min(TICKER_CEILING, currentPct + increment);
-                transcribeProgressBar.style.width = `${Math.round(currentPct)}%`;
-                transcribeProgressPct.textContent = `${Math.round(currentPct)}%`;
-
-                if (currentPct >= 20 && currentPct < 38) {
-                    transcribeStageText.textContent = isAdmin
-                        ? 'Compressing audio with FFmpeg for fast transfer...'
-                        : 'Preparing your song for analysis...';
-                } else if (currentPct >= 38 && currentPct < 55) {
-                    transcribeStageText.textContent = isAdmin
-                        ? 'Uploading compressed audio to OpenAI Whisper API...'
-                        : 'Sending audio to AI — this may take a minute...';
-                } else if (currentPct >= 55 && currentPct < 70) {
-                    transcribeStageText.textContent = isAdmin
-                        ? 'Whisper-1 is decoding speech tokens and phonemes...'
-                        : 'AI is listening to every word and beat...';
-                } else if (currentPct >= 70 && currentPct < 80) {
-                    transcribeStageText.textContent = isAdmin
-                        ? 'Extracting word-level timestamps from Whisper response...'
-                        : 'Identifying words and their exact timing...';
-                } else if (currentPct >= 80) {
-                    transcribeStageText.textContent = isAdmin
-                        ? 'Finalising Whisper token alignment — almost done...'
-                        : 'Wrapping up — this takes longer for full-length songs...';
+            // Don't trap the user behind the modal — studio stays usable while syncing.
+            setTimeout(() => {
+                if (!studioUnlocked) {
+                    unlockStudio();
                 }
-            }
-        }, 700);
+            }, 1800);
 
-        await LyricSyncAPI.pollJob(res.job_id);
-
-            if (ticker) clearInterval(ticker);
+            await LyricSyncAPI.pollJob(res.job_id);
             window.removeEventListener('job-progress', progressHandler);
+            stopLyricsStreamWatch();
 
-            // Jump to 95% — Whisper done, now loading lyrics from server
-            currentPct = 95;
-            transcribeProgressBar.style.width = '95%';
-            transcribeProgressPct.textContent = '95%';
-            transcribeStageText.textContent = isAdmin ? 'Loading aligned lyrics into studio...' : 'Almost there — loading your synced lyrics...';
-
-            // Fetch newly generated canonical lyrics
             const lyricsRes = await LyricSyncAPI.getLyrics(projectId);
-            if (lyricsRes.success && lyricsRes.lyrics) {
-                timeline.setLines(lyricsRes.lyrics);
-                player.setLyrics(lyricsRes.lyrics);
-                renderLyricsSheet(lyricsRes.lyrics);
+            if (lyricsRes.success) {
+                applyStreamLyrics(lyricsRes.lyrics || [], { ...(lyricsRes.stream || {}), partial: false, preview: false });
                 const revEl = document.getElementById('revisionDisplay') || document.getElementById('revisionBadge');
                 if (revEl) revEl.textContent = `Rev ${lyricsRes.revision}`;
             }
+            const knownArtist = lyricsRes?.stream?.artist || lyricsRes?.stream?.title;
+            const knownLabel = lyricsRes?.stream?.artist && lyricsRes?.stream?.title
+                ? `${lyricsRes.stream.artist} — ${lyricsRes.stream.title}`
+                : (lyricsRes?.stream?.title || lyricsRes?.stream?.language_name || '');
+            setStreamBanner('done');
+            if (lyricsRes?.stream?.source === 'lrclib' || lyricsRes?.stream?.source === 'catalog') {
+                const bannerText = document.getElementById('streamBannerText');
+                if (bannerText) {
+                    bannerText.textContent = knownLabel
+                        ? `Known lyrics loaded · ${knownLabel}${lyricsRes.stream.synced ? ' (timed)' : ''}.`
+                        : 'Known lyrics loaded from the catalog.';
+                }
+            }
+            setTimeout(hideStreamBanner, 2800);
+            paintStreamScrubber();
 
-            // Success completion
             transcribeSpinner.classList.add('d-none');
             transcribeSuccessIcon.classList.remove('d-none');
             transcribeProgressBar.style.width = '100%';
             transcribeProgressPct.textContent = '100%';
-            transcribeStageText.textContent = isAdmin ? 'Transcription Complete. Lyrics loaded into Studio.' : 'Done! Your lyrics are synced and ready to edit.';
-
-            setTimeout(() => {
-                transcribeModal.hide();
-            }, 1200);
+            transcribeStageText.textContent = (lyricsRes?.stream?.source === 'lrclib' || lyricsRes?.stream?.source === 'catalog')
+                ? (knownLabel ? `Done · ${knownLabel}` : 'Done · known lyrics loaded')
+                : (lyricsRes?.stream?.language_name
+                    ? `Done · ${lyricsRes.stream.language_name}`
+                    : 'Done. The full song is synced.');
+            if (knownArtist) {
+                const nameInput = document.getElementById('editorProjectName');
+                if (nameInput && lyricsRes.stream?.artist && lyricsRes.stream?.title) {
+                    const nextName = `${lyricsRes.stream.artist} - ${lyricsRes.stream.title}`;
+                    if (!nameInput.value || /untitled/i.test(nameInput.value) || nameInput.value.trim().length < 3) {
+                        nameInput.value = nextName;
+                    }
+                }
+            }
         } catch (err) {
-            if (ticker) clearInterval(ticker);
             window.removeEventListener('job-progress', progressHandler);
+            stopLyricsStreamWatch();
             transcribeSpinner.classList.add('d-none');
             const isTimeout = err.message?.toLowerCase().includes('took longer') || err.message?.toLowerCase().includes('timeout');
             transcribeErrorBox.innerHTML = isTimeout
-                ? `<strong>The transcription is taking longer than expected.</strong><br><span class="small">This usually happens with long songs or slow connections. Click Retry below — the server may have already finished processing.</span>`
+                ? `<strong>Sync is taking longer than expected.</strong><br><span class="small">Lines already on screen stay. Retry to continue, or keep playing the synced part.</span>`
                 : (err.message || "An error occurred during transcription.");
             transcribeErrorBox.classList.remove('d-none');
-            transcribeModalFooter.classList.remove('d-none');
+            if (transcribeRetryBtn) transcribeRetryBtn.classList.remove('d-none');
+            if (transcribeModalFooter) transcribeModalFooter.classList.remove('d-none');
+            if (studioUnlocked) transcribeModal.show();
         }
     });
 
@@ -1410,66 +2369,149 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Export Quality Tier Card Selection
     let selectedExportResolution = '720';
 
+    function syncExportTierSelected() {
+        const checked = document.querySelector('input[name="exportResolutionTier"]:checked');
+        const value = checked?.value || selectedExportResolution || '720';
+        selectedExportResolution = value;
+        exportTierLabel720?.classList.toggle('is-selected', value === '720');
+        exportTierLabel1080?.classList.toggle('is-selected', value === '1080');
+    }
+
     if (exportTierLabel720) {
         exportTierLabel720.addEventListener('click', () => {
-            selectedExportResolution = '720';
-            exportTierLabel720.classList.add('bg-light');
-            exportTierLabel1080.classList.remove('bg-light');
             const radio = exportTierLabel720.querySelector('input[type="radio"]');
             if (radio) radio.checked = true;
+            syncExportTierSelected();
         });
     }
 
     if (exportTierLabel1080) {
         exportTierLabel1080.addEventListener('click', () => {
-            selectedExportResolution = '1080';
-            exportTierLabel1080.classList.add('bg-light');
-            exportTierLabel720.classList.remove('bg-light');
             const radio = exportTierLabel1080.querySelector('input[type="radio"]');
             if (radio) radio.checked = true;
+            syncExportTierSelected();
+        });
+    }
+    syncExportTierSelected();
+
+    function showExportDockExpanded() {
+        if (!exportJobDock) return;
+        exportJobDock.classList.remove('d-none');
+        if (exportDockCard) exportDockCard.classList.remove('d-none');
+        if (exportDockCollapsed) exportDockCollapsed.classList.add('d-none');
+    }
+
+    function minimizeExportDock() {
+        if (!exportJobDock) return;
+        exportJobDock.classList.remove('d-none');
+        if (exportDockCard) exportDockCard.classList.add('d-none');
+        if (exportDockCollapsed) exportDockCollapsed.classList.remove('d-none');
+    }
+
+    function hideExportDock() {
+        if (!exportJobDock) return;
+        exportJobDock.classList.add('d-none');
+        if (exportDockCard) exportDockCard.classList.add('d-none');
+        if (exportDockCollapsed) exportDockCollapsed.classList.add('d-none');
+    }
+
+    function dismissExportModal() {
+        try {
+            const instance = bootstrap.Modal.getInstance(exportModalEl) || exportModal;
+            instance?.hide();
+        } catch (_) { /* ignore */ }
+        // Ensure a mid-animation modal can't leave a blocking backdrop behind
+        requestAnimationFrame(() => {
+            if (!exportModalEl) return;
+            exportModalEl.classList.remove('show');
+            exportModalEl.style.display = 'none';
+            exportModalEl.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+            document.querySelectorAll('.modal-backdrop').forEach((el) => el.remove());
         });
     }
 
+    function setExportBusy(busy) {
+        exportInProgress = busy;
+        if (exportVideoBtn) {
+            exportVideoBtn.classList.toggle('is-exporting', busy);
+            exportVideoBtn.title = busy ? 'Export running — click to show progress' : 'Export lyric video';
+        }
+        if (exportBtnLabel) {
+            if (!busy && exportBtnLabel.textContent && !exportBtnLabel.textContent.includes('Exporting')) {
+                exportIdleLabel = exportBtnLabel.textContent;
+            }
+            exportBtnLabel.textContent = busy ? 'Exporting…' : (exportIdleLabel || 'Export');
+        }
+        if (exportDockCollapsed) {
+            exportDockCollapsed.classList.toggle('is-complete', !busy);
+        }
+    }
+
+    function updateExportProgress(pct, stage) {
+        const safePct = Math.max(0, Math.min(100, Number(pct) || 0));
+        if (exportProgressBar) exportProgressBar.style.width = `${safePct}%`;
+        if (exportProgressPct) exportProgressPct.textContent = `${safePct}%`;
+        if (exportDockPillPct) exportDockPillPct.textContent = `${safePct}%`;
+        if (stage && exportStageText) exportStageText.textContent = stage;
+        if (exportDockPillText) {
+            exportDockPillText.textContent = safePct >= 100 ? 'Export ready' : 'Exporting…';
+        }
+    }
+
+    minimizeExportDockBtn?.addEventListener('click', minimizeExportDock);
+    hideExportDockBtn?.addEventListener('click', minimizeExportDock);
+    dismissExportDockBtn?.addEventListener('click', () => {
+        // Hide the card; keep pill if still rendering so status remains visible.
+        if (exportInProgress) minimizeExportDock();
+        else hideExportDock();
+    });
+    exportDockCollapsed?.addEventListener('click', showExportDockExpanded);
+
     // Open Export Modal in Quality Selection View
     exportVideoBtn.addEventListener('click', () => {
+        if (exportInProgress) {
+            showExportDockExpanded();
+            return;
+        }
         if (exportSelectView) exportSelectView.classList.remove('d-none');
-        if (exportProgressView) exportProgressView.classList.add('d-none');
-        if (startExportActionBtn) startExportActionBtn.classList.remove('d-none');
-        if (downloadHeaderBtn && !downloadHeaderBtn.classList.contains('d-none') && downloadFinalVideoBtn) {
-            downloadFinalVideoBtn.href = downloadHeaderBtn.href;
-            downloadFinalVideoBtn.classList.remove('d-none');
-        } else if (downloadFinalVideoBtn) {
-            downloadFinalVideoBtn.classList.add('d-none');
+        if (startExportActionBtn) {
+            startExportActionBtn.classList.remove('d-none');
+            startExportActionBtn.disabled = false;
         }
         if (exportErrorBox) exportErrorBox.classList.add('d-none');
         exportModal.show();
     });
 
 
-    // Execute Export Render upon clicking Start Render button
+    // Start render, then keep working — progress lives in the background dock
     if (startExportActionBtn) {
         startExportActionBtn.addEventListener('click', async () => {
             const chosenRes = document.querySelector('input[name="exportResolutionTier"]:checked')?.value || selectedExportResolution || '720';
+            const qualityLabel = chosenRes === '720'
+                ? (isAdmin ? '720p Fast Draft MP4' : '720p Fast Draft Video')
+                : (isAdmin ? '1080p Studio Master MP4' : '1080p Full HD Video');
 
-            // Transition to progress view
-            if (exportSelectView) exportSelectView.classList.add('d-none');
-            if (exportProgressView) exportProgressView.classList.remove('d-none');
-            if (startExportActionBtn) startExportActionBtn.classList.add('d-none');
-            if (exportSpinner) exportSpinner.classList.remove('d-none');
+            if (exportQualityBadgeText) exportQualityBadgeText.textContent = qualityLabel;
             if (exportErrorBox) exportErrorBox.classList.add('d-none');
-            if (exportQualityBadgeText) {
-                exportQualityBadgeText.textContent = chosenRes === '720' 
-                    ? (isAdmin ? '720p Fast Draft MP4' : '720p Fast Draft Video') 
-                    : (isAdmin ? '1080p Studio Master MP4' : '1080p Full HD Video');
+            if (downloadFinalVideoBtn) downloadFinalVideoBtn.classList.add('d-none');
+            if (exportSpinner) exportSpinner.classList.remove('d-none');
+            if (exportSubText) {
+                exportSubText.textContent = isAdmin
+                    ? 'Burning exact word-level timings via libass into progressive streaming MP4.'
+                    : 'Creating your synchronized high-definition lyric video.';
             }
 
-            exportProgressBar.style.width = '15%';
-            exportProgressPct.textContent = '15%';
-            exportStageText.textContent = isAdmin ? 'Queueing FFmpeg render job...' : 'Preparing high quality lyric video...';
+            updateExportProgress(12, isAdmin ? 'Queueing FFmpeg render job...' : 'Preparing high quality lyric video...');
+            setExportBusy(true);
+            dismissExportModal();
+            showExportDockExpanded();
+            startExportActionBtn.disabled = true;
 
             try {
-                // Apply latest style first
-                const styleConfig = applyCurrentStyle();
+                const styleConfig = buildStylePayloadForSave();
                 const renderConfig = {
                     aspect_ratio: renderAspectRatio.value,
                     resolution: chosenRes,
@@ -1488,39 +2530,43 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 const jobId = queueRes.job_id;
 
-                // Listen to progress events
                 const progressHandler = (e) => {
                     const job = e.detail;
-                    exportProgressBar.style.width = `${job.progress}%`;
-                    exportProgressPct.textContent = `${job.progress}%`;
-                    if (job.stage) exportStageText.textContent = friendlyStage(job.stage);
+                    updateExportProgress(job.progress, job.stage ? friendlyStage(job.stage) : null);
                 };
                 window.addEventListener('job-progress', progressHandler);
 
-                const completedJob = await LyricSyncAPI.pollJob(jobId);
+                await LyricSyncAPI.pollJob(jobId);
                 window.removeEventListener('job-progress', progressHandler);
 
-                // Completed!
-                exportSpinner.classList.add('d-none');
-                exportProgressBar.style.width = '100%';
-                exportProgressPct.textContent = '100%';
-                exportStageText.textContent = 'Video Render Complete!';
+                if (exportSpinner) exportSpinner.classList.add('d-none');
+                updateExportProgress(100, 'Video render complete');
+                if (exportSubText) exportSubText.textContent = 'Your lyric video is ready to download.';
+                setExportBusy(false);
+                showExportDockExpanded();
 
                 const downloadUrl = `/api/projects/${projectId}/download`;
-                downloadFinalVideoBtn.href = downloadUrl;
-                downloadFinalVideoBtn.classList.remove('d-none');
-
-                // Also show header download button
-                downloadHeaderBtn.href = downloadUrl;
-                downloadHeaderBtn.classList.remove('d-none');
-                downloadHeaderBtn.classList.add('d-flex');
-
+                if (downloadFinalVideoBtn) {
+                    downloadFinalVideoBtn.href = downloadUrl;
+                    downloadFinalVideoBtn.classList.remove('d-none');
+                }
+                if (downloadHeaderBtn) {
+                    downloadHeaderBtn.href = downloadUrl;
+                    downloadHeaderBtn.classList.remove('d-none');
+                    downloadHeaderBtn.classList.add('d-flex');
+                }
             } catch (err) {
                 if (exportSpinner) exportSpinner.classList.add('d-none');
-                exportStageText.textContent = 'Rendering Failed';
-                exportErrorBox.textContent = err.message;
-                exportErrorBox.classList.remove('d-none');
-                if (startExportActionBtn) startExportActionBtn.classList.remove('d-none');
+                if (exportStageText) exportStageText.textContent = 'Rendering failed';
+                if (exportSubText) exportSubText.textContent = 'You can keep editing, then try exporting again.';
+                if (exportErrorBox) {
+                    exportErrorBox.textContent = err.message || 'Export failed';
+                    exportErrorBox.classList.remove('d-none');
+                }
+                if (exportDockPillText) exportDockPillText.textContent = 'Export failed';
+                setExportBusy(false);
+                showExportDockExpanded();
+                startExportActionBtn.disabled = false;
             }
         });
     }

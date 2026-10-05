@@ -64,15 +64,17 @@ const LyricSyncAPI = {
         return await response.json();
     },
 
-    async triggerTranscription(projectId) {
+    async triggerTranscription(projectId, language = 'auto') {
         const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}/transcribe`, {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ language }),
         });
         return await response.json();
     },
 
     async getLyrics(projectId) {
-        const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}/lyrics`);
+        const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}/lyrics`, { cache: 'no-store' });
         return await response.json();
     },
 
@@ -104,13 +106,12 @@ const LyricSyncAPI = {
     },
 
     async getJobStatus(jobId) {
-        const response = await fetch(lyricSyncApiUrl(`/jobs/${jobId}`));
+        const response = await fetch(lyricSyncApiUrl(`/jobs/${jobId}`), { cache: 'no-store' });
         return await response.json();
     },
 
-    pollJob(jobId, intervalMs = 1500, timeoutMs = 600000) {
-        // timeoutMs = 10 minutes — Whisper-1 can take up to 5-6 min for long songs
-        // intervalMs starts at 1.5s, increases gradually to avoid hammering the server
+    pollJob(jobId, intervalMs = 900, timeoutMs = 600000) {
+        // Faster early polls so the opening preview unlocks quickly; slows later.
         return new Promise((resolve, reject) => {
             const startedAt = Date.now();
             let currentInterval = intervalMs;
@@ -124,11 +125,12 @@ const LyricSyncAPI = {
                     return reject(new Error('The transcription took longer than expected. The server is still processing — please click Retry to check if it completed.'));
                 }
 
-                // Adaptive interval: slow down after 90s to reduce server pressure
-                if (elapsed > 90000 && currentInterval < 4000) {
-                    currentInterval = 4000;
-                } else if (elapsed > 30000 && currentInterval < 2500) {
-                    currentInterval = 2500;
+                if (elapsed > 120000 && currentInterval < 3500) {
+                    currentInterval = 3500;
+                } else if (elapsed > 45000 && currentInterval < 2000) {
+                    currentInterval = 2000;
+                } else if (elapsed > 15000 && currentInterval < 1200) {
+                    currentInterval = 1200;
                 }
 
                 try {
@@ -151,28 +153,59 @@ const LyricSyncAPI = {
                     } else if (job.status === 'failed' || job.status === 'cancelled') {
                         reject(new Error(job.error_message || "Job execution failed"));
                     } else {
-                        // Still running — poll again
                         setTimeout(poll, currentInterval);
                     }
                 } catch (err) {
-                    // Network hiccup — retry a few times before giving up
                     failCount++;
                     if (failCount >= MAX_CONSECUTIVE_FAILS) {
                         return reject(new Error('Connection lost. The server may still be processing — please retry.'));
                     }
-                    // Exponential backoff on network errors
                     const backoffMs = Math.min(currentInterval * Math.pow(1.5, failCount), 12000);
                     setTimeout(poll, backoffMs);
                 }
             };
 
-            // Start polling immediately
-            setTimeout(poll, 800);
+            setTimeout(poll, 400);
         });
     },
 
-    async getBackgroundTemplates() {
-        const response = await fetch(`${lyricSyncProjectsUrl}/templates`);
+    watchLyricsStream(projectId, { onUpdate, onDone, onError } = {}) {
+        if (typeof EventSource === 'undefined') {
+            return { close() {}, supported: false };
+        }
+        const source = new EventSource(`${lyricSyncProjectsUrl}/${projectId}/lyrics/events`);
+        let closed = false;
+        const close = () => {
+            if (closed) return;
+            closed = true;
+            try { source.close(); } catch (_) { /* ignore */ }
+        };
+        source.addEventListener('lyrics', (event) => {
+            try {
+                const payload = JSON.parse(event.data);
+                if (typeof onUpdate === 'function') onUpdate(payload);
+            } catch (err) {
+                if (typeof onError === 'function') onError(err);
+            }
+        });
+        source.addEventListener('done', () => {
+            if (typeof onDone === 'function') onDone();
+            close();
+        });
+        source.onerror = () => {
+            if (typeof onError === 'function') onError(new Error('Lyric stream disconnected'));
+            // Keep EventSource auto-reconnect for transient drops while still partial.
+        };
+        return { close, supported: true, source };
+    },
+
+    async getBackgroundTemplates(params = {}) {
+        const query = new URLSearchParams();
+        if (params.mood) query.set('mood', params.mood);
+        if (params.q) query.set('q', params.q);
+        if (params.media) query.set('media', params.media);
+        const suffix = query.toString() ? `?${query}` : '';
+        const response = await fetch(`${lyricSyncProjectsUrl}/templates${suffix}`, { cache: 'no-store' });
         return await response.json();
     },
 
@@ -183,6 +216,30 @@ const LyricSyncAPI = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
+        });
+        return await response.json();
+    },
+
+    async getImageCredits() {
+        const response = await fetch('/api/billing/image-credits', { cache: 'no-store' });
+        return await response.json();
+    },
+
+    async startPremiumCheckout() {
+        const response = await fetch('/api/billing/checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+        });
+        return await response.json();
+    },
+
+    async uploadCustomBackgroundVideo(projectId, file) {
+        const formData = new FormData();
+        formData.append('video', file);
+        const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}/background/video`, {
+            method: 'POST',
+            body: formData,
         });
         return await response.json();
     },

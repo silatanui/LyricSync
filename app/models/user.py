@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import String, DateTime, Boolean
+from sqlalchemy import String, DateTime, Boolean, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -8,6 +8,8 @@ from app.extensions import db
 from app.utils.ids import generate_user_id
 
 ADMIN_EMAIL = "silatanuikipngetich@gmail.com"
+DEFAULT_FREE_IMAGE_CREDITS = 2
+
 
 class User(db.Model, UserMixin):
     __tablename__ = "users"
@@ -19,8 +21,10 @@ class User(db.Model, UserMixin):
     google_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=True, index=True)
     avatar_url: Mapped[str] = mapped_column(String(1024), nullable=True)
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    image_credits: Mapped[int] = mapped_column(Integer, default=DEFAULT_FREE_IMAGE_CREDITS, nullable=False)
+    is_premium: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    stripe_customer_id: Mapped[str] = mapped_column(String(128), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
-
 
     projects = relationship("Project", back_populates="user", cascade="all, delete-orphan")
 
@@ -34,6 +38,13 @@ class User(db.Model, UserMixin):
     def is_admin(self) -> bool:
         """Only silatanuikipngetich@gmail.com has system administrator privileges."""
         return bool(self.email and self.email.strip().lower() == ADMIN_EMAIL)
+
+    @property
+    def has_image_credits(self) -> bool:
+        """Admin is unlimited; everyone else needs a positive credit balance."""
+        if self.is_admin:
+            return True
+        return int(self.image_credits or 0) > 0
 
     @property
     def initials(self) -> str:
@@ -59,7 +70,9 @@ class User(db.Model, UserMixin):
             "initials": self.initials,
             "avatar_url": self.avatar_url,
             "is_admin": self.is_admin,
+            "is_premium": bool(self.is_premium),
+            "image_credits": -1 if self.is_admin else int(self.image_credits or 0),
+            "has_image_credits": self.has_image_credits,
             "email_verified": self.email_verified,
             "created_at": self.created_at.isoformat() if self.created_at else None
         }
-

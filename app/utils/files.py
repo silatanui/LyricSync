@@ -125,6 +125,24 @@ def resolve_project_media(project, kind: str) -> Path | None:
                         _heal_project_media_path(project, kind, match)
                         return match
         elif kind == "video":
+            # Prefer the template currently selected on the project.
+            try:
+                canonical = project.get_canonical_json()
+                template_id = (canonical.get("meta", {}) or {}).get("background_template") or ""
+                media_type = (canonical.get("meta", {}) or {}).get("background_media_type") or ""
+            except Exception:
+                template_id, media_type = "", ""
+            if template_id and template_id != "custom_video":
+                preferred_exts = (
+                    (".mp4", ".webm", ".mov", ".mkv", ".webp", ".png")
+                    if media_type == "video"
+                    else (".webp", ".png", ".jpg", ".jpeg", ".mp4", ".webm", ".mov", ".mkv")
+                )
+                for ext in preferred_exts:
+                    cand = proj_dir / f"background_{template_id}{ext}"
+                    if cand.is_file() and cand.stat().st_size > 0:
+                        _heal_project_media_path(project, kind, cand)
+                        return cand
             for prefix in ("background_video.", "video.", "master_video."):
                 for match in proj_dir.glob(f"{prefix}*"):
                     if match.is_file() and match.stat().st_size > 0:
@@ -144,32 +162,49 @@ def resolve_project_media(project, kind: str) -> Path | None:
                     _heal_project_media_path(project, kind, match)
                     return match
 
-    # 4. If kind == 'video' and not video background, auto-generate template asset
+    # 4. If kind == 'video' and missing on disk, regenerate from the chosen theme.
     if kind == "video":
         canonical = project.get_canonical_json()
         template_id = canonical.get("meta", {}).get("background_template", "burgundy_studio")
         aspect_ratio = canonical.get("render", {}).get("aspect_ratio", "16:9")
         try:
             from app.services.background_generator import BackgroundGenerator
+            from app.services.theme_catalog import get_theme
             w, h = BackgroundGenerator.get_dimensions(aspect_ratio)
-            bg_file = proj_dir / f"background_{template_id}.webp"
-            try:
-                BackgroundGenerator.generate_template_asset(
-                    pattern_type=template_id,
-                    output_path=bg_file,
-                    width=w,
-                    height=h,
-                    fmt="WEBP"
-                )
-            except Exception:
-                bg_file = proj_dir / f"background_{template_id}.png"
-                BackgroundGenerator.generate_template_asset(
-                    pattern_type=template_id,
-                    output_path=bg_file,
-                    width=w,
-                    height=h,
-                    fmt="PNG"
-                )
+            theme = get_theme(template_id) or {}
+            is_video_theme = (theme.get("media_type") == "video") or (
+                (canonical.get("meta", {}) or {}).get("background_media_type") == "video"
+            )
+            if is_video_theme:
+                bg_file = proj_dir / f"background_{template_id}.mp4"
+                if not bg_file.exists() or bg_file.stat().st_size < 2000:
+                    motion = (theme.get("motion") or "visualizer").lower()
+                    BackgroundGenerator.generate_theme_video_loop(
+                        pattern_type=template_id,
+                        output_path=bg_file,
+                        width=w,
+                        height=h,
+                        seconds=5.0 if motion == "visualizer" else 6.0,
+                    )
+            else:
+                bg_file = proj_dir / f"background_{template_id}.webp"
+                try:
+                    BackgroundGenerator.generate_template_asset(
+                        pattern_type=template_id,
+                        output_path=bg_file,
+                        width=w,
+                        height=h,
+                        fmt="WEBP"
+                    )
+                except Exception:
+                    bg_file = proj_dir / f"background_{template_id}.png"
+                    BackgroundGenerator.generate_template_asset(
+                        pattern_type=template_id,
+                        output_path=bg_file,
+                        width=w,
+                        height=h,
+                        fmt="PNG"
+                    )
             if bg_file.exists() and bg_file.stat().st_size > 0:
                 _heal_project_media_path(project, kind, bg_file)
                 return bg_file

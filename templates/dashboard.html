@@ -92,6 +92,11 @@
     <div class="row g-4" id="projectGrid">
         {% for p in projects %}
         {% set project_canonical = p.get_canonical_json() %}
+        {% set project_style = project_canonical.get('style', {}) or {} %}
+        {% set preview_primary = project_style.get('primary_color', '#FFFFFF') %}
+        {% set preview_accent = project_style.get('highlight_color', '#10B981') %}
+        {% set preview_credit = p.preview_credit() %}
+        {% set preview_snippets = p.preview_lyric_snippets(2) %}
         <div class="col-md-6 col-lg-3 project-item" data-title="{{ p.name|lower }}" data-background="{{ project_canonical.get('meta', {}).get('background_template', 'burgundy_studio') }}">
             <div class="project-card">
                 <div class="project-preview position-relative overflow-hidden">
@@ -102,6 +107,24 @@
                     {% else %}
                     <img src="{{ url_for('projects.stream_project_media', project_id=p.id, kind='video') }}" alt="{{ p.name }}" class="w-100 h-100 object-fit-cover" loading="lazy">
                     {% endif %}
+                    <div class="project-preview-scrim" aria-hidden="true"></div>
+                    <div class="project-preview-titlecard">
+                        <div class="song-title-cinematic project-titlecard-inner">
+                            <div class="st-kicker" style="color: {{ preview_accent }};">Now Playing</div>
+                            <div class="st-rule" style="color: {{ preview_accent }};"></div>
+                            <div class="st-title" style="color: {{ preview_primary }};">{{ preview_credit.title }}</div>
+                            {% if preview_credit.artist %}
+                            <div class="st-artist" style="color: {{ preview_accent }};">{{ preview_credit.artist }}</div>
+                            {% endif %}
+                            {% if preview_snippets %}
+                            <div class="project-preview-lyrics">
+                                {% for snippet in preview_snippets %}
+                                <span>{{ snippet }}</span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
                     <div class="project-preview-overlay"><i class="bi bi-play-circle"></i> Open studio</div>
                 </div>
                 <div class="d-flex justify-content-between align-items-center mb-3 text-secondary small">
@@ -109,11 +132,17 @@
                     <span class="font-mono text-muted">{{ p.created_at.strftime('%Y-%m-%d') }}</span>
                 </div>
 
-                <h4 class="fw-bold text-dark mb-3 text-truncate" title="{{ p.name }}">
+                <h4 class="fw-bold text-dark mb-2 text-truncate" title="{{ p.name }}">
                     {{ p.name }}
                 </h4>
 
-                <p class="project-description text-secondary small mb-3">{{ project_canonical.get('meta', {}).get('description', '') or 'Synchronized lyric video project' }}</p>
+                <p class="project-description text-secondary small mb-3">
+                    {% if preview_snippets %}
+                        “{{ preview_snippets[0] }}{% if preview_snippets|length > 1 %}…{% endif %}”
+                    {% else %}
+                        {{ project_canonical.get('meta', {}).get('description', '') or 'Synchronized lyric video project' }}
+                    {% endif %}
+                </p>
 
                 <div class="bg-light p-3 mb-4 border small">
                     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -214,6 +243,7 @@
     };
     projectItems.forEach(item => {
         const video = item.querySelector('video');
+        if (!video) return;
         video.poster = posterMap[item.dataset.background] || posterMap.burgundy_studio;
         video.addEventListener('mouseenter', () => video.play().catch(() => {}));
         video.addEventListener('mouseleave', () => { video.pause(); video.currentTime = 0; });

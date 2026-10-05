@@ -3,29 +3,38 @@
 {% block title %}{{ project.name }} - LyricSync Studio{% endblock %}
 
 {% block content %}
-<div class="editor-workspace d-flex flex-column container-fluid p-0" data-project-id="{{ project.id }}" data-is-admin="{{ 'true' if is_admin else 'false' }}">
-    <!-- Studio Header (Square, Spacious, Zero Badges) -->
-    <header class="editor-header d-flex justify-content-between align-items-center px-4 py-2.5 border-bottom bg-white">
-        <div class="d-flex align-items-center gap-3">
-            <a href="{{ url_for('views.dashboard') }}" class="btn btn-outline-secondary btn-sm px-3 py-2 text-decoration-none" title="Back to Projects">
-                <i class="bi bi-chevron-left me-1"></i> Projects
+<div class="editor-workspace d-flex flex-column container-fluid p-0"
+     data-project-id="{{ project.id }}"
+     data-is-admin="{{ 'true' if is_admin else 'false' }}"
+     data-image-credits="{{ image_credits_status.image_credits }}"
+     data-can-generate-ai="{{ 'true' if image_credits_status.can_generate else 'false' }}"
+     data-image-unlimited="{{ 'true' if image_credits_status.unlimited else 'false' }}"
+     data-premium-price="{{ image_credits_status.premium_price_label }}"
+     data-premium-credits="{{ image_credits_status.premium_credits }}"
+     data-stripe-enabled="{{ 'true' if image_credits_status.stripe_enabled else 'false' }}"
+     data-auth-required-ai="{{ 'false' if image_credits_status.authenticated else 'true' }}">
+    <!-- Studio Header -->
+    <header class="editor-header">
+        <div class="editor-header-identity">
+            <a href="{{ url_for('views.dashboard') }}" class="editor-back-btn text-decoration-none" title="Back to Projects">
+                <i class="bi bi-arrow-left"></i><span>Projects</span>
             </a>
-            <div class="d-flex align-items-center gap-3 border-start ps-3">
-                <input type="text" id="editorProjectName" class="form-control form-control-sm border-0 fw-bold px-1 text-dark fs-6" value="{{ project.name }}" style="max-width: 260px; color: var(--brand-burgundy) !important;">
-                <label class="project-visibility-toggle small text-secondary" title="Private projects never appear on the public homepage">
+            <div class="editor-project-meta">
+                <input type="text" id="editorProjectName" class="editor-project-name" value="{{ project.name }}" title="Project name">
+                <label class="project-visibility-toggle" title="Private projects never appear on the public homepage">
                     <input type="checkbox" id="projectPublicToggle" {% if canonical.get('meta', {}).get('is_public') is sameas true %}checked{% endif %}>
-                    <i class="bi bi-globe2"></i> Public
+                    <i class="bi bi-globe2"></i><span>Public</span>
                 </label>
             </div>
         </div>
 
-        <div class="d-flex align-items-center gap-2">
+        <div class="editor-header-tools">
             <!-- Preview Quality Switcher (Bandwidth Friendly) -->
-            <div class="dropdown me-1">
-                <button class="btn btn-outline-secondary btn-sm px-2.5 py-2 d-flex align-items-center gap-1.5" type="button" id="previewQualityDropdown" data-bs-toggle="dropdown" aria-expanded="false" title="Preview Quality Mode">
-                    <i class="bi bi-speedometer2 text-success" id="previewQualityIcon"></i>
+            <div class="dropdown">
+                <button class="editor-tool-btn" type="button" id="previewQualityDropdown" data-bs-toggle="dropdown" aria-expanded="false" title="Preview Quality Mode">
+                    <i class="bi bi-speedometer2" id="previewQualityIcon"></i>
                     <span id="previewQualityLabel" class="fw-semibold">720p Draft</span>
-                    <i class="bi bi-chevron-down small text-muted" style="font-size: 0.7rem;"></i>
+                    <i class="bi bi-chevron-down editor-tool-chevron"></i>
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end shadow-sm border p-2" aria-labelledby="previewQualityDropdown" style="min-width: 250px; font-size: 0.85rem;">
                     <li><h6 class="dropdown-header text-uppercase text-muted fw-bold px-2 py-1" style="font-size: 0.68rem; letter-spacing: 0.05em;">Preview Resolution</h6></li>
@@ -50,21 +59,80 @@
                 </ul>
             </div>
 
-            <button id="transcribeBtn" class="btn btn-outline-burgundy px-3 py-2 d-flex align-items-center gap-2">
-                <i class="bi bi-stars" style="color: var(--brand-burgundy);"></i> Transcribe AI
-            </button>
-            <button id="saveRevisionBtn" class="btn btn-outline-secondary px-3 py-2 d-flex align-items-center gap-2">
-                <i class="bi bi-bookmark-check"></i> Save Revision
-            </button>
-            <button id="exportVideoBtn" class="btn btn-burgundy px-3 py-2 fw-semibold d-flex align-items-center gap-2">
-                <i class="bi bi-film"></i> <span id="exportBtnLabel">Export Video</span>
-            </button>
-            <a href="{{ url_for('projects.download_project_render', project_id=project.id) }}" id="downloadHeaderBtn" class="btn btn-green px-3 py-2 fw-semibold {% if has_render %}d-flex{% else %}d-none{% endif %} align-items-center gap-2">
-                <i class="bi bi-download"></i> Download MP4
-            </a>
+            <div class="editor-lang-wrap">
+                <select id="transcribeLanguage" class="editor-lang-select" title="Language Whisper should listen for" aria-label="Transcription language">
+                    <option value="auto" selected>Auto detect</option>
+                    <option value="en">English</option>
+                    <option value="sw">Swahili</option>
+                    <option value="es">Spanish</option>
+                    <option value="fr">French</option>
+                    <option value="pt">Portuguese</option>
+                    <option value="de">German</option>
+                    <option value="it">Italian</option>
+                    <option value="ar">Arabic</option>
+                    <option value="hi">Hindi</option>
+                    <option value="bn">Bengali</option>
+                    <option value="ur">Urdu</option>
+                    <option value="zh">Chinese</option>
+                    <option value="ja">Japanese</option>
+                    <option value="ko">Korean</option>
+                    <option value="yo">Yoruba</option>
+                    <option value="ha">Hausa</option>
+                    <option value="ig">Igbo</option>
+                    <option value="am">Amharic</option>
+                    <option value="zu">Zulu</option>
+                    <option value="af">Afrikaans</option>
+                    <option value="ru">Russian</option>
+                    <option value="uk">Ukrainian</option>
+                    <option value="tr">Turkish</option>
+                    <option value="nl">Dutch</option>
+                    <option value="pl">Polish</option>
+                    <option value="cs">Czech</option>
+                    <option value="ro">Romanian</option>
+                    <option value="sv">Swedish</option>
+                    <option value="da">Danish</option>
+                    <option value="fi">Finnish</option>
+                    <option value="no">Norwegian</option>
+                    <option value="el">Greek</option>
+                    <option value="he">Hebrew</option>
+                    <option value="fa">Persian</option>
+                    <option value="id">Indonesian</option>
+                    <option value="ms">Malay</option>
+                    <option value="vi">Vietnamese</option>
+                    <option value="th">Thai</option>
+                    <option value="tl">Tagalog</option>
+                </select>
+                <button type="button" class="transcription-disclaimer-toggle" data-bs-toggle="collapse" data-bs-target="#transcriptionDisclaimer" aria-expanded="false" aria-controls="transcriptionDisclaimer">
+                    Accuracy note
+                </button>
+            </div>
 
+            <div class="editor-header-actions">
+                <button id="transcribeBtn" class="btn btn-outline-burgundy editor-action-btn">
+                    <i class="bi bi-stars"></i><span>Transcribe</span>
+                </button>
+                <button id="saveRevisionBtn" class="btn btn-outline-secondary editor-action-btn">
+                    <i class="bi bi-bookmark-check"></i><span>Save</span>
+                </button>
+                <button id="exportVideoBtn" class="btn btn-burgundy editor-action-btn">
+                    <i class="bi bi-film"></i><span id="exportBtnLabel">Export</span>
+                </button>
+                <a href="{{ url_for('projects.download_project_render', project_id=project.id) }}" id="downloadHeaderBtn" class="btn btn-green editor-action-btn {% if has_render %}d-inline-flex{% else %}d-none{% endif %}">
+                    <i class="bi bi-download"></i><span>Download</span>
+                </a>
+            </div>
         </div>
     </header>
+
+    <div class="collapse border-bottom" id="transcriptionDisclaimer">
+        <div class="transcription-disclaimer px-4 py-2">
+            <strong>Disclaimer:</strong>
+            Songs outside our known-lyrics catalog are transcribed best-effort.
+            Results are stronger in major / well-supported languages; sung dialects,
+            rare languages, and dense gospel harmonies may still come back incomplete or inaccurate.
+            We can’t guarantee perfect lyrics for every track — paste the correct lyrics when accuracy matters.
+        </div>
+    </div>
 
     <!-- Studio Body: Canva-Style Left Dock & Drawer, Split Center Artboard & Right Lyrics Sheet -->
     <div class="editor-main-area d-flex flex-grow-1 overflow-hidden">
@@ -124,84 +192,172 @@
                                     <span>Caveat (Handwritten Script - Default)</span>
                                     <i class="bi bi-check2"></i>
                                 </div>
-                                <div class="font-preview-item" data-font="Outfit" style="font-family: 'Outfit', sans-serif;">
-                                    <span>Outfit (Geometric Sans)</span>
-                                </div>
-                                <div class="font-preview-item" data-font="Playfair Display" style="font-family: 'Playfair Display', serif; font-size: 1.05rem;">
-                                    <span>Playfair Display (Editorial Serif)</span>
-                                </div>
-                                <div class="font-preview-item" data-font="Montserrat" style="font-family: 'Montserrat', sans-serif;">
-                                    <span>Montserrat (Modern Heading)</span>
-                                </div>
-                                <div class="font-preview-item" data-font="Cinzel" style="font-family: 'Cinzel', serif;">
-                                    <span>Cinzel (Cinematic Serif)</span>
-                                </div>
-                                <div class="font-preview-item" data-font="Bebas Neue" style="font-family: 'Bebas Neue', sans-serif; font-size: 1.15rem; letter-spacing: 0.05em;">
-                                    <span>Bebas Neue (Display Poster)</span>
-                                </div>
-                                <div class="font-preview-item" data-font="Roboto" style="font-family: 'Roboto', sans-serif;">
-                                    <span>Roboto (Neutral Sans)</span>
-                                </div>
-                                <div class="font-preview-item" data-font="Merriweather" style="font-family: 'Merriweather', serif;">
-                                    <span>Merriweather (Literary Serif)</span>
+                                <div class="font-preview-item" data-font="Estelle" style="font-family: 'Great Vibes', cursive; font-size: 1.45rem;">
+                                    <span>Estelle (Elegant Script)</span>
                                 </div>
                                 <div class="font-preview-item" data-font="Anton" style="font-family: 'Anton', sans-serif;">
-                                    <span>Anton (Bold Display)</span>
-                                </div>
-                                <div class="font-preview-item" data-font="Oswald" style="font-family: 'Oswald', sans-serif;">
-                                    <span>Oswald (Condensed)</span>
-                                </div>
-                                <div class="font-preview-item" data-font="Raleway" style="font-family: 'Raleway', sans-serif;">
-                                    <span>Raleway (Elegant Sans)</span>
-                                </div>
-                                <div class="font-preview-item" data-font="Nunito" style="font-family: 'Nunito', sans-serif;">
-                                    <span>Nunito (Soft Sans)</span>
-                                </div>
-                                <div class="font-preview-item" data-font="DM Sans" style="font-family: 'DM Sans', sans-serif;">
-                                    <span>DM Sans (Clean Sans)</span>
-                                </div>
-                                <div class="font-preview-item" data-font="Libre Baskerville" style="font-family: 'Libre Baskerville', serif;">
-                                    <span>Libre Baskerville (Classic Serif)</span>
+                                    <span>Anton</span>
                                 </div>
                                 <div class="font-preview-item" data-font="Arial" style="font-family: Arial, sans-serif;">
-                                    <span>Arial (Standard Sans)</span>
+                                    <span>Arial</span>
                                 </div>
-                                <div class="font-preview-item" data-font="Trebuchet MS" style="font-family: 'Trebuchet MS', sans-serif;">
-                                    <span>Trebuchet MS (Legibility)</span>
+                                <div class="font-preview-item" data-font="Avenir" style="font-family: Avenir, 'Avenir Next', 'Helvetica Neue', Arial, sans-serif;">
+                                    <span>Avenir</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Baskerville" style="font-family: Baskerville, 'Libre Baskerville', serif;">
+                                    <span>Baskerville</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Bebas Neue" style="font-family: 'Bebas Neue', sans-serif; font-size: 1.15rem; letter-spacing: 0.05em;">
+                                    <span>Bebas Neue</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Bodoni" style="font-family: 'Bodoni Moda', 'Bodoni MT', Bodoni, serif;">
+                                    <span>Bodoni</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Cinzel" style="font-family: 'Cinzel', serif;">
+                                    <span>Cinzel</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Cormorant Garamond" style="font-family: 'Cormorant Garamond', serif;">
+                                    <span>Cormorant Garamond</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Courier New" style="font-family: 'Courier New', Courier, monospace;">
+                                    <span>Courier New</span>
+                                </div>
+                                <div class="font-preview-item" data-font="DM Sans" style="font-family: 'DM Sans', sans-serif;">
+                                    <span>DM Sans</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Futura" style="font-family: Futura, 'Trebuchet MS', Arial, sans-serif;">
+                                    <span>Futura</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Garamond" style="font-family: 'EB Garamond', Garamond, serif;">
+                                    <span>Garamond</span>
                                 </div>
                                 <div class="font-preview-item" data-font="Georgia" style="font-family: Georgia, serif;">
-                                    <span>Georgia (Classic Serif)</span>
+                                    <span>Georgia</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Helvetica Neue" style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
+                                    <span>Helvetica Neue</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Inter" style="font-family: 'Inter', sans-serif;">
+                                    <span>Inter</span>
+                                </div>
+                                <div class="font-preview-item" data-font="ITC Century" style="font-family: 'Century Schoolbook', Century, 'Times New Roman', serif;">
+                                    <span>ITC Century</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Lato" style="font-family: 'Lato', sans-serif;">
+                                    <span>Lato</span>
+                                </div>
+                                <div class="font-preview-item" data-font="League Spartan" style="font-family: 'League Spartan', sans-serif;">
+                                    <span>League Spartan</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Libre Baskerville" style="font-family: 'Libre Baskerville', serif;">
+                                    <span>Libre Baskerville</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Merriweather" style="font-family: 'Merriweather', serif;">
+                                    <span>Merriweather</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Minion Pro" style="font-family: 'Minion Pro', 'EB Garamond', Garamond, serif;">
+                                    <span>Minion Pro</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Montserrat" style="font-family: 'Montserrat', sans-serif;">
+                                    <span>Montserrat</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Nunito" style="font-family: 'Nunito', sans-serif;">
+                                    <span>Nunito</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Open Sans" style="font-family: 'Open Sans', sans-serif;">
+                                    <span>Open Sans</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Oswald" style="font-family: 'Oswald', sans-serif;">
+                                    <span>Oswald</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Outfit" style="font-family: 'Outfit', sans-serif;">
+                                    <span>Outfit</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Playfair Display" style="font-family: 'Playfair Display', serif; font-size: 1.05rem;">
+                                    <span>Playfair Display</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Poppins" style="font-family: 'Poppins', sans-serif;">
+                                    <span>Poppins</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Proxima Nova" style="font-family: 'Proxima Nova', Montserrat, Arial, sans-serif;">
+                                    <span>Proxima Nova</span>
+                                </div>
+                                <div class="font-preview-item" data-font="PT Sans" style="font-family: 'PT Sans', sans-serif;">
+                                    <span>PT Sans</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Raleway" style="font-family: 'Raleway', sans-serif;">
+                                    <span>Raleway</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Roboto" style="font-family: 'Roboto', sans-serif;">
+                                    <span>Roboto</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Source Sans Pro" style="font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;">
+                                    <span>Source Sans Pro</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Times New Roman" style="font-family: 'Times New Roman', Times, serif;">
+                                    <span>Times New Roman</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Trebuchet MS" style="font-family: 'Trebuchet MS', sans-serif;">
+                                    <span>Trebuchet MS</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Ubuntu" style="font-family: 'Ubuntu', sans-serif;">
+                                    <span>Ubuntu</span>
+                                </div>
+                                <div class="font-preview-item" data-font="Univers" style="font-family: Univers, 'Helvetica Neue', Arial, sans-serif;">
+                                    <span>Univers</span>
                                 </div>
                             </div>
                         </div>
                         <select id="styleFontFamily" class="d-none">
                             <option value="Caveat" selected>Caveat</option>
+                            <option value="Estelle">Estelle</option>
                             <option value="Anton">Anton</option>
+                            <option value="Arial">Arial</option>
+                            <option value="Avenir">Avenir</option>
+                            <option value="Baskerville">Baskerville</option>
+                            <option value="Bebas Neue">Bebas Neue</option>
+                            <option value="Bodoni">Bodoni</option>
+                            <option value="Cinzel">Cinzel</option>
+                            <option value="Cormorant Garamond">Cormorant Garamond</option>
+                            <option value="Courier New">Courier New</option>
                             <option value="DM Sans">DM Sans</option>
+                            <option value="Futura">Futura</option>
+                            <option value="Garamond">Garamond</option>
+                            <option value="Georgia">Georgia</option>
+                            <option value="Helvetica Neue">Helvetica Neue</option>
+                            <option value="Inter">Inter</option>
+                            <option value="ITC Century">ITC Century</option>
+                            <option value="Lato">Lato</option>
+                            <option value="League Spartan">League Spartan</option>
                             <option value="Libre Baskerville">Libre Baskerville</option>
+                            <option value="Merriweather">Merriweather</option>
+                            <option value="Minion Pro">Minion Pro</option>
+                            <option value="Montserrat">Montserrat</option>
                             <option value="Nunito">Nunito</option>
+                            <option value="Open Sans">Open Sans</option>
                             <option value="Oswald">Oswald</option>
-                            <option value="Raleway">Raleway</option>
                             <option value="Outfit">Outfit</option>
                             <option value="Playfair Display">Playfair Display</option>
-                            <option value="Montserrat">Montserrat</option>
-                            <option value="Cinzel">Cinzel</option>
-                            <option value="Bebas Neue">Bebas Neue</option>
+                            <option value="Poppins">Poppins</option>
+                            <option value="Proxima Nova">Proxima Nova</option>
+                            <option value="PT Sans">PT Sans</option>
+                            <option value="Raleway">Raleway</option>
                             <option value="Roboto">Roboto</option>
-                            <option value="Merriweather">Merriweather</option>
-                            <option value="Arial">Arial</option>
+                            <option value="Source Sans Pro">Source Sans Pro</option>
+                            <option value="Times New Roman">Times New Roman</option>
                             <option value="Trebuchet MS">Trebuchet MS</option>
-                            <option value="Georgia">Georgia</option>
+                            <option value="Ubuntu">Ubuntu</option>
+                            <option value="Univers">Univers</option>
                         </select>
                     </div>
 
-                    <!-- Font Size (Default 34px) -->
+                    <!-- Font Size (studio preview px; export scales to full video resolution) -->
                     <div class="mb-3">
                         <div class="d-flex justify-content-between align-items-center mb-1">
                             <label class="form-label small fw-bold text-dark mb-0">Font Size</label>
-                            <span id="fontSizeDisplay" class="font-mono text-dark fw-bold small">28px</span>
+                            <span id="fontSizeDisplay" class="font-mono text-dark fw-bold small">36px</span>
                         </div>
-                        <input type="range" id="styleFontSize" class="form-range" min="12" max="64" value="28">
+                        <input type="range" id="styleFontSize" class="form-range" min="16" max="96" value="36">
                     </div>
 
                     <!-- Line Height (Default 1.0x) -->
@@ -269,24 +425,200 @@
                             <label class="form-label small fw-bold text-dark mb-1">Base Color</label>
                             <div class="d-flex align-items-center gap-2">
                                 <input type="color" id="stylePrimaryColor" class="form-control form-control-color p-1" style="width: 40px; height: 32px;" value="#FFFFFF" title="Base lyric text color">
-                                <span class="small font-mono text-muted">#FFFFFF</span>
+                                <span class="small font-mono text-muted style-color-hex" data-for="stylePrimaryColor">#FFFFFF</span>
                             </div>
                         </div>
                         <div class="col-6">
                             <label class="form-label small fw-bold text-dark mb-1">Karaoke Fill</label>
                             <div class="d-flex align-items-center gap-2">
                                 <input type="color" id="styleHighlightColor" class="form-control form-control-color p-1" style="width: 40px; height: 32px;" value="#10B981" title="Karaoke highlight color">
-                                <span class="small font-mono text-muted">#10B981</span>
+                                <span class="small font-mono text-muted style-color-hex" data-for="styleHighlightColor">#10B981</span>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Highlight Mode -->
+                    <!-- Text Effects: Outline / Drop Shadow / Bevel -->
+                    <div class="typo-effects-block mb-3">
+                        <div class="form-label small fw-bold text-dark mb-2 d-flex align-items-center gap-1">
+                            <i class="bi bi-magic" style="color: var(--brand-burgundy);"></i> Text Effects
+                        </div>
+
+                        <!-- Outline -->
+                        <details class="typo-effect-group" open>
+                            <summary class="typo-effect-summary">
+                                <label class="form-check form-check-inline m-0" onclick="event.stopPropagation()">
+                                    <input class="form-check-input" type="checkbox" id="styleOutlineEnabled" checked>
+                                    <span class="fw-semibold">Outline</span>
+                                </label>
+                            </summary>
+                            <div class="typo-effect-body" id="outlineControls">
+                                <div class="row g-2 align-items-end mb-2">
+                                    <div class="col-5">
+                                        <label class="form-label small text-secondary mb-1" for="styleOutlineColor">Color</label>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <input type="color" id="styleOutlineColor" class="form-control form-control-color p-1" style="width: 36px; height: 30px;" value="#000000">
+                                            <span class="small font-mono text-muted style-color-hex" data-for="styleOutlineColor">#000000</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-7">
+                                        <div class="d-flex justify-content-between">
+                                            <label class="form-label small text-secondary mb-1" for="styleOutlineSize">Size</label>
+                                            <span class="small font-mono text-muted" id="outlineSizeDisplay">2px</span>
+                                        </div>
+                                        <input type="range" id="styleOutlineSize" class="form-range" min="0" max="12" step="1" value="2">
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="d-flex justify-content-between">
+                                        <label class="form-label small text-secondary mb-1" for="styleOutlineSoftness">Softness</label>
+                                        <span class="small font-mono text-muted" id="outlineSoftnessDisplay">0px</span>
+                                    </div>
+                                    <input type="range" id="styleOutlineSoftness" class="form-range" min="0" max="8" step="0.5" value="0">
+                                </div>
+                            </div>
+                        </details>
+
+                        <!-- Drop Shadow -->
+                        <details class="typo-effect-group" open>
+                            <summary class="typo-effect-summary">
+                                <label class="form-check form-check-inline m-0" onclick="event.stopPropagation()">
+                                    <input class="form-check-input" type="checkbox" id="styleShadowEnabled" checked>
+                                    <span class="fw-semibold">Drop Shadow</span>
+                                </label>
+                            </summary>
+                            <div class="typo-effect-body" id="shadowControls">
+                                <div class="row g-2 align-items-end mb-2">
+                                    <div class="col-5">
+                                        <label class="form-label small text-secondary mb-1" for="styleShadowColor">Color</label>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <input type="color" id="styleShadowColor" class="form-control form-control-color p-1" style="width: 36px; height: 30px;" value="#000000">
+                                            <span class="small font-mono text-muted style-color-hex" data-for="styleShadowColor">#000000</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-7">
+                                        <div class="d-flex justify-content-between">
+                                            <label class="form-label small text-secondary mb-1" for="styleShadowOpacity">Opacity</label>
+                                            <span class="small font-mono text-muted" id="shadowOpacityDisplay">70%</span>
+                                        </div>
+                                        <input type="range" id="styleShadowOpacity" class="form-range" min="0" max="100" step="1" value="70">
+                                    </div>
+                                </div>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6">
+                                        <div class="d-flex justify-content-between">
+                                            <label class="form-label small text-secondary mb-1" for="styleShadowDistance">Distance</label>
+                                            <span class="small font-mono text-muted" id="shadowDistanceDisplay">3px</span>
+                                        </div>
+                                        <input type="range" id="styleShadowDistance" class="form-range" min="0" max="24" step="1" value="3">
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="d-flex justify-content-between">
+                                            <label class="form-label small text-secondary mb-1" for="styleShadowBlur">Blur</label>
+                                            <span class="small font-mono text-muted" id="shadowBlurDisplay">2px</span>
+                                        </div>
+                                        <input type="range" id="styleShadowBlur" class="form-range" min="0" max="24" step="1" value="2">
+                                    </div>
+                                </div>
+                                <div class="mb-1">
+                                    <div class="d-flex justify-content-between">
+                                        <label class="form-label small text-secondary mb-1" for="styleShadowAngle">Direction</label>
+                                        <span class="small font-mono text-muted" id="shadowAngleDisplay">45°</span>
+                                    </div>
+                                    <input type="range" id="styleShadowAngle" class="form-range" min="0" max="360" step="1" value="45">
+                                </div>
+                                <div class="typo-dir-pad" id="shadowDirPad" role="group" aria-label="Shadow direction presets">
+                                    <button type="button" class="typo-dir-btn" data-angle="225" title="Up-left">↖</button>
+                                    <button type="button" class="typo-dir-btn" data-angle="270" title="Up">↑</button>
+                                    <button type="button" class="typo-dir-btn" data-angle="315" title="Up-right">↗</button>
+                                    <button type="button" class="typo-dir-btn" data-angle="180" title="Left">←</button>
+                                    <button type="button" class="typo-dir-btn" data-angle="45" title="Default down-right">·</button>
+                                    <button type="button" class="typo-dir-btn" data-angle="0" title="Right">→</button>
+                                    <button type="button" class="typo-dir-btn" data-angle="135" title="Down-left">↙</button>
+                                    <button type="button" class="typo-dir-btn" data-angle="90" title="Down">↓</button>
+                                    <button type="button" class="typo-dir-btn" data-angle="45" title="Down-right">↘</button>
+                                </div>
+                            </div>
+                        </details>
+
+                        <!-- Bevel -->
+                        <details class="typo-effect-group">
+                            <summary class="typo-effect-summary">
+                                <label class="form-check form-check-inline m-0" onclick="event.stopPropagation()">
+                                    <input class="form-check-input" type="checkbox" id="styleBevelEnabled">
+                                    <span class="fw-semibold">Bevel / Emboss</span>
+                                </label>
+                            </summary>
+                            <div class="typo-effect-body" id="bevelControls">
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6">
+                                        <div class="d-flex justify-content-between">
+                                            <label class="form-label small text-secondary mb-1" for="styleBevelSize">Size</label>
+                                            <span class="small font-mono text-muted" id="bevelSizeDisplay">2px</span>
+                                        </div>
+                                        <input type="range" id="styleBevelSize" class="form-range" min="0" max="10" step="0.5" value="2">
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="d-flex justify-content-between">
+                                            <label class="form-label small text-secondary mb-1" for="styleBevelSoftness">Softness</label>
+                                            <span class="small font-mono text-muted" id="bevelSoftnessDisplay">1px</span>
+                                        </div>
+                                        <input type="range" id="styleBevelSoftness" class="form-range" min="0" max="8" step="0.5" value="1">
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <div class="d-flex justify-content-between">
+                                        <label class="form-label small text-secondary mb-1" for="styleBevelAngle">Light angle</label>
+                                        <span class="small font-mono text-muted" id="bevelAngleDisplay">135°</span>
+                                    </div>
+                                    <input type="range" id="styleBevelAngle" class="form-range" min="0" max="360" step="1" value="135">
+                                </div>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6">
+                                        <label class="form-label small text-secondary mb-1" for="styleBevelHighlightColor">Highlight</label>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <input type="color" id="styleBevelHighlightColor" class="form-control form-control-color p-1" style="width: 36px; height: 30px;" value="#FFFFFF">
+                                            <span class="small font-mono text-muted style-color-hex" data-for="styleBevelHighlightColor">#FFFFFF</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="d-flex justify-content-between">
+                                            <label class="form-label small text-secondary mb-1" for="styleBevelHighlightOpacity">Opacity</label>
+                                            <span class="small font-mono text-muted" id="bevelHighlightOpacityDisplay">55%</span>
+                                        </div>
+                                        <input type="range" id="styleBevelHighlightOpacity" class="form-range" min="0" max="100" step="1" value="55">
+                                    </div>
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <label class="form-label small text-secondary mb-1" for="styleBevelShadowColor">Shade</label>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <input type="color" id="styleBevelShadowColor" class="form-control form-control-color p-1" style="width: 36px; height: 30px;" value="#000000">
+                                            <span class="small font-mono text-muted style-color-hex" data-for="styleBevelShadowColor">#000000</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="d-flex justify-content-between">
+                                            <label class="form-label small text-secondary mb-1" for="styleBevelShadowOpacity">Opacity</label>
+                                            <span class="small font-mono text-muted" id="bevelShadowOpacityDisplay">45%</span>
+                                        </div>
+                                        <input type="range" id="styleBevelShadowOpacity" class="form-range" min="0" max="100" step="1" value="45">
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+
+                    <!-- Lyric Tracking -->
                     <div class="mb-3">
-                        <label class="form-label small fw-bold text-dark mb-1">Highlight Fill Mode</label>
+                        <label class="form-label small fw-bold text-dark mb-1">Lyric Tracking</label>
                         <select id="styleMode" class="form-select form-select-sm">
-                            <option value="karaoke" selected>Karaoke Progressive Fill</option>
-                            <option value="classic">Timed Active Word</option>
+                            <option value="karaoke" selected>Color Wipe (Karaoke Fill)</option>
+                            <option value="classic">Color Flash (Active Word)</option>
+                            <option value="underline">Underline Active Word</option>
+                            <option value="glow">Glow Active Word</option>
+                            <option value="scale">Scale Up Active Word</option>
+                            <option value="box">Highlight Box</option>
+                            <option value="none">None (No Tracking)</option>
                         </select>
                     </div>
 
@@ -301,11 +633,20 @@
                     </div>
 
                     <div class="row g-2 mb-3">
-                        <div class="col-8">
+                        <div class="col-6">
                             <label class="form-label small fw-bold text-dark mb-1">Font Style</label>
                             <select id="styleFontStyle" class="form-select form-select-sm">
                                 <option value="normal" selected>Regular</option>
                                 <option value="italic">Italic</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-dark mb-1">Capitalization</label>
+                            <select id="styleTextCase" class="form-select form-select-sm">
+                                <option value="as_is" selected>As typed</option>
+                                <option value="upper">UPPERCASE</option>
+                                <option value="lower">lowercase</option>
+                                <option value="title">Title Case</option>
                             </select>
                         </div>
                     </div>
@@ -317,11 +658,11 @@
                     </div>
                 </div>
 
-                <!-- Panel 2: Effects -->
+                <!-- Panel 2: Effects (Canva-style visual motion cards) -->
                 <div class="drawer-panel d-none" id="drawerPanelEffects">
-                    <p class="text-secondary small mb-3">Choose how lyrics enter and move on the canvas.</p>
-                    <label class="form-label small fw-bold text-dark mb-1">Lyric Motion</label>
-                    <select id="styleEffect" class="form-select form-select-sm mb-3">
+                    <p class="text-secondary small mb-2">Click a motion style — it applies live on the canvas.</p>
+
+                    <select id="styleEffect" class="d-none" aria-hidden="true">
                         <option value="none" selected>None</option>
                         <option value="fade">Fade In</option>
                         <option value="bounce">Bounce</option>
@@ -329,139 +670,170 @@
                         <option value="pulse">Pulse</option>
                         <option value="typewriter">Typewriter</option>
                     </select>
-                    <label class="form-label small fw-bold text-dark mb-1">Effect Strength</label>
-                    <input id="styleEffectStrength" class="form-range" type="range" min="0.2" max="1.5" step="0.1" value="0.7">
+
+                    <div class="effect-card-grid" id="effectCardGrid" role="listbox" aria-label="Lyric motion effects">
+                        <button type="button" class="effect-card active" data-effect="none" role="option" aria-selected="true">
+                            <div class="effect-card-preview">
+                                <span class="effect-preview-text effect-preview-none">Hello</span>
+                            </div>
+                            <div class="effect-card-meta">
+                                <strong>None</strong>
+                                <span>Static lyrics</span>
+                            </div>
+                            <i class="bi bi-check2 effect-card-check"></i>
+                        </button>
+                        <button type="button" class="effect-card" data-effect="fade" role="option" aria-selected="false">
+                            <div class="effect-card-preview">
+                                <span class="effect-preview-text lyric-effect-fade">Hello</span>
+                            </div>
+                            <div class="effect-card-meta">
+                                <strong>Fade In</strong>
+                                <span>Soft appearance</span>
+                            </div>
+                            <i class="bi bi-check2 effect-card-check"></i>
+                        </button>
+                        <button type="button" class="effect-card" data-effect="bounce" role="option" aria-selected="false">
+                            <div class="effect-card-preview">
+                                <span class="effect-preview-text lyric-effect-bounce">Hello</span>
+                            </div>
+                            <div class="effect-card-meta">
+                                <strong>Bounce</strong>
+                                <span>Playful drop</span>
+                            </div>
+                            <i class="bi bi-check2 effect-card-check"></i>
+                        </button>
+                        <button type="button" class="effect-card" data-effect="slide" role="option" aria-selected="false">
+                            <div class="effect-card-preview">
+                                <span class="effect-preview-text lyric-effect-slide">Hello</span>
+                            </div>
+                            <div class="effect-card-meta">
+                                <strong>Slide Up</strong>
+                                <span>Rise into place</span>
+                            </div>
+                            <i class="bi bi-check2 effect-card-check"></i>
+                        </button>
+                        <button type="button" class="effect-card" data-effect="pulse" role="option" aria-selected="false">
+                            <div class="effect-card-preview">
+                                <span class="effect-preview-text lyric-effect-pulse">Hello</span>
+                            </div>
+                            <div class="effect-card-meta">
+                                <strong>Pulse</strong>
+                                <span>Breathing glow</span>
+                            </div>
+                            <i class="bi bi-check2 effect-card-check"></i>
+                        </button>
+                        <button type="button" class="effect-card" data-effect="typewriter" role="option" aria-selected="false">
+                            <div class="effect-card-preview">
+                                <span class="effect-preview-text lyric-effect-typewriter">Hello</span>
+                            </div>
+                            <div class="effect-card-meta">
+                                <strong>Typewriter</strong>
+                                <span>Letter by letter</span>
+                            </div>
+                            <i class="bi bi-check2 effect-card-check"></i>
+                        </button>
+                    </div>
+
+                    <div class="effect-intensity mt-3 pt-3 border-top">
+                        <label class="form-label small fw-bold text-dark mb-1 d-flex align-items-center justify-content-between" for="styleEffectStrength">
+                            <span>Intensity</span>
+                            <span class="font-mono text-secondary" id="effectStrengthDisplay" style="font-size: 0.72rem;">70%</span>
+                        </label>
+                        <input id="styleEffectStrength" class="form-range" type="range" min="0.2" max="1.5" step="0.1" value="0.7">
+                        <div class="d-flex justify-content-between text-muted" style="font-size: 0.68rem;">
+                            <span>Subtle</span>
+                            <span>Strong</span>
+                        </div>
+                    </div>
+
+                    <div class="effect-live-hint mt-3">
+                        <i class="bi bi-brush"></i>
+                        <span>Selected motion updates the preview canvas instantly.</span>
+                    </div>
                 </div>
 
                 <!-- Panel 3: Backgrounds -->
                 <div class="drawer-panel d-none" id="drawerPanelBackgrounds">
-                    <p class="text-secondary small mb-3">Click any studio aesthetic theme to preview &amp; switch instantly:</p>
+                    <p class="text-secondary small mb-2">Browse studio themes by mood, or generate a custom AI scene from your lyrics.</p>
+                    <div class="ai-theme-banner mb-3" id="aiThemeBanner">
+                        <div class="ai-theme-banner-head">
+                            <div class="ai-theme-banner-title">
+                                <i class="bi bi-stars" aria-hidden="true"></i>
+                                <span>AI Lyric Scene</span>
+                            </div>
+                            <span class="ai-credit-chip" id="aiCreditChip" aria-live="polite">
+                                {% if image_credits_status.unlimited %}
+                                    Unlimited
+                                {% elif not image_credits_status.authenticated %}
+                                    Sign in
+                                {% else %}
+                                    {{ image_credits_status.image_credits }} left
+                                {% endif %}
+                            </span>
+                        </div>
+                        <p class="ai-theme-banner-copy">
+                            OpenAI reads your song title and lyrics, writes a visual brief, then paints a still backdrop for your canvas.
+                        </p>
+
+                        <div id="aiThemeGenerateWrap">
+                            <button type="button" class="btn btn-sm btn-burgundy w-100" id="generateAiThemeBtn">
+                                <i class="bi bi-magic me-1"></i> Generate from lyrics
+                            </button>
+                        </div>
+
+                        <div id="aiThemeLockedState" class="ai-theme-locked d-none" role="status">
+                            <div class="ai-theme-locked-icon" aria-hidden="true"><i class="bi bi-lock-fill"></i></div>
+                            <div class="ai-theme-locked-copy">
+                                <strong>Free AI images used up</strong>
+                                <span>Upgrade to Premium for {{ image_credits_status.premium_credits }} more lyric scenes{% if image_credits_status.premium_price_label %} ({{ image_credits_status.premium_price_label }}){% endif %}.</span>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-burgundy w-100" id="upgradePremiumBtn">
+                                <i class="bi bi-credit-card me-1"></i>
+                                Upgrade to Premium ({{ image_credits_status.premium_price_label }} for {{ image_credits_status.premium_credits }} images)
+                            </button>
+                            <a class="ai-theme-locked-login d-none" id="aiThemeSignInLink" href="{{ url_for('auth.login_page') }}">
+                                <i class="bi bi-google me-1"></i> Sign in to claim free credits
+                            </a>
+                        </div>
+
+                        <div id="aiThemePromptPreview" class="ai-theme-prompt d-none"></div>
+                    </div>
+                    <div class="mb-2">
+                        <input type="search" id="themeSearchInput" class="form-control form-control-sm" placeholder="Search themes, moods…" autocomplete="off">
+                    </div>
+                    <div class="theme-mood-chips mb-2" id="themeMoodChips" role="listbox" aria-label="Theme moods"></div>
+                    <div class="d-flex gap-1 mb-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary theme-media-filter active" data-media="all">All</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary theme-media-filter" data-media="image">Stills</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary theme-media-filter" data-media="video">Video</button>
+                    </div>
                     <div id="themeApplyStatus" class="small text-success d-none mb-2"><span class="spinner-border spinner-border-sm me-1"></span> Applying theme...</div>
-                    <div class="row g-2.5" id="drawerTemplatesList">
-                        <div class="col-6">
-                            <div class="template-visual-card p-1 active" data-template-id="burgundy_studio">
-                                <div class="template-thumb-box position-relative">
-                                    <img src="{{ url_for('static', filename='img/templates/burgundy_studio.png') }}" alt="Burgundy Studio" loading="lazy">
+                    <div id="themeCountLabel" class="small text-secondary mb-2">Loading themes…</div>
+                    <div class="row g-2.5" id="drawerTemplatesList"></div>
+
+                    <div class="theme-custom-upload mt-3 pt-3 border-top">
+                        <label class="form-label fw-bold text-dark mb-1 small text-uppercase tracking-wider d-flex align-items-center gap-1">
+                            <i class="bi bi-camera-video"></i> Custom video background
+                        </label>
+                        <p class="text-secondary small mb-2">Upload your own footage to override the selected theme. MP4, MOV, or WEBM.</p>
+                        <div class="square-dropzone square-dropzone-compact mb-2" id="studioVideoDropzone">
+                            <input type="file" id="studioVideoFileInput" accept="video/*,.mp4,.mov,.webm,.mkv" class="d-none">
+                            <div class="mb-1 text-secondary"><i class="bi bi-cloud-arrow-up fs-3"></i></div>
+                            <div id="studioVideoLabel">
+                                <span class="fw-semibold text-dark d-block small">Click or drop video here</span>
+                                <span class="text-secondary" style="font-size: 0.72rem;">Optional · replaces theme background</span>
+                            </div>
+                            <div id="studioVideoFileInfo" class="mt-1 d-none">
+                                <div class="d-flex align-items-center justify-content-center gap-1 text-success fw-semibold small">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <span id="studioVideoFileName" class="text-dark text-truncate"></span>
                                 </div>
-                                <div class="p-1 text-center">
-                                    <div class="fw-bold small text-dark text-truncate" style="font-size: 0.74rem;">Burgundy Studio</div>
-                                </div>
+                                <button type="button" id="studioRemoveVideoBtn" class="btn btn-outline-secondary btn-sm mt-2 px-2 py-0" style="font-size: 0.72rem;">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i> Revert to theme
+                                </button>
                             </div>
                         </div>
-                        <div class="col-6">
-                            <div class="template-visual-card p-1" data-template-id="deep_nebula">
-                                <div class="template-thumb-box position-relative">
-                                    <img src="{{ url_for('static', filename='img/templates/deep_nebula.png') }}" alt="Deep Nebula" loading="lazy">
-                                </div>
-                                <div class="p-1 text-center">
-                                    <div class="fw-bold small text-dark text-truncate" style="font-size: 0.74rem;">Deep Nebula</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="template-visual-card p-1" data-template-id="retrowave_sunset">
-                                <div class="template-thumb-box position-relative">
-                                    <img src="{{ url_for('static', filename='img/templates/retrowave_sunset.png') }}" alt="Retrowave Dusk" loading="lazy">
-                                </div>
-                                <div class="p-1 text-center">
-                                    <div class="fw-bold small text-dark text-truncate" style="font-size: 0.74rem;">Retrowave Dusk</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="template-visual-card p-1" data-template-id="midnight_acoustic">
-                                <div class="template-thumb-box position-relative">
-                                    <img src="{{ url_for('static', filename='img/templates/midnight_acoustic.png') }}" alt="Midnight Acoustic" loading="lazy">
-                                </div>
-                                <div class="p-1 text-center">
-                                    <div class="fw-bold small text-dark text-truncate" style="font-size: 0.74rem;">Midnight Acoustic</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="template-visual-card p-1" data-template-id="abstract_aurora">
-                                <div class="template-thumb-box position-relative">
-                                    <img src="{{ url_for('static', filename='img/templates/abstract_aurora.png') }}" alt="Abstract Aurora" loading="lazy">
-                                </div>
-                                <div class="p-1 text-center">
-                                    <div class="fw-bold small text-dark text-truncate" style="font-size: 0.74rem;">Abstract Aurora</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="template-visual-card p-1" data-template-id="minimal_dark">
-                                <div class="template-thumb-box position-relative">
-                                    <img src="{{ url_for('static', filename='img/templates/minimal_dark.png') }}" alt="Minimal Graphite" loading="lazy">
-                                </div>
-                                <div class="p-1 text-center">
-                                    <div class="fw-bold small text-dark text-truncate" style="font-size: 0.74rem;">Minimal Graphite</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="template-visual-card p-1" data-template-id="cyberpunk_neon">
-                                <div class="template-thumb-box position-relative">
-                                    <img src="{{ url_for('static', filename='img/templates/cyberpunk_neon.png') }}" alt="Cyberpunk Neon" loading="lazy">
-                                </div>
-                                <div class="p-1 text-center">
-                                    <div class="fw-bold small text-dark text-truncate" style="font-size: 0.74rem;">Cyberpunk Neon</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="template-visual-card p-1" data-template-id="golden_hour">
-                                <div class="template-thumb-box position-relative">
-                                    <img src="{{ url_for('static', filename='img/templates/golden_hour.png') }}" alt="Golden Hour" loading="lazy">
-                                </div>
-                                <div class="p-1 text-center">
-                                    <div class="fw-bold small text-dark text-truncate" style="font-size: 0.74rem;">Golden Hour</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="template-visual-card p-1" data-template-id="velvet_lounge">
-                                <div class="template-thumb-box position-relative">
-                                    <img src="{{ url_for('static', filename='img/templates/velvet_lounge.png') }}" alt="Velvet Lounge" loading="lazy">
-                                </div>
-                                <div class="p-1 text-center">
-                                    <div class="fw-bold small text-dark text-truncate" style="font-size: 0.74rem;">Velvet Lounge</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="template-visual-card p-1" data-template-id="lofi_chill">
-                                <div class="template-thumb-box position-relative">
-                                    <img src="{{ url_for('static', filename='img/templates/lofi_chill.png') }}" alt="Lo-Fi Chill" loading="lazy">
-                                </div>
-                                <div class="p-1 text-center">
-                                    <div class="fw-bold small text-dark text-truncate" style="font-size: 0.74rem;">Lo-Fi Chill</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="template-visual-card p-1" data-template-id="emerald_stage">
-                                <div class="template-thumb-box position-relative"><img src="{{ url_for('static', filename='img/templates/abstract_aurora.png') }}" alt="Emerald Stage" loading="lazy"></div>
-                                <div class="p-1 text-center"><div class="fw-bold small text-dark text-truncate" style="font-size: 0.74rem;">Emerald Stage</div></div>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="template-visual-card p-1" data-template-id="rose_film">
-                                <div class="template-thumb-box position-relative"><img src="{{ url_for('static', filename='img/templates/retrowave_sunset.png') }}" alt="Rose Film" loading="lazy"></div>
-                                <div class="p-1 text-center"><div class="fw-bold small text-dark text-truncate" style="font-size: 0.74rem;">Rose Film</div></div>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="template-visual-card p-1" data-template-id="ocean_pulse">
-                                <div class="template-thumb-box position-relative"><img src="{{ url_for('static', filename='img/templates/cyberpunk_neon.png') }}" alt="Ocean Pulse" loading="lazy"></div>
-                                <div class="p-1 text-center"><div class="fw-bold small text-dark text-truncate" style="font-size: 0.74rem;">Ocean Pulse</div></div>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="template-visual-card p-1" data-template-id="paper_moon">
-                                <div class="template-thumb-box position-relative"><img src="{{ url_for('static', filename='img/templates/golden_hour.png') }}" alt="Paper Moon" loading="lazy"></div>
-                                <div class="p-1 text-center"><div class="fw-bold small text-dark text-truncate" style="font-size: 0.74rem;">Paper Moon</div></div>
-                            </div>
-                        </div>
+                        <div id="studioVideoUploadStatus" class="small text-secondary d-none"></div>
                     </div>
                 </div>
 
@@ -517,41 +889,51 @@
                 <div class="drawer-panel d-none" id="drawerPanelLyrics">
                     <p class="text-secondary small mb-3">Upload custom lyrics or paste text to generate synchronized lyric lines:</p>
                     <div class="mb-3">
-                        <label class="form-label small fw-bold text-dark mb-1">Upload File (.txt or .lrc)</label>
+                        <label class="form-label small fw-bold text-dark mb-1" for="drawerLyricsFileInput">Upload File (.txt or .lrc)</label>
                         <input type="file" id="drawerLyricsFileInput" accept=".txt,.lrc,text/plain" class="form-control form-control-sm">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small fw-bold text-dark mb-1">Or Paste Lyrics Text</label>
-                        <textarea id="drawerLyricsTextarea" class="form-control studio-input font-mono" rows="8" placeholder="Paste your lyrics here (one line per lyric)..."></textarea>
+                        <label class="form-label small fw-bold text-dark mb-1" for="drawerLyricsTextarea">Or Paste Lyrics Text</label>
+                        <textarea id="drawerLyricsTextarea" class="form-control studio-input" rows="8" placeholder="Paste your lyrics here (one line per lyric)..."></textarea>
                     </div>
-                    <div class="d-grid mb-2">
-                        <button type="button" id="drawerImportLyricsBtn" class="btn btn-burgundy btn-sm py-2 fw-bold d-flex align-items-center justify-content-center gap-2">
-                            <i class="bi bi-file-earmark-arrow-up"></i> Import &amp; Apply Lyrics
+                    <div class="lyrics-import-actions">
+                        <button type="button" id="drawerImportLyricsBtn" class="btn btn-burgundy lyrics-import-btn">
+                            <i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i>
+                            <span>Import &amp; Apply Lyrics</span>
                         </button>
+                        <div id="drawerLyricsAlert" class="studio-status d-none" role="status" aria-live="polite"></div>
                     </div>
-                    <div id="drawerLyricsAlert" class="alert alert-info d-none small py-2"></div>
                 </div>
             </div>
         </aside>
 
         <!-- Center Preview Canvas (Centered Artboard, 100% visible while editing) -->
         <div class="preview-stage flex-grow-1 d-flex flex-column position-relative overflow-hidden justify-content-center align-items-center p-4">
-            <div id="videoContainer" class="video-container position-relative ratio-16-9 quality-draft" data-has-video="{{ 'true' if project.is_video_background else 'false' }}">
-                <!-- Background Artwork Image (Instant 0.05s template rendering) -->
-                <img id="mainBgImage" 
-                     src="{{ url_for('projects.stream_project_media', project_id=project.id, kind='video') if not project.is_video_background else '' }}" 
-                     class="w-100 h-100 object-fit-cover position-absolute top-0 start-0 {% if project.is_video_background %}d-none{% endif %}" 
+            {% set bg_template = (canonical.get('meta') or {}).get('background_template', 'burgundy_studio') %}
+            {% set bg_stream = url_for('projects.stream_project_media', project_id=project.id, kind='video') %}
+            {% set bg_poster = url_for('projects.preview_background_template', template_id=bg_template) %}
+            <div id="videoContainer"
+                 class="video-container position-relative ratio-16-9 quality-draft"
+                 data-has-video="{{ 'true' if project.is_video_background else 'false' }}"
+                 data-bg-stream="{{ bg_stream }}"
+                 data-bg-poster="{{ bg_poster }}"
+                 data-bg-template="{{ bg_template }}">
+                <!-- Still poster / image theme (always a valid src so reload fallback never breaks) -->
+                <img id="mainBgImage"
+                     src="{{ bg_stream if not project.is_video_background else bg_poster }}"
+                     class="w-100 h-100 object-fit-cover position-absolute top-0 start-0 {% if project.is_video_background %}d-none{% endif %}"
                      alt="Background Theme"
                      loading="eager">
 
-                <!-- HTML5 Background Video (For uploaded video tracks) -->
-                <video id="mainVideo" 
-                       preload="metadata" 
-                       playsinline 
-                       class="w-100 h-100 object-fit-cover {% if not project.is_video_background %}d-none{% endif %}">
-                    {% if project.is_video_background %}
-                    <source src="{{ url_for('projects.stream_project_media', project_id=project.id, kind='video') }}">
-                    {% endif %}
+                <!-- Looping muted theme bed / custom video wallpaper (audio is the master clock) -->
+                <video id="mainVideo"
+                       preload="auto"
+                       playsinline
+                       muted
+                       loop
+                       poster="{{ bg_poster }}"
+                       class="w-100 h-100 object-fit-cover {% if not project.is_video_background %}d-none{% endif %}"
+                       {% if project.is_video_background %}src="{{ bg_stream }}"{% endif %}>
                 </video>
                 <!-- Master Audio Track (Streamed with byte-ranges & caching) -->
                 <audio id="mainAudio" preload="metadata">
@@ -616,21 +998,31 @@
 
     <!-- Studio Bottom: Transport & Spacious Timeline Drawer -->
     <div class="editor-bottom-panel d-flex flex-column border-top">
+        <div id="streamBanner" class="stream-sync-banner d-none" role="status">
+            <span class="spinner-border spinner-border-sm" id="streamBannerSpinner" style="color: var(--brand-burgundy);"></span>
+            <div class="stream-banner-copy flex-grow-1">
+                <span id="streamBannerText">Syncing lyrics. Playback follows the part that is ready.</span>
+                <div class="stream-banner-meter" aria-hidden="true">
+                    <div id="streamBannerMeterFill" class="stream-banner-meter-fill"></div>
+                </div>
+            </div>
+            <button type="button" id="streamPlayPreviewBtn" class="btn btn-sm btn-burgundy px-3 py-1 d-none">Play preview</button>
+        </div>
         <!-- Player Controls Bar (Square, Clean, Well-Padded) -->
-        <div class="player-controls-bar d-flex justify-content-between align-items-center px-4 py-2 bg-white border-bottom">
+        <div class="player-controls-bar d-flex justify-content-between align-items-center px-4 py-2 border-bottom">
             <div class="d-flex align-items-center gap-2.5">
                 <!-- Square Green Play Button -->
                 <button id="playPauseBtn" class="btn btn-green p-0 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;" title="Play / Pause (Spacebar)">
                     <i class="bi bi-play-fill fs-4" id="playIcon"></i>
                 </button>
-                <button id="replay5Btn" class="btn btn-light btn-sm border px-2.5 py-2 text-secondary" title="Replay 5 seconds">
+                <button id="replay5Btn" class="btn btn-player-skip btn-sm px-2.5 py-2" title="Replay 5 seconds">
                     <i class="bi bi-arrow-counterclockwise me-1"></i> 5s
                 </button>
-                <button id="forward5Btn" class="btn btn-light btn-sm border px-2.5 py-2 text-secondary" title="Forward 5 seconds">
+                <button id="forward5Btn" class="btn btn-player-skip btn-sm px-2.5 py-2" title="Forward 5 seconds">
                     5s <i class="bi bi-arrow-clockwise ms-1"></i>
                 </button>
                 <!-- Digital Clock Display (Square, Crisp) -->
-                <div class="ms-3 font-mono bg-light px-3 py-2 border small">
+                <div class="ms-3 font-mono player-time-display px-3 py-2 border small">
                     <span id="currentTimeDisplay" class="fw-bold text-dark">00:00.00</span>
                     <span class="text-muted mx-1">/</span>
                     <span id="totalDurationDisplay" class="text-secondary">00:00.00</span>
@@ -671,7 +1063,7 @@
         </div>
 
         <!-- Interactive Lyric Timeline List (Compact, Scrollable) -->
-        <div class="timeline-scroll-container p-3 overflow-y-auto" style="height: 76px; background-color: #F8F9FA;" id="timelineContainer">
+        <div class="timeline-scroll-container p-3 overflow-y-auto" id="timelineContainer">
             <div class="confidence-heatmap-wrap">
                 <div class="confidence-heatmap-legend"><span><i class="heatmap-dot high"></i> High confidence</span><span><i class="heatmap-dot edited"></i> Review</span><span><i class="heatmap-dot low"></i> Low confidence</span></div>
                 <div id="confidenceHeatmap" class="confidence-heatmap" role="button" title="Click a confidence section to seek"></div>
@@ -709,13 +1101,19 @@
                         Preparing your song for analysis...
                     {% endif %}
                 </h5>
-                <p class="text-secondary small mb-4" id="transcribeSubText">
+                <p class="text-secondary small mb-3" id="transcribeSubText">
                     {% if is_admin %}
-                        Full-length songs can take 2-5 minutes. The bar keeps moving while AI processes.
+                        First we check the lyric catalog for a known track. If it matches, timed lyrics load instantly; otherwise Whisper streams an opening preview.
                     {% else %}
-                        This works best with clear vocals. Longer songs take more time — stay on this page.
+                        Known songs load published lyrics instantly. New or rare tracks fall back to AI transcription of a short opening preview.
                     {% endif %}
                 </p>
+                <div class="transcription-disclaimer text-start mb-4">
+                    <strong>Disclaimer:</strong>
+                    If a song isn’t recognized in the catalog, transcription is best-effort.
+                    Languages outside our strongest set — and heavily sung, dialect, or gospel vocals — may not return perfect lyrics.
+                    Paste the real lyrics for the cleanest result when AI misses.
+                </div>
 
                 <div class="progress mb-2" style="height: 10px; border-radius: 3px;">
                     <div id="transcribeProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="background-color: var(--brand-burgundy); width: 15%; transition: width 0.7s ease;"></div>
@@ -733,17 +1131,17 @@
 
                 <div id="transcribeErrorBox" class="alert alert-warning mt-3 d-none text-start"></div>
             </div>
-            <div class="modal-footer border-top pt-3 d-none" id="transcribeModalFooter">
-                <button type="button" class="btn btn-outline-secondary px-3" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-burgundy px-4" id="transcribeRetryBtn">Retry</button>
+            <div class="modal-footer border-top pt-3" id="transcribeModalFooter">
+                <button type="button" class="btn btn-outline-secondary px-3" id="transcribeContinueBtn" data-bs-dismiss="modal">Continue in studio</button>
+                <button type="button" class="btn btn-burgundy px-4 d-none" id="transcribeRetryBtn">Retry</button>
             </div>
         </div>
     </div>
 </div>
 
 
-<!-- Export Modal with Quality Tier Selection & Progress Tracking -->
-<div class="modal fade" id="exportModal" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
+<!-- Export quality picker (brief). Progress continues in the background dock. -->
+<div class="modal fade" id="exportModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content studio-box p-4 border">
             <div class="modal-header border-bottom pb-3">
@@ -752,67 +1150,39 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" id="exportModalCloseX"></button>
             </div>
-            
-            <!-- Step 1: Quality Selection Mode -->
+
             <div id="exportSelectView" class="modal-body py-3">
-                <p class="text-secondary small mb-3">Choose your export quality tier. Low bandwidth connections benefit from 720p Fast Draft.</p>
-                
-                <div class="d-flex flex-column gap-2 mb-2">
-                    <label class="p-3 border rounded-2 d-flex align-items-start gap-3 bg-light" id="exportTierLabel720" style="cursor: pointer;">
-                        <input type="radio" name="exportResolutionTier" value="720" checked class="form-check-input mt-1">
-                        <div class="flex-grow-1">
-                            <div class="d-flex align-items-center justify-content-between mb-1">
-                                <span class="fw-bold text-dark d-flex align-items-center gap-1.5">
-                                    <i class="bi bi-lightning-charge-fill text-warning"></i> 720p Fast Draft (Recommended)
+                <p class="text-secondary small mb-3">Choose a quality tier, then keep editing while the render runs in the background.</p>
+
+                <div class="export-tier-list d-flex flex-column gap-2 mb-2">
+                    <label class="export-tier-card is-selected" id="exportTierLabel720">
+                        <input type="radio" name="exportResolutionTier" value="720" checked class="form-check-input export-tier-radio">
+                        <div class="export-tier-body">
+                            <div class="export-tier-heading">
+                                <span class="export-tier-title">
+                                    <i class="bi bi-lightning-charge-fill export-tier-icon export-tier-icon--draft"></i>
+                                    720p Fast Draft (Recommended)
                                 </span>
-                                <span class="badge bg-success-subtle text-success border border-success-subtle small font-mono">Fast &amp; Light</span>
+                                <span class="export-tier-badge export-tier-badge--fast">Fast &amp; Light</span>
                             </div>
-                            <small class="text-secondary d-block">Renders 3-4x faster, optimized for low bandwidth, instant streaming, and mobile sharing.</small>
+                            <p class="export-tier-desc">Renders 3-4x faster, optimized for low bandwidth, instant streaming, and mobile sharing.</p>
                         </div>
                     </label>
 
-                    <label class="p-3 border rounded-2 d-flex align-items-start gap-3" id="exportTierLabel1080" style="cursor: pointer;">
-                        <input type="radio" name="exportResolutionTier" value="1080" class="form-check-input mt-1">
-                        <div class="flex-grow-1">
-                            <div class="d-flex align-items-center justify-content-between mb-1">
-                                <span class="fw-bold text-dark d-flex align-items-center gap-1.5">
-                                    <i class="bi bi-stars text-primary"></i> 1080p Studio Master
+                    <label class="export-tier-card" id="exportTierLabel1080">
+                        <input type="radio" name="exportResolutionTier" value="1080" class="form-check-input export-tier-radio">
+                        <div class="export-tier-body">
+                            <div class="export-tier-heading">
+                                <span class="export-tier-title">
+                                    <i class="bi bi-stars export-tier-icon export-tier-icon--master"></i>
+                                    1080p Studio Master
                                 </span>
-                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle small font-mono">Full HD</span>
+                                <span class="export-tier-badge export-tier-badge--hd">Full HD</span>
                             </div>
-                            <small class="text-secondary d-block">Crisp maximum resolution for final YouTube, Vimeo, and theater release.</small>
+                            <p class="export-tier-desc">Crisp maximum resolution for final YouTube, Vimeo, and theater release.</p>
                         </div>
                     </label>
                 </div>
-            </div>
-
-            <!-- Step 2: Render Progress Mode -->
-            <div id="exportProgressView" class="modal-body py-4 text-center d-none">
-                <div class="spinner-border mb-3" style="color: var(--brand-burgundy); width: 2.5rem; height: 2.5rem;" id="exportSpinner" role="status"></div>
-                <h5 id="exportStageText" class="fw-bold text-dark mb-1">
-                    {% if is_admin %}
-                        Queueing FFmpeg render job...
-                    {% else %}
-                        Preparing your lyric video...
-                    {% endif %}
-                </h5>
-                <p class="text-secondary small mb-4" id="exportSubText">
-                    {% if is_admin %}
-                        Burning exact word-level timings via libass into progressive streaming MP4.
-                    {% else %}
-                        Creating your synchronized high-definition lyric video.
-                    {% endif %}
-                </p>
-
-                <div class="progress mb-2" style="height: 8px;">
-                    <div id="exportProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="background-color: var(--brand-burgundy); width: 10%;"></div>
-                </div>
-                <div class="d-flex justify-content-between text-secondary font-mono small">
-                    <span id="exportProgressPct" class="fw-bold" style="color: var(--brand-burgundy);">10%</span>
-                    <span id="exportQualityBadgeText">720p Fast Draft MP4</span>
-                </div>
-
-                <div id="exportErrorBox" class="alert alert-danger mt-3 d-none text-start small"></div>
             </div>
 
             <div class="modal-footer border-top pt-3 d-flex justify-content-between">
@@ -820,9 +1190,106 @@
                 <button type="button" class="btn btn-burgundy px-4 fw-semibold" id="startExportActionBtn">
                     <i class="bi bi-play-circle me-1"></i> Start Render
                 </button>
-                <a href="#" id="downloadFinalVideoBtn" class="btn btn-green fw-bold d-none px-4">
-                    <i class="bi bi-download me-1"></i> Download MP4
-                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Non-blocking background export progress -->
+<div id="exportJobDock" class="export-job-dock d-none" role="status" aria-live="polite" aria-atomic="true">
+    <button type="button" id="exportDockCollapsed" class="export-job-pill d-none" title="Show export progress">
+        <span class="export-job-pill-spinner" aria-hidden="true"></span>
+        <span id="exportDockPillText">Exporting…</span>
+        <span id="exportDockPillPct" class="export-job-pill-pct">0%</span>
+    </button>
+
+    <div id="exportDockCard" class="export-job-card">
+        <div class="export-job-card-header">
+            <div class="d-flex align-items-center gap-2 min-w-0">
+                <i class="bi bi-film" style="color: var(--brand-burgundy);"></i>
+                <strong class="text-truncate">Export Lyric Video</strong>
+            </div>
+            <div class="d-flex align-items-center gap-1">
+                <button type="button" class="export-job-icon-btn" id="minimizeExportDockBtn" title="Minimize">
+                    <i class="bi bi-dash-lg"></i>
+                </button>
+                <button type="button" class="export-job-icon-btn" id="dismissExportDockBtn" title="Hide">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="export-job-card-body">
+            <div class="d-flex align-items-start gap-2 mb-2">
+                <div class="spinner-border export-job-spinner" id="exportSpinner" role="status"></div>
+                <div class="min-w-0 flex-grow-1">
+                    <div id="exportStageText" class="fw-semibold text-dark">
+                        {% if is_admin %}
+                            Queueing FFmpeg render job...
+                        {% else %}
+                            Preparing your lyric video...
+                        {% endif %}
+                    </div>
+                    <p class="text-secondary small mb-0" id="exportSubText">
+                        {% if is_admin %}
+                            Burning exact word-level timings via libass into progressive streaming MP4.
+                        {% else %}
+                            Creating your synchronized high-definition lyric video.
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+
+            <div class="progress export-job-progress mb-2">
+                <div id="exportProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="background-color: var(--brand-burgundy); width: 10%;"></div>
+            </div>
+            <div class="d-flex justify-content-between text-secondary font-mono small">
+                <span id="exportProgressPct" class="fw-bold" style="color: var(--brand-burgundy);">10%</span>
+                <span id="exportQualityBadgeText">720p Fast Draft</span>
+            </div>
+
+            <div id="exportErrorBox" class="alert alert-danger mt-2 mb-0 d-none text-start small py-2"></div>
+        </div>
+
+        <div class="export-job-card-footer">
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="hideExportDockBtn">Keep working</button>
+            <a href="#" id="downloadFinalVideoBtn" class="btn btn-green btn-sm fw-bold d-none">
+                <i class="bi bi-download me-1"></i> Download MP4
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="premiumUpgradeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content studio-box border premium-upgrade-modal">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold text-dark mb-0">LyricSync Premium</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body pt-2">
+                <p class="text-secondary small mb-3">
+                    Keep generating AI lyric scenes from your songs. Free accounts get a starter pack of credits; Premium adds {{ image_credits_status.premium_credits }} more images.
+                </p>
+                <div class="premium-upgrade-card mb-3">
+                    <div class="premium-upgrade-price">{{ image_credits_status.premium_price_label }}</div>
+                    <ul class="premium-upgrade-perks">
+                        <li><i class="bi bi-check2-circle"></i> {{ image_credits_status.premium_credits }} AI lyric scene images</li>
+                        <li><i class="bi bi-check2-circle"></i> Card checkout via Stripe (when enabled)</li>
+                        <li><i class="bi bi-check2-circle"></i> Same studio tools you already use</li>
+                    </ul>
+                </div>
+                <button type="button" class="btn btn-burgundy w-100 mb-2" id="payWithCardBtn">
+                    <i class="bi bi-credit-card-2-front me-1"></i> Pay with card
+                </button>
+                <p class="text-secondary mb-0" id="premiumCheckoutHint" style="font-size: 0.72rem;">
+                    {% if image_credits_status.stripe_enabled %}
+                        Secure checkout opens in Stripe. Credits are added automatically after payment.
+                    {% else %}
+                        Card payments activate when you add Stripe keys on the server. Until then, contact the admin to upgrade manually.
+                    {% endif %}
+                </p>
+                <div id="premiumCheckoutStatus" class="small mt-2 d-none"></div>
             </div>
         </div>
     </div>
@@ -830,6 +1297,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/fonts.js') }}"></script>
 <script src="{{ url_for('static', filename='js/player.js') }}"></script>
 <script src="{{ url_for('static', filename='js/timeline.js') }}"></script>
 <script src="{{ url_for('static', filename='js/editor.js') }}"></script>

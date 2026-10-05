@@ -7,8 +7,8 @@
 
 .docs-wrapper {
     font-family: 'Outfit', sans-serif !important;
-    background-color: #F8F9FA;
-    color: #1A1A1A;
+    background-color: var(--surface-bg, #F8F9FA);
+    color: var(--text-primary, #1A1A1A);
     min-height: calc(100vh - 68px);
 }
 
@@ -34,14 +34,14 @@
 .docs-wrapper li {
     margin-bottom: 0.65rem;
     font-size: 0.95rem;
-    color: #374151;
+    color: var(--text-secondary, #374151);
 }
 
 .docs-wrapper h1 {
     font-size: 2.3rem;
     font-weight: 800;
     letter-spacing: -0.03em;
-    color: #111827;
+    color: var(--text-primary, #111827);
     margin-bottom: 0.75rem;
 }
 
@@ -49,17 +49,17 @@
     font-size: 1.55rem;
     font-weight: 700;
     letter-spacing: -0.02em;
-    color: #1F2937;
+    color: var(--text-primary, #1F2937);
     margin-top: 2rem;
     margin-bottom: 0.75rem;
     padding-bottom: 0.4rem;
-    border-bottom: 1px solid #E5E7EB;
+    border-bottom: 1px solid var(--border-color, #E5E7EB);
 }
 
 .docs-wrapper h3 {
     font-size: 1.25rem;
     font-weight: 600;
-    color: #374151;
+    color: var(--text-primary, #374151);
     margin-top: 1.4rem;
     margin-bottom: 0.6rem;
 }
@@ -67,7 +67,7 @@
 .docs-wrapper h4 {
     font-size: 1.05rem;
     font-weight: 600;
-    color: #4B5563;
+    color: var(--text-secondary, #4B5563);
     margin-top: 1rem;
     margin-bottom: 0.5rem;
 }
@@ -78,8 +78,8 @@
     top: 68px;
     height: calc(100vh - 68px);
     overflow-y: auto;
-    background-color: #FFFFFF;
-    border-right: 1px solid #E5E7EB;
+    background-color: var(--surface-card, #FFFFFF);
+    border-right: 1px solid var(--border-color, #E5E7EB);
     padding: 1.5rem 1rem;
     font-size: 0.88rem;
 }
@@ -342,4 +342,78 @@
     font-size: 0.82rem;
     color: #6B7280;
     margin-bottom: 0;
+}
+
+/* Dark theme — documentation surfaces & type */
+html[data-theme="dark"] .docs-wrapper {
+    background-color: var(--surface-bg);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .docs-sidebar,
+html[data-theme="dark"] .docs-feature-card,
+html[data-theme="dark"] .diagram-card {
+    background-color: var(--surface-card);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .docs-sidebar-heading,
+html[data-theme="dark"] .docs-toc-title {
+    color: var(--text-muted);
+}
+
+html[data-theme="dark"] .docs-nav-link,
+html[data-theme="dark"] .docs-toc-link,
+html[data-theme="dark"] .docs-lead,
+html[data-theme="dark"] .diagram-card-desc,
+html[data-theme="dark"] .docs-feature-card p {
+    color: var(--text-secondary);
+}
+
+html[data-theme="dark"] .docs-nav-link:hover,
+html[data-theme="dark"] .docs-nav-link.active {
+    color: var(--brand-burgundy);
+    background-color: var(--brand-burgundy-light);
+    border-left-color: var(--brand-burgundy);
+}
+
+html[data-theme="dark"] .docs-toc-link:hover {
+    color: var(--brand-burgundy);
+}
+
+html[data-theme="dark"] .docs-wrapper h1,
+html[data-theme="dark"] .docs-wrapper h2,
+html[data-theme="dark"] .docs-wrapper h3,
+html[data-theme="dark"] .docs-wrapper h4,
+html[data-theme="dark"] .diagram-card-title,
+html[data-theme="dark"] .docs-feature-card h5 {
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .docs-wrapper h2 {
+    border-bottom-color: var(--border-color);
+}
+
+html[data-theme="dark"] .docs-callout {
+    background-color: var(--brand-burgundy-light);
+    border-left-color: var(--brand-burgundy);
+    color: var(--text-primary);
+}
+
+html[data-theme="dark"] .docs-callout.tip {
+    background-color: var(--brand-green-light);
+    border-left-color: var(--brand-green-accent);
+}
+
+html[data-theme="dark"] .docs-callout.info {
+    background-color: #152033;
+    border-left-color: #60A5FA;
+}
+
+html[data-theme="dark"] .docs-wrapper p,
+html[data-theme="dark"] .docs-wrapper li {
+    color: var(--text-secondary);
+    font-size: 0.97rem;
+    line-height: 1.55 !important;
 }

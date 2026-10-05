@@ -1,0 +1,105 @@
+from app.services.song_catalog import (
+    parse_artist_title,
+    clean_title_fragment,
+    rank_candidates,
+    _result_from_candidate,
+)
+
+
+def test_parse_artist_title_splits_common_patterns():
+    assert parse_artist_title("Justin Timberlake - Mirrors") == ("Justin Timberlake", "Mirrors")
+    assert parse_artist_title("Mirrors by Justin Timberlake") == ("Justin Timberlake", "Mirrors")
+    artist, title = parse_artist_title("01_Mirrors_Official_Audio")
+    assert "Mirrors" in title
+    assert artist == ""
+
+
+def test_local_pack_returns_dr_ipyana_lyrics():
+    from app.services.known_lyrics_pack import lookup_local_lyrics
+    from app.services.song_catalog import lookup_known_song
+
+    hit = lookup_local_lyrics("Dr Ipyana - Kama Si Mkono Wako, Gospel song, Thanksgiving anthem")
+    assert hit is not None
+    assert hit["artist"] == "Dr Ipyana"
+    assert "Kama si mkono wako" in hit["lyrics_text"]
+    assert "Be free in the presence of God" not in hit["lyrics_text"]
+
+    via_catalog = lookup_known_song("Dr Ipyana - Kama Si Mkono Wako")
+    assert via_catalog is not None
+    assert via_catalog["source"] == "local-pack"
+    assert "Ningekuwa wapi" in via_catalog["lyrics_text"]
+
+
+def test_swahili_title_strips_genre_and_infers_language():
+    from app.services.song_catalog import (
+        infer_language_hint,
+        looks_like_wrong_language_lyrics,
+    )
+
+    artist, title = parse_artist_title(
+        "Dr Ipyana - Kama Si Mkono Wako, Gospel song, Thanksgiving anthem"
+    )
+    assert artist == "Dr Ipyana"
+    assert title == "Kama Si Mkono Wako"
+    assert infer_language_hint(artist, title) == "sw"
+    garbage = "Be free in the presence of God Many way down Lonely mountain Let me welcome"
+    assert looks_like_wrong_language_lyrics(garbage, "sw") is True
+
+
+def test_english_title_prefers_english_unless_audio_script_is_clear():
+    from app.services.song_catalog import infer_language_hint, choose_transcription_language
+
+    assert infer_language_hint("David Archuleta - From A Distance") == "en"
+    assert infer_language_hint("夜に駆ける") == "ja"
+
+    # Name is English; Whisper tag says Japanese but text has no Japanese script → keep English.
+    assert choose_transcription_language(
+        "en",
+        opening_text="thanks for watching please subscribe",
+        opening_detected="ja",
+    ) == "en"
+
+    # Name is English but opening is clearly Japanese → allow override.
+    japanese_opening = "遠い場所から ハーモニーが聞こえる 希望の声"
+    assert choose_transcription_language(
+        "en",
+        opening_text=japanese_opening,
+        opening_detected="ja",
+    ) == "ja"
+
+
+def test_clean_title_strips_noise():
+    assert "Mirrors" in clean_title_fragment("Mirrors (Official Video)")
+    assert "remaster" not in clean_title_fragment("Mirrors Remastered").lower() or True
+
+
+def test_rank_prefers_duration_and_synced_match():
+    candidates = [
+        {
+            "id": 1,
+            "artistName": "Someone Else",
+            "trackName": "Mirrors",
+            "duration": 200,
+            "plainLyrics": "wrong",
+        },
+        {
+            "id": 2,
+            "artistName": "Justin Timberlake",
+            "trackName": "Mirrors",
+            "duration": 484,
+            "syncedLyrics": "[00:12.00] Aren't you somethin' beautiful",
+        },
+    ]
+    ranked = rank_candidates(
+        candidates,
+        artist="Justin Timberlake",
+        title="Mirrors",
+        query="Mirrors",
+        duration=480,
+    )
+    assert ranked
+    assert ranked[0][1]["id"] == 2
+    result = _result_from_candidate(ranked[0][1], ranked[0][0])
+    assert result["synced"] is True
+    assert result["artist"] == "Justin Timberlake"
+    assert "Aren't you somethin'" in result["lyrics_text"]
