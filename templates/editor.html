@@ -952,8 +952,15 @@
         <!-- Center Preview Canvas (Centered Artboard, 100% visible while editing) -->
         <div class="preview-stage flex-grow-1 d-flex flex-column position-relative overflow-hidden justify-content-center align-items-center p-4">
             {% set bg_template = (canonical.get('meta') or {}).get('background_template', 'burgundy_studio') %}
-            {% set bg_stream = url_for('projects.stream_project_media', project_id=project.id, kind='video') %}
-            {% set bg_poster = url_for('projects.preview_background_template', template_id=bg_template) %}
+            {% set bg_media_type = (canonical.get('meta') or {}).get('background_media_type', 'image') %}
+            {% set bg_is_custom = bg_template in ['ai_lyric_scene', 'custom_video', 'library_image', 'library_video'] or (canonical.get('meta') or {}).get('ai_background') %}
+            {% set bg_bust = (project.updated_at.timestamp()|int) if project.updated_at else 0 %}
+            {% set bg_stream = url_for('projects.stream_project_media', project_id=project.id, kind='video', t=bg_bust) %}
+            {% if bg_is_custom %}
+                {% set bg_poster = bg_stream %}
+            {% else %}
+                {% set bg_poster = url_for('projects.preview_background_template', template_id=bg_template) %}
+            {% endif %}
             <div id="videoContainer"
                  class="video-container position-relative ratio-16-9 quality-draft"
                  data-has-video="{{ 'true' if project.is_video_background else 'false' }}"

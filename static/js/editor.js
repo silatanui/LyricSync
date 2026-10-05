@@ -1183,6 +1183,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const styleConfig = buildStylePayloadForSave();
                 await LyricSyncAPI.updateStyle(projectId, styleConfig, { aspect_ratio: aspect });
+                // Keep AI / library scenes; regenerating would replace the painted image.
+                if (selectedBackgroundTemplate === 'ai_lyric_scene'
+                    || selectedBackgroundTemplate === 'library_image'
+                    || selectedBackgroundTemplate === 'library_video'
+                    || selectedBackgroundTemplate === 'custom_video') {
+                    return;
+                }
                 const res = await LyricSyncAPI.updateBackgroundTemplate(projectId, selectedBackgroundTemplate, aspect);
                 if (res.success && res.video_url) {
                     await applyBackgroundResponse(res);
@@ -1291,20 +1298,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         const abs = (typeof window.lyricSyncAbsoluteUrl === 'function')
             ? window.lyricSyncAbsoluteUrl
             : (p) => p;
-        const posterUrl = videoContainer?.getAttribute('data-bg-poster')
-            || abs(`/api/projects/templates/preview/${res.template || selectedBackgroundTemplate || 'burgundy_studio'}`);
+        const templateId = res.template || selectedBackgroundTemplate || 'burgundy_studio';
+        const isProjectOwnedBg = (
+            templateId === 'ai_lyric_scene'
+            || templateId === 'custom_video'
+            || templateId === 'library_image'
+            || templateId === 'library_video'
+            || !!res.ai
+        );
+        // For AI / uploads, the project media stream IS the poster. Catalog thumbs
+        // must never replace the painted scene after apply or on later fallbacks.
+        const streamUrl = res.video_url || videoContainer?.getAttribute('data-bg-stream') || '';
+        const catalogPoster = abs(`/api/projects/templates/preview/${templateId}`);
+        const posterUrl = isProjectOwnedBg
+            ? streamUrl
+            : (videoContainer?.getAttribute('data-bg-poster') || catalogPoster);
         if (videoContainer) {
             videoContainer.setAttribute('data-has-video', isVideoBg ? 'true' : 'false');
-            if (res.video_url) videoContainer.setAttribute('data-bg-stream', res.video_url);
-            if (res.template) {
-                videoContainer.setAttribute('data-bg-template', res.template);
-                videoContainer.setAttribute('data-bg-poster', abs(`/api/projects/templates/preview/${res.template}`));
-            }
+            if (streamUrl) videoContainer.setAttribute('data-bg-stream', streamUrl);
+            if (res.template) videoContainer.setAttribute('data-bg-template', res.template);
+            videoContainer.setAttribute('data-bg-poster', posterUrl || catalogPoster);
         }
         await player.setMediaMode({
             hasVideo: isVideoBg,
-            videoSrc: isVideoBg ? res.video_url : undefined,
-            imageSrc: isVideoBg ? posterUrl : res.video_url,
+            videoSrc: isVideoBg ? streamUrl : undefined,
+            imageSrc: isVideoBg ? (posterUrl || catalogPoster) : streamUrl,
             preserveTime: keepTime,
         });
         player.seekTo(keepTime);

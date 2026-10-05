@@ -154,7 +154,8 @@ def stream_project_media(project_id: str, kind: str):
 
     from app.utils.files import detect_mime_type
     response = send_file(str(path), mimetype=detect_mime_type(path), conditional=True)
-    response.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=3600"
+    # Avoid sticky browser caches showing a previous theme after AI/custom swaps.
+    response.headers["Cache-Control"] = "private, max-age=60, must-revalidate"
     response.headers["Accept-Ranges"] = "bytes"
     return response
 
@@ -346,6 +347,9 @@ def _apply_background_file(project, bg_file: Path, template_id: str, aspect_rati
     canonical.setdefault("meta", {})["background_media_type"] = "image" if is_image else "video"
     if extra_meta:
         canonical["meta"].update(extra_meta)
+    # Touch updated_at so editor reload cache-busts the media stream URL.
+    from datetime import datetime, timezone
+    project.updated_at = datetime.now(timezone.utc)
     canonical.setdefault("render", {})["aspect_ratio"] = aspect_ratio
     canonical.setdefault("style", {})["aspectRatio"] = aspect_ratio
     project.set_canonical_json(canonical)

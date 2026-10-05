@@ -131,6 +131,7 @@ def resolve_project_media(project, kind: str) -> Path | None:
                 template_id = (canonical.get("meta", {}) or {}).get("background_template") or ""
                 media_type = (canonical.get("meta", {}) or {}).get("background_media_type") or ""
             except Exception:
+                canonical = {}
                 template_id, media_type = "", ""
             if template_id and template_id != "custom_video":
                 preferred_exts = (
@@ -148,33 +149,69 @@ def resolve_project_media(project, kind: str) -> Path | None:
                     if match.is_file() and match.stat().st_size > 0:
                         _heal_project_media_path(project, kind, match)
                         return match
-            for match in proj_dir.iterdir():
-                if match.is_file() and match.suffix.lower() in (".mp4", ".mov", ".webm", ".mkv"):
-                    if match.stat().st_size > 0:
+            # Prefer archived AI generations over any leftover catalog still.
+            if template_id == "ai_lyric_scene" or bool((canonical.get("meta") or {}).get("ai_background")):
+                try:
+                    files_dir = proj_dir / "files"
+                    if files_dir.is_dir():
+                        archives = sorted(
+                            (
+                                p for p in files_dir.glob("ai_lyric_scene_*.webp")
+                                if p.is_file() and p.stat().st_size > 0
+                            ),
+                            key=lambda p: p.stat().st_mtime,
+                            reverse=True,
+                        )
+                        if archives:
+                            active = proj_dir / "background_ai_lyric_scene.webp"
+                            try:
+                                if not active.exists() or active.stat().st_size <= 0:
+                                    import shutil
+                                    shutil.copy2(archives[0], active)
+                            except Exception:
+                                active = archives[0]
+                            if active.exists() and active.stat().st_size > 0:
+                                _heal_project_media_path(project, kind, active)
+                                return active
+                except Exception:
+                    pass
+            if template_id != "ai_lyric_scene":
+                for match in proj_dir.iterdir():
+                    if match.is_file() and match.suffix.lower() in (".mp4", ".mov", ".webm", ".mkv"):
+                        if match.stat().st_size > 0:
+                            _heal_project_media_path(project, kind, match)
+                            return match
+                for match in proj_dir.glob("background_*.webp"):
+                    if match.is_file() and match.stat().st_size > 0:
                         _heal_project_media_path(project, kind, match)
                         return match
-            for match in proj_dir.glob("background_*.webp"):
-                if match.is_file() and match.stat().st_size > 0:
-                    _heal_project_media_path(project, kind, match)
-                    return match
-            for match in proj_dir.glob("background_*.png"):
-                if match.is_file() and match.stat().st_size > 0:
-                    _heal_project_media_path(project, kind, match)
-                    return match
+                for match in proj_dir.glob("background_*.png"):
+                    if match.is_file() and match.stat().st_size > 0:
+                        _heal_project_media_path(project, kind, match)
+                        return match
 
     # 4. If kind == 'video' and missing on disk, regenerate from the chosen theme.
+    # Never synthesize placeholders for AI / custom / library backgrounds — that
+    # would overwrite the user's painted or uploaded scene on reload.
     if kind == "video":
         canonical = project.get_canonical_json()
-        template_id = canonical.get("meta", {}).get("background_template", "burgundy_studio")
+        template_id = (canonical.get("meta", {}) or {}).get("background_template", "burgundy_studio") or "burgundy_studio"
+        media_type = (canonical.get("meta", {}) or {}).get("background_media_type") or ""
+        skip_regen = template_id in {
+            "ai_lyric_scene",
+            "custom_video",
+            "library_image",
+            "library_video",
+        } or bool((canonical.get("meta") or {}).get("ai_background"))
+        if skip_regen:
+            return None
         aspect_ratio = canonical.get("render", {}).get("aspect_ratio", "16:9")
         try:
             from app.services.background_generator import BackgroundGenerator
             from app.services.theme_catalog import get_theme
             w, h = BackgroundGenerator.get_dimensions(aspect_ratio)
             theme = get_theme(template_id) or {}
-            is_video_theme = (theme.get("media_type") == "video") or (
-                (canonical.get("meta", {}) or {}).get("background_media_type") == "video"
-            )
+            is_video_theme = (theme.get("media_type") == "video") or (media_type == "video")
             if is_video_theme:
                 bg_file = proj_dir / f"background_{template_id}.mp4"
                 if not bg_file.exists() or bg_file.stat().st_size < 2000:
