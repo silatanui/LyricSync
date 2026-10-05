@@ -127,10 +127,13 @@ class Project(db.Model):
         }
 
     def to_dict(self):
+        from app.services.project_privacy import project_is_public
         return {
             "id": self.id,
             "name": self.name,
             "status": self.status,
+            "user_id": self.user_id,
+            "is_public": project_is_public(self),
             "audio": {
                 "path": self.audio_path,
                 "duration": self.audio_duration,

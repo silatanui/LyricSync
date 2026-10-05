@@ -21,9 +21,9 @@
             </a>
             <div class="editor-project-meta">
                 <input type="text" id="editorProjectName" class="editor-project-name" value="{{ project.name }}" title="Project name">
-                <label class="project-visibility-toggle" title="Private projects never appear on the public homepage">
+                <label class="project-visibility-toggle" title="Projects stay private until you turn this on. Only then do they appear on the public homepage.">
                     <input type="checkbox" id="projectPublicToggle" {% if canonical.get('meta', {}).get('is_public') is sameas true %}checked{% endif %}>
-                    <i class="bi bi-globe2"></i><span>Public</span>
+                    <i class="bi bi-globe2"></i><span>{% if canonical.get('meta', {}).get('is_public') is sameas true %}Public{% else %}Private{% endif %}</span>
                 </label>
             </div>
         </div>

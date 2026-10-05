@@ -7,13 +7,34 @@ from app.extensions import db
 from app.models import Project, MediaAsset, RenderJob
 from app.utils.files import get_project_dir, get_project_output_dir, resolve_project_media, resolve_rendered_video
 from app.services.background_generator import BackgroundGenerator
+from app.services.project_privacy import (
+    normalize_is_public,
+    project_is_public,
+    user_can_access_project,
+    user_can_edit_project,
+    visible_projects_query,
+)
 
 projects_bp = Blueprint("projects", __name__, url_prefix="/api/projects")
 
+
+def _forbidden(message: str = "You do not have access to this project."):
+    return jsonify({
+        "success": False,
+        "error": {"code": "FORBIDDEN", "message": message, "retryable": False},
+    }), 403
+
+
 @projects_bp.route("", methods=["GET"])
 def list_projects():
-    """List all projects."""
-    projects = db.session.query(Project).order_by(Project.created_at.desc()).all()
+    """List projects visible to the current user (admin sees all)."""
+    if not current_user.is_authenticated:
+        return jsonify({"success": True, "projects": []})
+    projects = (
+        visible_projects_query(db.session.query(Project))
+        .order_by(Project.created_at.desc())
+        .all()
+    )
     return jsonify({
         "success": True,
         "projects": [p.to_dict() for p in projects]
@@ -28,15 +49,19 @@ def get_project(project_id: str):
             "success": False,
             "error": {"code": "PROJECT_NOT_FOUND", "message": "Project not found.", "retryable": False}
         }), 404
+    if not user_can_access_project(current_user, project):
+        return _forbidden()
 
     rendered_file = resolve_rendered_video(project)
     has_render = rendered_file is not None
     download_url = url_for("projects.download_project_render", project_id=project.id) if has_render else None
+    canonical = project.get_canonical_json()
 
     return jsonify({
         "success": True,
         "project": project.to_dict(),
-        "canonical": project.get_canonical_json(),
+        "canonical": canonical,
+        "is_public": project_is_public(canonical),
         "has_render": has_render,
         "download_url": download_url
     })
@@ -87,6 +112,8 @@ def update_project(project_id: str):
             "success": False,
             "error": {"code": "PROJECT_NOT_FOUND", "message": "Project not found.", "retryable": False}
         }), 404
+    if not user_can_edit_project(current_user, project):
+        return _forbidden("Sign in as the project owner to change visibility or details.")
 
     data = request.get_json() or {}
     name = data.get("name", project.name)
@@ -99,10 +126,15 @@ def update_project(project_id: str):
     project.name = name.strip()[:255]
     canonical = project.get_canonical_json()
     if "is_public" in data:
-        canonical.setdefault("meta", {})["is_public"] = bool(data["is_public"])
+        # Strict parse so accidental truthy strings never publish a project.
+        canonical.setdefault("meta", {})["is_public"] = normalize_is_public(data.get("is_public"))
     project.set_canonical_json(canonical)
     db.session.commit()
-    return jsonify({"success": True, "project": project.to_dict(), "is_public": canonical.get("meta", {}).get("is_public", False)})
+    return jsonify({
+        "success": True,
+        "project": project.to_dict(),
+        "is_public": project_is_public(canonical),
+    })
 
 @projects_bp.route("/<project_id>/media/<kind>", methods=["GET"])
 def stream_project_media(project_id: str, kind: str):
@@ -110,6 +142,8 @@ def stream_project_media(project_id: str, kind: str):
     project = db.session.get(Project, project_id)
     if not project:
         return "Project not found", 404
+    if not user_can_access_project(current_user, project):
+        return "Forbidden", 403
 
     if kind in ("rendered", "output"):
         path = resolve_rendered_video(project)
@@ -134,6 +168,8 @@ def download_project_render(project_id: str):
             "success": False,
             "error": {"code": "PROJECT_NOT_FOUND", "message": "Project not found", "retryable": False}
         }), 404
+    if not user_can_access_project(current_user, project):
+        return _forbidden()
 
     job_path = resolve_rendered_video(project)
     if not job_path or not job_path.exists():
@@ -752,6 +788,8 @@ def stream_project_file(project_id: str, asset_id: str):
     project = db.session.get(Project, project_id)
     if not project:
         return "Project not found", 404
+    if not user_can_access_project(current_user, project):
+        return "Forbidden", 403
     asset = db.session.get(MediaAsset, asset_id)
     if not asset or asset.project_id != project_id:
         return "File not found", 404

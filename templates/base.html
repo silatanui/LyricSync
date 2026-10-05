@@ -148,103 +148,103 @@
 
                     <div class="dropdown-menu dropdown-menu-end user-dropdown-menu shadow-lg border p-0 mt-2" aria-labelledby="userNavbarDropdown">
                         <!-- User Card Header -->
-                        <div class="user-dropdown-header p-3 border-bottom d-flex align-items-center gap-3">
+                        <div class="user-dropdown-header">
                             <div class="user-avatar-wrapper-lg flex-shrink-0">
                                 {% if current_user.avatar_url %}
-                                    <img src="{{ current_user.avatar_url }}" alt="{{ current_user.initials }}" class="rounded-circle shadow-sm" width="46" height="46">
+                                    <img src="{{ current_user.avatar_url }}" alt="{{ current_user.initials }}" class="rounded-circle shadow-sm" width="48" height="48">
                                 {% else %}
                                     <div class="user-avatar-initials-lg rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-sm">
                                         {{ current_user.initials }}
                                     </div>
                                 {% endif %}
                             </div>
-                            <div class="d-flex flex-column overflow-hidden flex-grow-1">
-                                <span class="fw-bold text-dark text-truncate" style="font-size: 0.95rem;">
+                            <div class="user-dropdown-identity">
+                                <span class="user-dropdown-name">
                                     {{ current_user.display_name or current_user.email.split('@')[0] }}
                                 </span>
-                                <span class="text-secondary small text-truncate font-mono" style="font-size: 0.75rem;">
+                                <span class="user-dropdown-email">
                                     {{ current_user.email }}
                                 </span>
                                 {% if is_admin %}
-                                <div class="d-flex align-items-center gap-1.5 mt-1">
-                                    <span class="badge bg-danger text-white border border-danger fw-semibold" style="font-size: 0.65rem; padding: 2px 6px;">
-                                        <i class="bi bi-shield-lock-fill me-0.5"></i> System Admin
+                                <div class="user-dropdown-meta">
+                                    <span class="user-role-badge is-admin">
+                                        <i class="bi bi-shield-lock-fill"></i> System Admin
                                     </span>
-                                    <span class="text-danger-emphasis small" style="font-size: 0.68rem;">Full Access</span>
+                                    <span class="user-dropdown-count">Full Access</span>
                                 </div>
                                 {% else %}
-                                <div class="d-flex align-items-center gap-1.5 mt-1">
-                                    <span class="badge bg-burgundy-subtle text-burgundy border border-burgundy-subtle fw-semibold" style="font-size: 0.65rem; padding: 2px 6px;">
-                                        <i class="bi bi-stars me-0.5"></i> Studio Creator
+                                <div class="user-dropdown-meta">
+                                    <span class="user-role-badge">
+                                        <i class="bi bi-stars"></i> Studio Creator
                                     </span>
-                                    <span class="text-muted" style="font-size: 0.68rem;">• {{ current_user.projects|length }} Project{% if current_user.projects|length != 1 %}s{% endif %}</span>
+                                    <span class="user-dropdown-count">{{ current_user.projects|length }} Project{% if current_user.projects|length != 1 %}s{% endif %}</span>
                                 </div>
                                 {% endif %}
                             </div>
                         </div>
 
                         <!-- Dropdown Section 1: Projects & Studio -->
-                        <div class="p-2 border-bottom">
-                            <span class="dropdown-section-title px-2 py-1 text-uppercase text-secondary fw-bold d-block" style="font-size: 0.68rem; letter-spacing: 0.05em;">Projects &amp; Studio</span>
-                            <a class="dropdown-item rounded-2 py-2 px-2.5 d-flex align-items-center gap-2.5" href="{{ url_for('views.upload_page') }}">
-                                <div class="menu-icon-box bg-burgundy-subtle text-burgundy"><i class="bi bi-plus-circle-fill" style="color: var(--brand-burgundy);"></i></div>
-                                <div>
-                                    <span class="d-block fw-semibold text-dark" style="font-size: 0.85rem;">New Lyric Project</span>
-                                    <small class="text-secondary d-block" style="font-size: 0.72rem;">Upload song &amp; auto-sync</small>
+                        <div class="user-dropdown-section">
+                            <span class="dropdown-section-title">Projects &amp; Studio</span>
+                            <a class="dropdown-item user-menu-item" href="{{ url_for('views.upload_page') }}">
+                                <div class="menu-icon-box"><i class="bi bi-plus-circle-fill"></i></div>
+                                <div class="user-menu-copy">
+                                    <span class="user-menu-title">New Lyric Project</span>
+                                    <span class="user-menu-sub">Upload song &amp; auto-sync</span>
                                 </div>
                             </a>
-                            <a class="dropdown-item rounded-2 py-2 px-2.5 d-flex align-items-center gap-2.5" href="{{ url_for('views.dashboard') }}">
-                                <div class="menu-icon-box bg-primary-subtle text-primary"><i class="bi bi-folder2-open text-primary"></i></div>
-                                <div>
-                                    <span class="d-block fw-semibold text-dark" style="font-size: 0.85rem;">My Projects</span>
-                                    <small class="text-secondary d-block" style="font-size: 0.72rem;">Browse revisions &amp; videos</small>
+                            <a class="dropdown-item user-menu-item" href="{{ url_for('views.dashboard') }}">
+                                <div class="menu-icon-box"><i class="bi bi-folder2-open"></i></div>
+                                <div class="user-menu-copy">
+                                    <span class="user-menu-title">My Projects</span>
+                                    <span class="user-menu-sub">Browse revisions &amp; videos</span>
                                 </div>
                             </a>
-                            <a class="dropdown-item rounded-2 py-2 px-2.5 d-flex align-items-center gap-2.5" href="{{ url_for('views.upload_page') }}?quick=1">
-                                <div class="menu-icon-box bg-success-subtle text-success"><i class="bi bi-magic text-success"></i></div>
-                                <div>
-                                    <span class="d-block fw-semibold text-dark" style="font-size: 0.85rem;">AI Quick Sync</span>
-                                    <small class="text-secondary d-block" style="font-size: 0.72rem;">One-click transcription draft</small>
+                            <a class="dropdown-item user-menu-item" href="{{ url_for('views.upload_page') }}?quick=1">
+                                <div class="menu-icon-box"><i class="bi bi-magic"></i></div>
+                                <div class="user-menu-copy">
+                                    <span class="user-menu-title">AI Quick Sync</span>
+                                    <span class="user-menu-sub">One-click transcription draft</span>
                                 </div>
                             </a>
                         </div>
 
                         {% if is_admin %}
                         <!-- Admin Technical Diagnostics (Restricted strictly to silatanuikipngetich@gmail.com) -->
-                        <div class="p-2 border-bottom bg-light">
-                            <span class="dropdown-section-title px-2 py-1 text-uppercase text-danger fw-bold d-block" style="font-size: 0.65rem; letter-spacing: 0.05em;">
-                                <i class="bi bi-cpu-fill me-1"></i> Admin Diagnostics
+                        <div class="user-dropdown-section user-dropdown-admin">
+                            <span class="dropdown-section-title is-admin-title">
+                                <i class="bi bi-cpu-fill"></i> Admin Diagnostics
                             </span>
-                            <div class="px-2 py-1 small text-secondary" style="font-size: 0.75rem;">
-                                <div class="d-flex justify-content-between mb-1">
-                                    <span>AI Model:</span>
-                                    <span class="fw-semibold text-dark font-mono">Whisper-1</span>
+                            <div class="user-admin-meta">
+                                <div class="user-admin-row">
+                                    <span>AI Model</span>
+                                    <span class="font-mono">Whisper-1</span>
                                 </div>
-                                <div class="d-flex justify-content-between mb-1">
-                                    <span>Render Engine:</span>
-                                    <span class="fw-semibold text-dark font-mono">FFmpeg (libass)</span>
+                                <div class="user-admin-row">
+                                    <span>Render Engine</span>
+                                    <span class="font-mono">FFmpeg (libass)</span>
                                 </div>
                             </div>
-                            <a class="dropdown-item rounded-2 py-1.5 px-2.5 d-flex align-items-center justify-content-between" href="{{ url_for('views.health_check') }}" target="_blank">
-                                <span class="d-flex align-items-center gap-2 small text-dark">
-                                    <i class="bi bi-activity text-success"></i> System Health &amp; Storage
-                                </span>
-                                <span class="badge bg-success-subtle text-success small font-mono" style="font-size: 0.65rem;">Live</span>
+                            <a class="dropdown-item user-menu-item user-menu-item-compact" href="{{ url_for('views.health_check') }}" target="_blank">
+                                <i class="bi bi-activity user-menu-inline-icon" style="color: #22C55E;"></i>
+                                <span class="user-menu-title">System Health &amp; Storage</span>
                             </a>
                         </div>
                         {% endif %}
 
                         <!-- Support & Help -->
-                        <div class="p-2 border-bottom">
-                            <a class="dropdown-item rounded-2 py-1.5 px-2.5 d-flex align-items-center gap-2 small text-dark" href="https://tanuisila.dev/contact.php" target="_blank">
-                                <i class="bi bi-question-circle text-secondary"></i> Help &amp; Support
+                        <div class="user-dropdown-section user-dropdown-section-quiet">
+                            <a class="dropdown-item user-menu-item user-menu-item-compact" href="https://tanuisila.dev/contact.php" target="_blank">
+                                <i class="bi bi-question-circle user-menu-inline-icon"></i>
+                                <span class="user-menu-title">Help &amp; Support</span>
                             </a>
                         </div>
 
                         <!-- Sign Out -->
-                        <div class="p-2 bg-light rounded-bottom">
-                            <a href="{{ url_for('auth.logout') }}" class="dropdown-item rounded-2 py-2 px-2.5 d-flex align-items-center gap-2 text-danger fw-semibold" style="font-size: 0.85rem;">
-                                <i class="bi bi-box-arrow-right fs-6"></i> Sign Out
+                        <div class="user-dropdown-section user-dropdown-section-footer">
+                            <a href="{{ url_for('auth.logout') }}" class="dropdown-item user-menu-item user-menu-item-compact user-menu-signout">
+                                <i class="bi bi-box-arrow-right user-menu-inline-icon"></i>
+                                <span class="user-menu-title">Sign Out</span>
                             </a>
                         </div>
                     </div>

@@ -1,9 +1,11 @@
 import os
 from pathlib import Path
 from flask import Blueprint, request, jsonify, current_app, url_for
+from flask_login import current_user
 from werkzeug.utils import secure_filename
 from app.extensions import db
 from app.models import Project, MediaAsset
+from app.services.project_privacy import ensure_private_meta
 from app.utils.ids import generate_project_id, generate_asset_id
 from app.utils.validation import validate_audio_file, validate_video_file
 from app.utils.files import get_project_dir, calculate_checksum, detect_mime_type
@@ -47,6 +49,16 @@ def create_project():
     Ingests audio, applies chosen studio background template or custom video, probes media,
     and automatically executes initial transcription pipeline before opening studio.
     """
+    if not current_user.is_authenticated:
+        return jsonify({
+            "success": False,
+            "error": {
+                "code": "AUTH_REQUIRED",
+                "message": "Sign in to create a private project. Only you will see it unless you publish it.",
+                "retryable": False,
+            },
+        }), 401
+
     if "audio" not in request.files:
         return jsonify({
             "success": False,
@@ -169,8 +181,10 @@ def create_project():
 
     video_dur = v_probe.get("duration", audio_dur)
 
+    owner_id = current_user.id if current_user.is_authenticated else None
     project = Project(
         id=proj_id,
+        user_id=owner_id,
         name=project_name,
         status="ready",
         audio_path=str(audio_saved_path.resolve()),
@@ -209,7 +223,7 @@ def create_project():
     db.session.add(audio_asset)
     db.session.add(video_asset)
 
-    # Initialize canonical JSON
+    # Initialize canonical JSON — always private unless the owner later opts in.
     canonical = project.get_canonical_json()
     canonical["media"]["audio_path"] = str(audio_saved_path.resolve())
     canonical["media"]["video_path"] = str(video_saved_path.resolve())
@@ -218,8 +232,10 @@ def create_project():
     canonical["media"]["fps"] = v_probe.get("fps", 30.0)
     canonical["media"]["width"] = v_probe.get("width", t_width)
     canonical["media"]["height"] = v_probe.get("height", t_height)
-    canonical.setdefault("meta", {})["background_template"] = selected_template
-    canonical.setdefault("meta", {})["auto_title"] = is_auto_title
+    ensure_private_meta(canonical)
+    canonical["meta"]["is_public"] = False
+    canonical["meta"]["background_template"] = selected_template
+    canonical["meta"]["auto_title"] = is_auto_title
     canonical.setdefault("render", {})["aspect_ratio"] = aspect_ratio
     canonical.setdefault("style", {})["aspectRatio"] = aspect_ratio
     project.set_canonical_json(canonical)

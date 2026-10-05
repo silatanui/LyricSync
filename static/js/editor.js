@@ -316,14 +316,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (projectPublicToggle) {
+        const visibilityLabel = projectPublicToggle.closest('label')?.querySelector('span');
+        const syncVisibilityLabel = () => {
+            if (visibilityLabel) {
+                visibilityLabel.textContent = projectPublicToggle.checked ? 'Public' : 'Private';
+            }
+        };
+        syncVisibilityLabel();
         projectPublicToggle.addEventListener('change', async () => {
+            syncVisibilityLabel();
             try {
                 const response = await LyricSyncAPI.updateProject(projectId, {
-                    is_public: projectPublicToggle.checked,
+                    is_public: !!projectPublicToggle.checked,
                 });
                 if (!response.success) throw new Error(response.error?.message || 'Could not update visibility');
+                if (typeof response.is_public === 'boolean') {
+                    projectPublicToggle.checked = response.is_public;
+                    syncVisibilityLabel();
+                }
             } catch (error) {
                 projectPublicToggle.checked = !projectPublicToggle.checked;
+                syncVisibilityLabel();
                 console.warn('Could not update project visibility:', error);
             }
         });

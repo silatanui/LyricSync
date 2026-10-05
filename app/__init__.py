@@ -80,6 +80,32 @@ def create_app(config_class=Config):
                     db.session.commit()
                 db.session.execute(db.text("UPDATE users SET email_verified = 1 WHERE email = 'silatanuikipngetich@gmail.com' OR google_id IS NOT NULL"))
                 db.session.commit()
+                # Legacy projects were created without an owner and appeared in every
+                # dashboard. Assign orphans to the admin account and keep them private
+                # unless meta.is_public was explicitly set to true.
+                try:
+                    from app.models import User, Project
+                    from app.models.user import ADMIN_EMAIL
+                    from app.services.project_privacy import ensure_private_meta, normalize_is_public
+                    admin = db.session.query(User).filter(
+                        db.func.lower(User.email) == ADMIN_EMAIL.lower()
+                    ).first()
+                    if admin:
+                        orphans = db.session.query(Project).filter(Project.user_id.is_(None)).all()
+                        for orphan in orphans:
+                            orphan.user_id = admin.id
+                    for project in db.session.query(Project).all():
+                        canonical = project.get_canonical_json()
+                        ensure_private_meta(canonical)
+                        # Never treat missing/ambiguous values as public.
+                        canonical["meta"]["is_public"] = normalize_is_public(
+                            canonical.get("meta", {}).get("is_public")
+                        )
+                        project.set_canonical_json(canonical)
+                    db.session.commit()
+                except Exception as privacy_err:
+                    db.session.rollback()
+                    flask_app.logger.warning(f"Project privacy migration warning: {privacy_err}")
             if "render_jobs" in inspector.get_table_names():
                 job_cols = [c["name"] for c in inspector.get_columns("render_jobs")]
                 if "detail_json" not in job_cols:

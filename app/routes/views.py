@@ -1,9 +1,15 @@
-from flask import Blueprint, render_template, abort, current_app
-from flask_login import current_user
+from flask import Blueprint, render_template, abort, current_app, redirect, url_for
+from flask_login import current_user, login_required
 from pathlib import Path
 from app.extensions import db
 from app.models import Project
 from app.services.media_probe import get_ffmpeg_binary, get_ffprobe_binary
+from app.services.project_privacy import (
+    project_is_public,
+    user_can_access_project,
+    user_can_edit_project,
+    visible_projects_query,
+)
 import shutil
 
 views_bp = Blueprint("views", __name__)
@@ -13,8 +19,7 @@ def home():
     """Public portfolio and product homepage."""
     projects = []
     for project in db.session.query(Project).order_by(Project.created_at.desc()).all():
-        canonical = project.get_canonical_json()
-        if canonical.get("meta", {}).get("is_public") is True:
+        if project_is_public(project):
             projects.append(project)
     return render_template("home.html", project_count=len(projects), public_projects=projects)
 
@@ -33,22 +38,31 @@ def docs_page():
     return render_template("docs.html")
 
 @views_bp.route("/projects")
+@login_required
 def dashboard():
-    """Projects dashboard page."""
-    projects = db.session.query(Project).order_by(Project.created_at.desc()).all()
+    """Projects dashboard — only the signed-in user's projects (admin sees all)."""
+    query = visible_projects_query(db.session.query(Project)).order_by(Project.created_at.desc())
+    projects = query.all()
     return render_template("dashboard.html", projects=projects)
 
 @views_bp.route("/upload")
+@login_required
 def upload_page():
-    """Media upload interface."""
+    """Media upload interface — sign-in required so new projects stay private to the owner."""
     return render_template("upload.html")
 
 @views_bp.route("/editor/<project_id>")
 def editor_page(project_id: str):
-    """Studio synchronized editor page."""
+    """Studio synchronized editor page — private projects require ownership."""
     project = db.session.get(Project, project_id)
     if not project:
         abort(404)
+    if not user_can_edit_project(current_user, project):
+        if project_is_public(project):
+            return redirect(url_for("views.public_project_page", project_id=project_id))
+        if not current_user.is_authenticated:
+            return redirect(url_for("auth.login_page"))
+        abort(403)
     from app.utils.files import resolve_rendered_video, resolve_project_media
     # Heal / regenerate missing theme media before the page paints.
     resolve_project_media(project, "audio")
@@ -62,7 +76,7 @@ def editor_page(project_id: str):
 def public_project_page(project_id: str):
     """Read-only view for projects explicitly published by their owner."""
     project = db.session.get(Project, project_id)
-    if not project or project.get_canonical_json().get("meta", {}).get("is_public") is not True:
+    if not project or not project_is_public(project):
         abort(404)
     from app.utils.files import resolve_rendered_video, resolve_project_media
     rendered_path = resolve_rendered_video(project)
