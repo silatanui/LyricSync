@@ -1341,9 +1341,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             const thumb = abs(theme.thumbnail || `/api/projects/templates/preview/${theme.id}`);
             col.innerHTML = `
                 <div class="template-visual-card p-1${theme.id === selectedBackgroundTemplate ? ' active' : ''}" data-template-id="${theme.id}">
-                    <div class="template-thumb-box position-relative" style="background:${color};">
-                        <img src="${thumb}" alt="${theme.name}" loading="lazy"
-                             onerror="this.style.opacity=0">
+                    <div class="template-thumb-box sk-media position-relative" style="background:${color};">
+                        <img class="sk-img" src="${thumb}" alt="${theme.name}" loading="lazy"
+                             onerror="this.classList.add('is-loaded'); this.closest('.sk-media')?.classList.add('is-ready');">
                         ${theme.is_ai ? '<span class="theme-video-badge theme-ai-badge">AI</span>'
                             : theme.is_visualizer ? '<span class="theme-video-badge theme-viz-badge">Visualizer</span>'
                             : theme.is_video ? '<span class="theme-video-badge">Video</span>'
@@ -1358,6 +1358,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             card.addEventListener('click', () => applyThemeCard(card, theme.id));
             drawerTemplatesList.appendChild(col);
         });
+        if (window.LyricSyncSkeleton) LyricSyncSkeleton.bindMedia(drawerTemplatesList);
     }
 
     async function applyBackgroundResponse(res) {
@@ -1396,6 +1397,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             imageSrc: isVideoBg ? (posterUrl || catalogPoster) : streamUrl,
             preserveTime: keepTime,
         });
+        if (window.LyricSyncSkeleton && videoContainer) {
+            LyricSyncSkeleton.rebindMedia(videoContainer);
+        }
         player.seekTo(keepTime);
         if (wasPlaying) {
             player.play();
@@ -1669,10 +1673,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const isImage = file.section === 'images';
         return `
             <div class="files-card" data-asset-id="${file.id}">
-                <div class="files-card-thumb" style="background:${isImage ? '#1e293b' : '#31121c'};">
+                <div class="files-card-thumb sk-media" style="background:${isImage ? '#1e293b' : '#31121c'};">
                     ${isImage
-                        ? `<img src="${url}" alt="${file.name}" loading="lazy">`
-                        : `<video src="${url}" muted preload="metadata"></video>`}
+                        ? `<img class="sk-img" src="${url}" alt="${file.name}" loading="lazy">`
+                        : `<video class="sk-img" src="${url}" muted preload="metadata"></video>`}
                 </div>
                 <div class="files-card-meta">
                     <strong class="text-truncate d-block">${file.name}</strong>
@@ -1684,6 +1688,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function refreshProjectFiles() {
         if (!projectFilesAudioList && !projectFilesImagesList && !projectFilesVideosList) return;
+        if (projectFilesImagesList && window.LyricSyncSkeleton) {
+            projectFilesImagesList.innerHTML = LyricSyncSkeleton.filesGridSkeleton(6);
+        }
+        if (projectFilesVideosList && window.LyricSyncSkeleton) {
+            projectFilesVideosList.innerHTML = LyricSyncSkeleton.filesGridSkeleton(3);
+        }
         try {
             const res = await LyricSyncAPI.getProjectFiles(projectId);
             if (!res.success) throw new Error(res.error?.message || 'Could not load files');
@@ -1703,12 +1713,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                     ? images.map((f) => renderFileCard(f, { applyable: true })).join('')
                     : '';
                 if (!images.length) renderFilesEmpty(projectFilesImagesList, 'No images yet. Generate an AI scene or upload one.');
+                if (window.LyricSyncSkeleton) LyricSyncSkeleton.bindMedia(projectFilesImagesList);
             }
             if (projectFilesVideosList) {
                 projectFilesVideosList.innerHTML = videos.length
                     ? videos.map((f) => renderFileCard(f, { applyable: true })).join('')
                     : '';
                 if (!videos.length) renderFilesEmpty(projectFilesVideosList, 'No videos yet. Upload footage from Themes or here.');
+                if (window.LyricSyncSkeleton) LyricSyncSkeleton.bindMedia(projectFilesVideosList);
             }
 
             document.querySelectorAll('.files-apply-btn').forEach((btn) => {
@@ -1800,7 +1812,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (studioVideoUploadStatus) {
             studioVideoUploadStatus.classList.remove('d-none', 'text-danger');
             studioVideoUploadStatus.classList.add('text-secondary');
-            studioVideoUploadStatus.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Uploading custom video…';
+            studioVideoUploadStatus.innerHTML = '<span class="ai-busy-skeleton-inline me-1" aria-hidden="true"></span> Uploading custom video…';
         }
         try {
             const res = await LyricSyncAPI.uploadCustomBackgroundVideo(projectId, file);
@@ -1857,7 +1869,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (studioVideoUploadStatus) {
                 studioVideoUploadStatus.classList.remove('d-none', 'text-danger', 'text-success');
                 studioVideoUploadStatus.classList.add('text-secondary');
-                studioVideoUploadStatus.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Restoring theme…';
+                studioVideoUploadStatus.innerHTML = '<span class="ai-busy-skeleton-inline me-1" aria-hidden="true"></span> Restoring theme…';
             }
             try {
                 const res = await LyricSyncAPI.updateBackgroundTemplate(projectId, fallbackTheme, currentAspectRatio);
@@ -1882,6 +1894,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function loadThemeCatalog() {
+        if (drawerTemplatesList && window.LyricSyncSkeleton) {
+            drawerTemplatesList.innerHTML = LyricSyncSkeleton.themeGridSkeleton(8);
+        }
+        if (themeCountLabel) {
+            themeCountLabel.innerHTML = '<span class="sk-line sk-w-40" style="display:inline-block;margin:0;height:0.65rem;vertical-align:middle;"></span>';
+        }
         try {
             const res = await LyricSyncAPI.getBackgroundTemplates();
             if (!res.success) throw new Error('Failed to load themes');
@@ -1892,6 +1910,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (err) {
             console.warn('Theme catalog load failed', err);
             if (themeCountLabel) themeCountLabel.textContent = 'Could not load themes';
+            if (drawerTemplatesList) {
+                drawerTemplatesList.innerHTML = '<div class="col-12 text-secondary small py-3">Themes could not be loaded.</div>';
+            }
         }
     }
 
@@ -1937,7 +1958,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const origHtml = drawerImportLyricsBtn.innerHTML;
             drawerImportLyricsBtn.disabled = true;
-            drawerImportLyricsBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span><span>Importing…</span>';
+            drawerImportLyricsBtn.innerHTML = '<span class="ai-busy-skeleton-inline" role="status" aria-hidden="true"></span><span>Importing…</span>';
 
             try {
                 let payload;
@@ -2027,10 +2048,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             const listening = activeStream?.partial;
             const until = formatTime(Number(activeStream?.transcribed_until) || 0);
             lyricsSheetList.innerHTML = listening ? `
-                <div class="text-center py-5 text-secondary">
-                    <div class="spinner-border spinner-border-sm mb-2" style="color: var(--brand-burgundy);"></div>
-                    <p class="fw-bold mb-1 text-dark">Streaming opening preview</p>
-                    <p class="small text-secondary mb-0">Language detection + first lines land soon. Audio is playable; lyrics fill in as each slice finishes${Number(activeStream?.transcribed_until) > 0 ? ` (ready to ${until})` : ''}.</p>
+                <div class="sk-lyrics-wrap">
+                    ${window.LyricSyncSkeleton ? LyricSyncSkeleton.lyricsSheetSkeleton() : ''}
+                    <div class="text-center px-3 pb-4 text-secondary">
+                        <p class="fw-bold mb-1 text-dark">Streaming opening preview</p>
+                        <p class="small text-secondary mb-0">First lines land soon. Audio is playable; lyrics fill in as each slice finishes${Number(activeStream?.transcribed_until) > 0 ? ` (ready to ${until})` : ''}.</p>
+                    </div>
                 </div>
             ` : `
                 <div class="text-center py-5 text-secondary">
@@ -2349,7 +2372,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const pct = duration > 0 ? Math.max(0, Math.min(100, (synced / duration) * 100)) : 0;
         banner.classList.remove('d-none');
         banner.classList.add('d-flex');
-        if (spinner) spinner.classList.toggle('d-none', mode === 'done');
+        const showSk = mode !== 'done' && synced < 0.2;
+        banner.classList.toggle('is-skeleton', showSk);
+        if (spinner) spinner.classList.add('d-none');
         if (meter) meter.style.width = `${pct}%`;
         if (playPreviewBtn) {
             const showPlay = mode !== 'done' && synced > 0.2 && player.isPaused;
@@ -2664,7 +2689,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Save Revision Button
     saveRevisionBtn.addEventListener('click', async () => {
         saveRevisionBtn.disabled = true;
-        saveRevisionBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+        saveRevisionBtn.innerHTML = '<span class="ai-busy-skeleton-inline me-1" aria-hidden="true"></span> Saving…';
 
         try {
             const lines = timeline.getLines();

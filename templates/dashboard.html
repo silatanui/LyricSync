@@ -58,13 +58,13 @@
         <article class="project-item" data-title="{{ p.name|lower }}" data-background="{{ project_canonical.get('meta', {}).get('background_template', 'burgundy_studio') }}">
             <div class="project-card">
                 <a href="{{ url_for('views.editor_page', project_id=p.id) }}" class="project-preview-link text-decoration-none">
-                    <div class="project-preview position-relative overflow-hidden">
+                    <div class="project-preview sk-media position-relative overflow-hidden">
                         {% if p.is_video_background %}
-                        <video muted loop preload="metadata" playsinline class="w-100 h-100 object-fit-cover">
+                        <video muted loop preload="metadata" playsinline class="w-100 h-100 object-fit-cover sk-img">
                             <source src="{{ url_for('projects.stream_project_media', project_id=p.id, kind='video') }}" type="video/mp4">
                         </video>
                         {% else %}
-                        <img src="{{ url_for('projects.stream_project_media', project_id=p.id, kind='video') }}" alt="{{ p.name }}" class="w-100 h-100 object-fit-cover" loading="lazy">
+                        <img src="{{ url_for('projects.stream_project_media', project_id=p.id, kind='video') }}" alt="{{ p.name }}" class="w-100 h-100 object-fit-cover sk-img" loading="lazy">
                         {% endif %}
                         <div class="project-preview-scrim" aria-hidden="true"></div>
                         <div class="project-preview-titlecard">
@@ -200,6 +200,7 @@
         video.addEventListener('mouseenter', () => video.play().catch(() => {}));
         video.addEventListener('mouseleave', () => { video.pause(); video.currentTime = 0; });
     });
+    if (window.LyricSyncSkeleton) LyricSyncSkeleton.bindMedia(document.getElementById('projectGrid') || document);
 
     let projectPage = 0;
     function renderProjectPage(page) {

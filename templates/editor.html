@@ -833,9 +833,14 @@
                         <button type="button" class="btn btn-sm btn-outline-secondary theme-media-filter" data-media="image">Stills</button>
                         <button type="button" class="btn btn-sm btn-outline-secondary theme-media-filter" data-media="video">Video</button>
                     </div>
-                    <div id="themeApplyStatus" class="small text-success d-none mb-2"><span class="spinner-border spinner-border-sm me-1"></span> Applying theme...</div>
+                    <div id="themeApplyStatus" class="small text-success d-none mb-2"><span class="ai-busy-skeleton-inline me-1" aria-hidden="true"></span> Applying theme...</div>
                     <div id="themeCountLabel" class="small text-secondary mb-2">Loading themes…</div>
-                    <div class="row g-2.5" id="drawerTemplatesList"></div>
+                    <div class="row g-2.5" id="drawerTemplatesList">
+                        <div class="col-6"><div class="sk-theme-card"><div class="sk-block sk-img-block"></div><div class="sk-line sk-w-70"></div><div class="sk-line sk-w-45"></div></div></div>
+                        <div class="col-6"><div class="sk-theme-card"><div class="sk-block sk-img-block"></div><div class="sk-line sk-w-70"></div><div class="sk-line sk-w-45"></div></div></div>
+                        <div class="col-6"><div class="sk-theme-card"><div class="sk-block sk-img-block"></div><div class="sk-line sk-w-70"></div><div class="sk-line sk-w-45"></div></div></div>
+                        <div class="col-6"><div class="sk-theme-card"><div class="sk-block sk-img-block"></div><div class="sk-line sk-w-70"></div><div class="sk-line sk-w-45"></div></div></div>
+                    </div>
 
                     <div class="theme-custom-upload mt-3 pt-3 border-top">
                         <label class="form-label fw-bold text-dark mb-1 small text-uppercase tracking-wider d-flex align-items-center gap-1">
@@ -950,11 +955,23 @@
                     </div>
                     <div class="files-section mb-3">
                         <div class="files-section-head"><i class="bi bi-image"></i> Images</div>
-                        <div id="projectFilesImagesList" class="files-list files-grid"></div>
+                        <div id="projectFilesImagesList" class="files-list files-grid">
+                            <div class="sk-files-grid" aria-busy="true">
+                                <div class="sk-block sk-file-tile"></div>
+                                <div class="sk-block sk-file-tile"></div>
+                                <div class="sk-block sk-file-tile"></div>
+                            </div>
+                        </div>
                     </div>
                     <div class="files-section">
                         <div class="files-section-head"><i class="bi bi-camera-video"></i> Videos</div>
-                        <div id="projectFilesVideosList" class="files-list files-grid"></div>
+                        <div id="projectFilesVideosList" class="files-list files-grid">
+                            <div class="sk-files-grid" aria-busy="true">
+                                <div class="sk-block sk-file-tile"></div>
+                                <div class="sk-block sk-file-tile"></div>
+                                <div class="sk-block sk-file-tile"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -973,7 +990,7 @@
                 {% set bg_poster = url_for('projects.preview_background_template', template_id=bg_template) %}
             {% endif %}
             <div id="videoContainer"
-                 class="video-container position-relative ratio-16-9 quality-draft"
+                 class="video-container sk-media position-relative ratio-16-9 quality-draft"
                  data-has-video="{{ 'true' if project.is_video_background else 'false' }}"
                  data-bg-stream="{{ bg_stream }}"
                  data-bg-poster="{{ bg_poster }}"
@@ -981,7 +998,7 @@
                 <!-- Still poster / image theme (always a valid src so reload fallback never breaks) -->
                 <img id="mainBgImage"
                      src="{{ bg_stream if not project.is_video_background else bg_poster }}"
-                     class="w-100 h-100 object-fit-cover position-absolute top-0 start-0 {% if project.is_video_background %}d-none{% endif %}"
+                     class="w-100 h-100 object-fit-cover position-absolute top-0 start-0 sk-img {% if project.is_video_background %}d-none{% endif %}"
                      alt="Background Theme"
                      loading="eager">
 
@@ -992,7 +1009,7 @@
                        muted
                        loop
                        poster="{{ bg_poster }}"
-                       class="w-100 h-100 object-fit-cover {% if not project.is_video_background %}d-none{% endif %}"
+                       class="w-100 h-100 object-fit-cover sk-img {% if not project.is_video_background %}d-none{% endif %}"
                        {% if project.is_video_background %}src="{{ bg_stream }}"{% endif %}>
                 </video>
                 <!-- Master Audio Track (Streamed with byte-ranges & caching) -->
@@ -1053,9 +1070,15 @@
 
             <!-- Full Extracted Lyrics Sheet List (Plain Text with Reduced Line Height) -->
             <div class="lyrics-sheet-body flex-grow-1 overflow-y-auto" id="lyricsSheetList">
-                <div class="text-center py-5 text-secondary">
-                    <div class="spinner-border spinner-border-sm text-secondary mb-2" role="status"></div>
-                    <p class="small mb-0">Loading song lyrics...</p>
+                <div class="sk-lyrics" aria-busy="true">
+                    <div class="sk-line sk-w-30 sk-mb"></div>
+                    <div class="sk-line sk-w-90"></div>
+                    <div class="sk-line sk-w-80"></div>
+                    <div class="sk-line sk-w-85"></div>
+                    <div class="sk-line sk-w-55 sk-mb"></div>
+                    <div class="sk-line sk-w-88"></div>
+                    <div class="sk-line sk-w-75"></div>
+                    <div class="sk-line sk-w-60"></div>
                 </div>
             </div>
 
@@ -1070,8 +1093,12 @@
     <!-- Studio Bottom: Transport & Spacious Timeline Drawer -->
     <div class="editor-bottom-panel d-flex flex-column border-top">
         <div id="streamBanner" class="stream-sync-banner d-none" role="status">
-            <span class="spinner-border spinner-border-sm" id="streamBannerSpinner" style="color: var(--brand-burgundy);"></span>
+            <span class="spinner-border spinner-border-sm d-none" id="streamBannerSpinner" style="color: var(--brand-burgundy);"></span>
             <div class="stream-banner-copy flex-grow-1">
+                <div class="stream-banner-sk" aria-hidden="true">
+                    <span class="sk-line sk-w-70"></span>
+                    <span class="sk-line sk-w-45"></span>
+                </div>
                 <span id="streamBannerText">Syncing lyrics. Playback follows the part that is ready.</span>
                 <div class="stream-banner-meter" aria-hidden="true">
                     <div id="streamBannerMeterFill" class="stream-banner-meter-fill"></div>
@@ -1161,7 +1188,11 @@
                 </h5>
             </div>
             <div class="modal-body py-4 text-center">
-                <div class="spinner-border mb-3" style="color: var(--brand-burgundy); width: 2.5rem; height: 2.5rem;" id="transcribeSpinner" role="status"></div>
+                <div class="sk-transcribe" id="transcribeSpinner" role="status" aria-label="Loading">
+                    <div class="sk-block sk-img-block"></div>
+                    <div class="sk-line sk-w-80" style="margin-left:auto;margin-right:auto;"></div>
+                    <div class="sk-line sk-w-55" style="margin-left:auto;margin-right:auto;"></div>
+                </div>
                 <div id="transcribeSuccessIcon" class="d-none text-success mb-2">
                     <i class="bi bi-check-circle-fill display-4" style="color: var(--brand-green-accent);"></i>
                 </div>

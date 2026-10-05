@@ -27,14 +27,14 @@
     </div>
 
     <!-- Main Player Stage -->
-    <div class="public-project-hero position-relative overflow-hidden shadow-sm" style="background: #12050B; aspect-ratio: 16 / 9;">
+    <div class="public-project-hero sk-media position-relative overflow-hidden shadow-sm" style="background: #12050B; aspect-ratio: 16 / 9;">
         {% if has_render %}
-            <video id="sharedMedia" controls playsinline preload="auto" class="w-100 h-100 object-fit-contain" style="display: block; background: #000;">
+            <video id="sharedMedia" controls playsinline preload="auto" class="w-100 h-100 object-fit-contain sk-img" style="display: block; background: #000;">
                 <source src="{{ url_for('projects.stream_project_media', project_id=project.id, kind='rendered') }}" type="video/mp4">
                 Your browser does not support HTML5 video.
             </video>
         {% elif is_video_bg %}
-            <video id="sharedMedia" playsinline loop preload="auto" class="w-100 h-100 object-fit-cover position-absolute top-0 start-0">
+            <video id="sharedMedia" playsinline loop preload="auto" class="w-100 h-100 object-fit-cover position-absolute top-0 start-0 sk-img">
                 <source src="{{ url_for('projects.stream_project_media', project_id=project.id, kind='video') }}" type="video/mp4">
             </video>
             <div class="shared-lyric-overlay position-absolute top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center align-items-center p-4 text-center pointer-events-none">
@@ -45,7 +45,7 @@
         {% else %}
             <img id="sharedBgImg"
                  src="{{ url_for('projects.stream_project_media', project_id=project.id, kind='video') }}"
-                 class="w-100 h-100 object-fit-cover position-absolute top-0 start-0"
+                 class="w-100 h-100 object-fit-cover position-absolute top-0 start-0 sk-img"
                  alt="Project Artwork">
             <div class="shared-lyric-overlay position-absolute top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center align-items-center p-4 text-center pointer-events-none">
                 <div id="sharedActiveLyric" class="shared-active-lyric">
@@ -112,6 +112,7 @@
 <script src="{{ url_for('static', filename='js/fonts.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    if (window.LyricSyncSkeleton) LyricSyncSkeleton.bindMedia(document);
     const page = document.querySelector('.public-project-page');
     const hasRender = {{ 'true' if has_render else 'false' }};
     const isVideoBg = {{ 'true' if is_video_bg else 'false' }};

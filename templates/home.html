@@ -7,11 +7,11 @@
 {% block content %}
 <div class="home-page">
     <section class="home-hero">
-        <div class="home-hero-art" aria-hidden="true">
+        <div class="home-hero-art sk-media" aria-hidden="true">
             <img
                 src="{{ url_for('static', filename='img/themes/city_vespers.jpg') }}"
                 alt=""
-                class="home-hero-img"
+                class="home-hero-img sk-img"
                 fetchpriority="high"
             >
             <div class="home-hero-scrim"></div>
@@ -62,16 +62,16 @@
                 {% set credit = project.preview_credit() %}
                 <div class="col-md-6 col-lg-3">
                     <article class="public-project-card">
-                        <a class="public-project-art text-decoration-none" href="{{ url_for('views.public_project_page', project_id=project.id) }}">
+                        <a class="public-project-art sk-media text-decoration-none" href="{{ url_for('views.public_project_page', project_id=project.id) }}">
                             {% if project.is_video_background %}
-                            <video muted loop playsinline preload="metadata" class="public-project-media">
+                            <video muted loop playsinline preload="metadata" class="public-project-media sk-img">
                                 <source src="{{ url_for('projects.stream_project_media', project_id=project.id, kind='video') }}" type="video/mp4">
                             </video>
                             {% else %}
                             <img
                                 src="{{ url_for('projects.stream_project_media', project_id=project.id, kind='video') }}"
                                 alt="{{ project.name }}"
-                                class="public-project-media"
+                                class="public-project-media sk-img"
                                 loading="lazy"
                             >
                             {% endif %}
@@ -102,7 +102,7 @@
             <div class="row g-4 home-process-visuals">
                 <div class="col-md-4">
                     <figure class="home-process-card">
-                        <img src="{{ url_for('static', filename='img/home/process-upload.jpg') }}" alt="Headphones and music listening setup" loading="lazy">
+                        <div class="sk-media"><img class="sk-img" src="{{ url_for('static', filename='img/home/process-upload.jpg') }}" alt="Headphones and music listening setup" loading="lazy"></div>
                         <figcaption>
                             <span>01</span>
                             <h3>Upload the track</h3>
@@ -112,7 +112,7 @@
                 </div>
                 <div class="col-md-4">
                     <figure class="home-process-card">
-                        <img src="{{ url_for('static', filename='img/home/process-sync.jpg') }}" alt="Music production desk with instruments" loading="lazy">
+                        <div class="sk-media"><img class="sk-img" src="{{ url_for('static', filename='img/home/process-sync.jpg') }}" alt="Music production desk with instruments" loading="lazy"></div>
                         <figcaption>
                             <span>02</span>
                             <h3>Let AI find the timing</h3>
@@ -122,7 +122,7 @@
                 </div>
                 <div class="col-md-4">
                     <figure class="home-process-card">
-                        <img src="{{ url_for('static', filename='img/home/process-export.jpg') }}" alt="Performer singing into a microphone" loading="lazy">
+                        <div class="sk-media"><img class="sk-img" src="{{ url_for('static', filename='img/home/process-export.jpg') }}" alt="Performer singing into a microphone" loading="lazy"></div>
                         <figcaption>
                             <span>03</span>
                             <h3>Direct the visual</h3>
@@ -139,7 +139,7 @@
             <div class="row g-5 align-items-center">
                 <div class="col-lg-6 order-lg-2">
                     <div class="home-feature-visual">
-                        <img src="{{ url_for('static', filename='img/home/feature-studio.jpg') }}" alt="Music studio workspace for lyric video creation" loading="lazy">
+                        <div class="sk-media"><img class="sk-img" src="{{ url_for('static', filename='img/home/feature-studio.jpg') }}" alt="Music studio workspace for lyric video creation" loading="lazy"></div>
                         <div class="home-visual-caption"><span class="home-live-dot"></span> Timing · typography · themes · export</div>
                     </div>
                 </div>
@@ -198,7 +198,7 @@
             <div class="row g-5 align-items-center">
                 <div class="col-lg-5">
                     <div class="home-about-visual">
-                        <img src="{{ url_for('static', filename='img/home/about-maker.jpg') }}" alt="Microphone ready for a recording session" loading="lazy">
+                        <div class="sk-media"><img class="sk-img" src="{{ url_for('static', filename='img/home/about-maker.jpg') }}" alt="Microphone ready for a recording session" loading="lazy"></div>
                     </div>
                 </div>
                 <div class="col-lg-7">
@@ -231,8 +231,8 @@
     </section>
 
     <section class="home-cta-section">
-        <div class="home-cta-art" aria-hidden="true">
-            <img src="{{ url_for('static', filename='img/home/cta-stage.jpg') }}" alt="">
+        <div class="home-cta-art sk-media" aria-hidden="true">
+            <img class="sk-img" src="{{ url_for('static', filename='img/home/cta-stage.jpg') }}" alt="">
         </div>
         <div class="container home-cta-inner">
             <div>
@@ -284,5 +284,6 @@ document.querySelectorAll('.public-project-card video').forEach((video) => {
     card.addEventListener('mouseenter', () => video.play().catch(() => {}));
     card.addEventListener('mouseleave', () => { video.pause(); video.currentTime = 0; });
 });
+if (window.LyricSyncSkeleton) LyricSyncSkeleton.bindMedia(document);
 </script>
 {% endblock %}
