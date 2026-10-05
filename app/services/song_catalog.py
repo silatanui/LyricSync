@@ -141,10 +141,8 @@ def infer_language_hint(*parts: str) -> str | None:
     if len({h.lower() for h in hits}) >= 2 or "ipyana" in lower:
         return "sw"
 
-    # Latin-letter titles default to English so Auto does not drift to a wrong CJK guess.
-    latin = re.findall(r"[A-Za-z]", blob)
-    if len(latin) >= 3:
-        return "en"
+    # Latin script is shared by English, Swahili, and many others. Do not assume English;
+    # the upload "base language" picker (or Whisper auto-detect) decides.
     return None
 
 
@@ -177,10 +175,13 @@ def choose_transcription_language(
     name_language: str | None,
     opening_text: str = "",
     opening_detected: str | None = None,
+    *,
+    force_language: bool = False,
 ) -> str | None:
     """
-    Prefer the language implied by the audio/project name.
+    Prefer the language implied by the audio/project name (or user pick).
     Only switch when the opening transcript is pretty clearly another language.
+    When force_language is True (explicit user base language), never switch.
     """
     from app.services.openai_transcription import normalize_language_code
 
@@ -188,14 +189,19 @@ def choose_transcription_language(
     audio_lang = normalize_language_code(opening_detected)
     evidence = script_language_evidence(opening_text or "")
 
+    if name_lang and force_language:
+        return name_lang
+
     if name_lang:
-        # Strong written-script evidence in the opening beats a Latin title.
-        if evidence and evidence != name_lang:
+        # Only override a Latin/base hint with a different *script* (e.g. Arabic, CJK).
+        # Do not jump from Swahili/English to Hausa/Japanese on a flaky Whisper guess.
+        if evidence and evidence != name_lang and evidence not in {"en", "sw"}:
             return evidence
         if (
             audio_lang
             and audio_lang != name_lang
             and evidence == audio_lang
+            and evidence not in {None, "en", "sw"}
             and looks_like_wrong_language_lyrics(opening_text, name_lang)
         ):
             return audio_lang

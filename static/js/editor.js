@@ -1696,7 +1696,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 projectFilesAudioList.innerHTML = audio.length
                     ? audio.map((f) => renderFileCard(f)).join('')
                     : '';
-                if (!audio.length) renderFilesEmpty(projectFilesAudioList, 'No audio yet — upload a song to start.');
+                if (!audio.length) renderFilesEmpty(projectFilesAudioList, 'No audio yet. Upload a song to start.');
             }
             if (projectFilesImagesList) {
                 projectFilesImagesList.innerHTML = images.length
@@ -2087,7 +2087,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (activeStream?.partial) {
             const pending = document.createElement('div');
             pending.className = 'small text-secondary fst-italic px-2 py-2';
-            pending.textContent = 'Still listening — more lines appear as this part finishes.';
+            pending.textContent = 'Still listening. More lines appear as this part finishes.';
             lyricsSheetList.appendChild(pending);
         }
 
@@ -2373,7 +2373,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 : '';
             text.textContent = `${name} preview · synced to ${until} of ${total}${chunkHint}. Play until the ready part, then it waits.`;
         } else {
-            text.textContent = 'Listening for language + opening lines. Audio is ready — lyrics stream in as each slice finishes.';
+            text.textContent = 'Listening for language and opening lines. Audio is ready; lyrics stream in as each slice finishes.';
         }
     }
 
@@ -2603,7 +2603,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             const knownArtist = lyricsRes?.stream?.artist || lyricsRes?.stream?.title;
             const knownLabel = lyricsRes?.stream?.artist && lyricsRes?.stream?.title
-                ? `${lyricsRes.stream.artist} — ${lyricsRes.stream.title}`
+                ? `${lyricsRes.stream.artist} - ${lyricsRes.stream.title}`
                 : (lyricsRes?.stream?.title || lyricsRes?.stream?.language_name || '');
             setStreamBanner('done');
             if (lyricsRes?.stream?.source === 'lrclib' || lyricsRes?.stream?.source === 'catalog') {
@@ -2760,7 +2760,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         exportInProgress = busy;
         if (exportVideoBtn) {
             exportVideoBtn.classList.toggle('is-exporting', busy);
-            exportVideoBtn.title = busy ? 'Export running — click to show progress' : 'Export lyric video';
+            exportVideoBtn.title = busy ? 'Export running. Click to show progress' : 'Export lyric video';
         }
         if (exportBtnLabel) {
             if (!busy && exportBtnLabel.textContent && !exportBtnLabel.textContent.includes('Exporting')) {

@@ -77,6 +77,10 @@ def create_project():
     project_name = raw_name if not is_auto_title else derive_title_from_filename(audio_file.filename or "")
     aspect_ratio = request.form.get("aspect_ratio", "16:9").strip() or "16:9"
     selected_template = request.form.get("template", "burgundy_studio").strip() or "burgundy_studio"
+    from app.services.openai_transcription import normalize_language_code
+    preferred_language = normalize_language_code(
+        request.form.get("preferred_language") or request.form.get("language")
+    )
     t_width, t_height = BackgroundGenerator.get_dimensions(aspect_ratio)
 
     if not audio_file.filename:
@@ -236,6 +240,11 @@ def create_project():
     canonical["meta"]["is_public"] = False
     canonical["meta"]["background_template"] = selected_template
     canonical["meta"]["auto_title"] = is_auto_title
+    if preferred_language:
+        canonical["meta"]["preferred_language"] = preferred_language
+        canonical.setdefault("transcription", {})["language"] = preferred_language
+    else:
+        canonical["meta"].pop("preferred_language", None)
     canonical.setdefault("render", {})["aspect_ratio"] = aspect_ratio
     canonical.setdefault("style", {})["aspectRatio"] = aspect_ratio
     project.set_canonical_json(canonical)

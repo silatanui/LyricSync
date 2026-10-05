@@ -3,26 +3,25 @@
 {% block title %}Create Project - LyricSync Studio{% endblock %}
 
 {% block content %}
-<div class="container-fluid px-4 px-lg-5 py-3 py-lg-4 upload-wizard-page">
-    <div class="row justify-content-center">
-        <div class="col-lg-10 col-xl-9">
-            <div class="studio-box upload-wizard">
-                <!-- Header -->
-                <div class="d-flex align-items-center gap-3 mb-3 pb-3 border-bottom">
-                    <div class="brand-symbol" style="width: 46px; height: 46px; margin-right: 0.85rem !important;">
-                        <i class="bi bi-music-note-beamed fs-4"></i>
-                    </div>
-                    <div class="flex-grow-1">
-                        <h3 class="fw-bold mb-1 text-dark">Create Synchronized Lyric Video</h3>
-                        <p class="text-secondary mb-0 small">Two short pages — upload your song, choose a look, then open the studio.</p>
-                    </div>
-                </div>
+<div class="upload-page">
+    <section class="upload-hero" aria-label="New project">
+        <div class="upload-hero-media" aria-hidden="true">
+            <img src="{{ url_for('static', filename='img/home/process-upload.jpg') }}" alt="" class="upload-hero-img">
+            <div class="upload-hero-scrim"></div>
+        </div>
+        <div class="upload-hero-copy">
+            <p class="upload-hero-kicker">LyricSync Studio</p>
+            <h1>Start a new lyric video</h1>
+            <p>Upload a song, pick the main lyrics language, choose a look, then open the studio.</p>
+        </div>
+    </section>
 
-                <!-- Step progress rail -->
+    <div class="upload-wizard-shell">
+            <div class="studio-box upload-wizard">
                 <nav class="wizard-progress" aria-label="Create project steps">
                     <button type="button" class="wizard-progress-item active" data-goto-step="1" id="progressStep1">
                         <span class="wizard-progress-num">1</span>
-                        <span class="wizard-progress-label">Audio</span>
+                        <span class="wizard-progress-label">Song &amp; language</span>
                     </button>
                     <div class="wizard-progress-line" id="progressLine1"></div>
                     <button type="button" class="wizard-progress-item" data-goto-step="2" id="progressStep2" disabled>
@@ -47,24 +46,65 @@
                                     <span class="badge bg-burgundy text-white px-2 py-1 fw-bold" style="background-color: var(--brand-burgundy);">Step 1</span>
                                     <span id="step1Badge" class="badge bg-light text-secondary border px-2 py-1">Required</span>
                                 </div>
-                                <h4 class="fw-bold text-dark mb-1" id="step1Title">Upload your song</h4>
-                                <p class="text-secondary small mb-0">Drop the master track. Word-level timings are transcribed after you open the studio.</p>
+                                <h4 class="fw-bold text-dark mb-1" id="step1Title">Song, language, and lyrics</h4>
+                                <p class="text-secondary small mb-0">We first look up published lyrics. If the song is unknown, AI transcribes using your base language.</p>
                             </div>
                         </div>
 
-                        <div class="transcription-disclaimer mb-3">
-                            <strong>Disclaimer:</strong>
-                            Unrecognized songs and languages outside our strongest set are transcribed best-effort only — results aren’t guaranteed. Paste official lyrics when you need accuracy.
+                        <div class="upload-lang-card mb-3">
+                            <label for="preferredLanguage" class="form-label fw-bold text-dark mb-1 d-flex align-items-center gap-2">
+                                <i class="bi bi-translate" style="color: var(--brand-burgundy);"></i>
+                                Base language for lyrics
+                            </label>
+                            <p class="text-secondary small mb-2 mb-md-3">
+                                Pick the main language of the song. If it mixes languages, choose the one used most.
+                                This keeps transcription from drifting into the wrong tongue.
+                            </p>
+                            <select id="preferredLanguage" class="form-select form-select-lg upload-lang-select" aria-describedby="preferredLanguageHelp">
+                                <option value="auto">Auto detect (less reliable)</option>
+                                <option value="sw" selected>Swahili</option>
+                                <option value="en">English</option>
+                                <option value="yo">Yoruba</option>
+                                <option value="ha">Hausa</option>
+                                <option value="ig">Igbo</option>
+                                <option value="am">Amharic</option>
+                                <option value="zu">Zulu</option>
+                                <option value="af">Afrikaans</option>
+                                <option value="fr">French</option>
+                                <option value="es">Spanish</option>
+                                <option value="pt">Portuguese</option>
+                                <option value="ar">Arabic</option>
+                                <option value="hi">Hindi</option>
+                                <option value="de">German</option>
+                                <option value="it">Italian</option>
+                                <option value="zh">Chinese</option>
+                                <option value="ja">Japanese</option>
+                                <option value="ko">Korean</option>
+                                <option value="ru">Russian</option>
+                                <option value="tr">Turkish</option>
+                                <option value="id">Indonesian</option>
+                                <option value="tl">Tagalog</option>
+                            </select>
+                            <p id="preferredLanguageHelp" class="form-text mb-0">
+                                Tip: for gospel or East African tracks, choose Swahili (or English) instead of Auto detect.
+                            </p>
                         </div>
 
-                        <div class="square-dropzone mb-3" id="audioDropzone" style="min-height: 140px;">
+                        <div class="transcription-disclaimer mb-3">
+                            <strong>How lyrics are built:</strong>
+                            1) Search known song catalogs.
+                            2) If nothing matches, transcribe with your base language.
+                            Paste official lyrics below when you need exact wording.
+                        </div>
+
+                        <div class="square-dropzone mb-3" id="audioDropzone" style="min-height: 150px;">
                             <input type="file" id="audioFileInput" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac" class="d-none">
                             <div class="mb-2" style="color: var(--brand-burgundy);">
                                 <i class="bi bi-cloud-arrow-up fs-1"></i>
                             </div>
                             <div id="audioLabel">
-                                <span class="fw-bold text-dark d-block mb-1 fs-6">Click or Drop Audio File Here</span>
-                                <div class="text-secondary small">Supports MP3, WAV, M4A, FLAC, OGG</div>
+                                <span class="fw-bold text-dark d-block mb-1 fs-6">Click or drop your audio file</span>
+                                <div class="text-secondary small">MP3, WAV, M4A, FLAC, OGG</div>
                             </div>
                             <div id="audioFileInfo" class="mt-2 d-none">
                                 <div class="d-flex align-items-center justify-content-center gap-2 text-success fw-bold mb-1 fs-6">
@@ -77,16 +117,16 @@
 
                         <div class="mb-3">
                             <label for="projectName" class="form-label fw-semibold text-dark mb-1 d-flex align-items-center justify-content-between">
-                                <span>Song Title <span class="text-secondary fw-normal small">(Optional)</span></span>
-                                <span id="autoTitleHint" class="badge bg-light text-muted border small d-none">Auto-detected from file</span>
+                                <span>Song title <span class="text-secondary fw-normal small">(optional)</span></span>
+                                <span id="autoTitleHint" class="badge bg-light text-muted border small d-none">From filename</span>
                             </label>
-                            <input type="text" class="form-control" id="projectName" placeholder="e.g. Amazing Grace (or leave empty to auto-generate)">
+                            <input type="text" class="form-control" id="projectName" placeholder="Artist - Song title">
                         </div>
 
                         <div class="pt-2 border-top">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <label class="form-label fw-bold text-dark mb-0 d-flex align-items-center gap-1.5 small text-uppercase tracking-wider">
-                                    <i class="bi bi-file-earmark-text" style="color: var(--brand-burgundy);"></i> Custom Lyrics <span class="text-secondary fw-normal" style="text-transform: none;">(Optional)</span>
+                                    <i class="bi bi-file-earmark-text" style="color: var(--brand-burgundy);"></i> Official lyrics <span class="text-secondary fw-normal" style="text-transform: none;">(optional)</span>
                                 </label>
                             </div>
                             <div class="row g-3 align-items-stretch">
@@ -99,8 +139,8 @@
                                     </label>
                                 </div>
                                 <div class="col-md-6 d-flex flex-column">
-                                    <label class="form-label small text-secondary mb-1" for="customLyricsText">Or paste lyrics text</label>
-                                    <textarea class="form-control studio-input flex-grow-1" id="customLyricsText" rows="3" placeholder="Paste custom song lyrics..."></textarea>
+                                    <label class="form-label small text-secondary mb-1" for="customLyricsText">Or paste lyrics</label>
+                                    <textarea class="form-control studio-input flex-grow-1" id="customLyricsText" rows="3" placeholder="Paste the official lyrics…"></textarea>
                                 </div>
                             </div>
                         </div>
@@ -121,7 +161,7 @@
                                     <span class="badge badge-studio-green px-2 py-1"><i class="bi bi-check2 me-1"></i> Ready</span>
                                 </div>
                                 <h4 class="fw-bold text-dark mb-1" id="step2Title">Choose canvas &amp; look</h4>
-                                <p class="text-secondary small mb-0">Pick a frame size and a studio background. You can change themes again in the editor.</p>
+                                <p class="text-secondary small mb-0">Pick a frame size and a studio background. You can change themes again later in the editor.</p>
                             </div>
                         </div>
 
@@ -332,7 +372,6 @@
                     </div>
                 </form>
             </div>
-        </div>
     </div>
 </div>
 {% endblock %}
@@ -539,11 +578,17 @@
         subText.textContent = 'Sending audio file to server...';
         if (timerText) timerText.textContent = '0s elapsed';
 
+        const preferredLanguage = document.getElementById('preferredLanguage')?.value || 'auto';
+        try { localStorage.setItem('lyricsync_language', preferredLanguage); } catch (_) {}
+
         const formData = new FormData();
         formData.append('name', projectName);
         formData.append('audio', audioFile);
         formData.append('template', selectedTemplate);
         formData.append('aspect_ratio', selectedAspect);
+        if (preferredLanguage && preferredLanguage !== 'auto') {
+            formData.append('preferred_language', preferredLanguage);
+        }
 
         const lyricsFileInput = document.getElementById('customLyricsFile');
         const lyricsTextInput = document.getElementById('customLyricsText');
@@ -628,6 +673,19 @@
             alertBox.classList.remove('d-none');
         }
     });
+
+    const preferredLanguageSelect = document.getElementById('preferredLanguage');
+    if (preferredLanguageSelect) {
+        try {
+            const saved = localStorage.getItem('lyricsync_language');
+            if (saved && [...preferredLanguageSelect.options].some((opt) => opt.value === saved)) {
+                preferredLanguageSelect.value = saved;
+            }
+        } catch (_) {}
+        preferredLanguageSelect.addEventListener('change', () => {
+            try { localStorage.setItem('lyricsync_language', preferredLanguageSelect.value); } catch (_) {}
+        });
+    }
 
     goToStep(1, { force: true });
 </script>

@@ -135,7 +135,7 @@ const LyricSyncAPI = {
                 const elapsed = Date.now() - startedAt;
 
                 if (elapsed >= timeoutMs) {
-                    return reject(new Error('The transcription took longer than expected. The server is still processing — please click Retry to check if it completed.'));
+                    return reject(new Error('The transcription took longer than expected. The server is still processing. Please click Retry to check if it completed.'));
                 }
 
                 if (elapsed > 120000 && currentInterval < 3500) {
@@ -171,7 +171,7 @@ const LyricSyncAPI = {
                 } catch (err) {
                     failCount++;
                     if (failCount >= MAX_CONSECUTIVE_FAILS) {
-                        return reject(new Error('Connection lost. The server may still be processing — please retry.'));
+                        return reject(new Error('Connection lost. The server may still be processing. Please retry.'));
                     }
                     const backoffMs = Math.min(currentInterval * Math.pow(1.5, failCount), 12000);
                     setTimeout(poll, backoffMs);

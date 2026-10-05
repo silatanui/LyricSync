@@ -119,7 +119,7 @@
                             data-bs-trigger="focus"
                             data-bs-custom-class="editor-accuracy-popover"
                             data-bs-html="true"
-                            data-bs-content="<strong>Best-effort transcription.</strong> Known catalog songs are strongest. Sung dialects, rare languages, and dense harmonies may be incomplete — paste official lyrics when accuracy matters.">
+                            data-bs-content="<strong>Best-effort transcription.</strong> Known catalog songs are strongest. Sung dialects, rare languages, and dense harmonies may be incomplete. Paste official lyrics when accuracy matters.">
                         <i class="bi bi-info-circle" aria-hidden="true"></i>
                     </button>
                 </div>
@@ -668,7 +668,7 @@
 
                 <!-- Panel 2: Effects (Canva-style visual motion cards) -->
                 <div class="drawer-panel d-none" id="drawerPanelEffects">
-                    <p class="text-secondary small mb-2">Click a motion style — it applies live on the canvas.</p>
+                    <p class="text-secondary small mb-2">Click a motion style. It applies live on the canvas.</p>
 
                     <select id="styleEffect" class="d-none" aria-hidden="true">
                         <option value="none" selected>None</option>
@@ -780,7 +780,7 @@
                             </span>
                         </div>
                         <p class="ai-theme-banner-copy">
-                            OpenAI paints a custom still from your title and lyrics. That generation is costly — please consider supporting it with Premium ($5/100 images). Upload, sync, themes, styling, and export stay free.
+                            OpenAI paints a custom still from your title and lyrics. That generation is costly, so please consider supporting it with Premium ($5/100 images). Upload, sync, themes, styling, and export stay free.
                         </p>
                         <div class="ai-support-appeal" role="note">
                             <i class="bi bi-heart" aria-hidden="true"></i>
@@ -792,7 +792,7 @@
                                 <i class="bi bi-magic me-1"></i> Generate from lyrics
                             </button>
                             <button type="button" class="btn btn-sm btn-outline-burgundy w-100 mt-2" id="supportAiImagesBtn">
-                                <i class="bi bi-credit-card me-1"></i> Support AI images — $5/100
+                                <i class="bi bi-credit-card me-1"></i> Support AI images ($5/100)
                             </button>
                             <div id="aiThemeBusy" class="ai-busy-status d-none" role="status" aria-live="polite" aria-atomic="true">
                                 <div class="ai-busy-skeleton" aria-hidden="true">
@@ -811,7 +811,7 @@
                             <div class="ai-theme-locked-icon" aria-hidden="true"><i class="bi bi-lock-fill"></i></div>
                             <div class="ai-theme-locked-copy">
                                 <strong>Today's free AI images used up</strong>
-                                <span>You get {{ image_credits_status.daily_allowance or image_credits_status.free_allowance or 2 }} free AI generations each day. Premium adds 100 more for $5 — sync, themes, and export stay free.</span>
+                                <span>You get {{ image_credits_status.daily_allowance or image_credits_status.free_allowance or 2 }} free AI generations each day. Premium adds 100 more for $5. Sync, themes, and export stay free.</span>
                             </div>
                             <button type="button" class="btn btn-sm btn-burgundy w-100" id="upgradePremiumBtn">
                                 <i class="bi bi-credit-card me-1"></i>
@@ -934,7 +934,7 @@
                 <!-- Panel: Project Files -->
                 <div class="drawer-panel d-none" id="drawerPanelFiles">
                     <p class="text-secondary small mb-2">
-                        Private to you — every song, AI scene, upload, and video for this project stays here. Scroll the dock to open Files anytime.
+                        Private to you. Every song, AI scene, upload, and video for this project stays here. Scroll the dock to open Files anytime.
                     </p>
                     <div class="files-upload-row mb-3">
                         <input type="file" id="projectFilesUploadInput" class="d-none" accept="image/*,video/*,.webp,.png,.jpg,.jpeg,.gif,.mp4,.mov,.webm">
@@ -1182,7 +1182,7 @@
                 <div class="transcription-disclaimer text-start mb-4">
                     <strong>Disclaimer:</strong>
                     If a song isn’t recognized in the catalog, transcription is best-effort.
-                    Languages outside our strongest set — and heavily sung, dialect, or gospel vocals — may not return perfect lyrics.
+                    Languages outside our strongest set, and heavily sung, dialect, or gospel vocals, may not return perfect lyrics.
                     Paste the real lyrics for the cleanest result when AI misses.
                 </div>
 
@@ -1340,7 +1340,7 @@
             </div>
             <div class="modal-body pt-2">
                 <p class="text-secondary small mb-3">
-                    AI lyric scenes use paid image models and cost real resources. Supporting with Premium helps keep generation available — while upload, transcription, themes, styling, and export stay free for everyone.
+                    AI lyric scenes use paid image models and cost real resources. Supporting with Premium helps keep generation available, while upload, transcription, themes, styling, and export stay free for everyone.
                 </p>
                 <div class="premium-upgrade-card mb-3">
                     <div class="premium-upgrade-price">$5/100</div>

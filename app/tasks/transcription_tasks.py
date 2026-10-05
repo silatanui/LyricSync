@@ -305,32 +305,38 @@ def _try_known_song_lyrics(project, audio_path, job_id, language, song_duration,
                     extract_audio_chunk(upload_path, start, length or 12.0, tmp_chunk)
                     piece_path = tmp_chunk
 
-                # Probe from t=0 with auto-detect so we can compare against the name language.
-                opening = transcriber.transcribe_word_timestamps(piece_path, language=None)
+                # Probe from t=0. If the user picked a base language, force it
+                # so Whisper does not invent Hausa/Japanese for a Swahili song.
+                name_lang = language_hint or infer_language_hint(project_name)
+                probe_lang = name_lang  # may be None for true auto-detect
+                opening = transcriber.transcribe_word_timestamps(piece_path, language=probe_lang)
                 opening_text = (opening.get("text") or "").strip()
                 opening_detected = normalize_language_code(opening.get("language")) or ""
-                opening_meta = {"text": opening_text, "detected": opening_detected}
+                opening_meta = {"text": opening_text, "detected": opening_detected or (probe_lang or "")}
 
-                name_lang = language_hint or infer_language_hint(project_name)
-                resolved = choose_transcription_language(
-                    name_language=name_lang,
-                    opening_text=opening_text,
-                    opening_detected=opening_detected,
-                )
-                # Prefer name language; only switch when choose_* found strong audio evidence.
-                if resolved and resolved != opening_detected:
-                    _update_job_stage(
-                        job_id,
-                        f"Using {language_display_name(resolved)} from the song name…"[:64],
-                        20,
+                if probe_lang:
+                    # User/base language wins; do not re-detect into another tongue.
+                    language_hint = probe_lang
+                    resolved = probe_lang
+                else:
+                    resolved = choose_transcription_language(
+                        name_language=name_lang,
+                        opening_text=opening_text,
+                        opening_detected=opening_detected,
                     )
-                    opening = transcriber.transcribe_word_timestamps(piece_path, language=resolved)
-                    opening_text = (opening.get("text") or "").strip()
-                    opening_meta = {
-                        "text": opening_text,
-                        "detected": normalize_language_code(opening.get("language")) or resolved,
-                    }
-                language_hint = resolved or name_lang or opening_detected
+                    if resolved and resolved != opening_detected:
+                        _update_job_stage(
+                            job_id,
+                            f"Using {language_display_name(resolved)} from the song name…"[:64],
+                            20,
+                        )
+                        opening = transcriber.transcribe_word_timestamps(piece_path, language=resolved)
+                        opening_text = (opening.get("text") or "").strip()
+                        opening_meta = {
+                            "text": opening_text,
+                            "detected": normalize_language_code(opening.get("language")) or resolved,
+                        }
+                    language_hint = resolved or name_lang or opening_detected
 
                 if opening_text:
                     _update_job_stage(job_id, "Matching opening lyrics to the catalog…", 24)
@@ -359,7 +365,7 @@ def _try_known_song_lyrics(project, audio_path, job_id, language, song_duration,
     if not match:
         return False, language_hint, opening_meta
 
-    label = f"{match.get('artist')} — {match.get('title')}".strip(" —")
+    label = f"{match.get('artist')} - {match.get('title')}".strip(" -")
     _update_job_stage(
         job_id,
         f"Found {label}. Loading known lyrics…"[:64],
@@ -594,7 +600,8 @@ def run_transcription_pipeline(app, project_id: str, job_id: str = None, languag
             finally:
                 db.session.remove()
 
-            # Unrecognized song: name language first; override only with strong audio evidence.
+            # Unrecognized song: use the user's base language when set.
+            # Otherwise prefer title/catalog hint; only switch with strong evidence.
             if user_selected_language:
                 effective_language = user_selected_language
             else:
@@ -602,12 +609,13 @@ def run_transcription_pipeline(app, project_id: str, job_id: str = None, languag
                     name_language=language_from_catalog or name_language,
                     opening_text=opening_meta.get("text") or "",
                     opening_detected=opening_meta.get("detected") or "",
+                    force_language=False,
                 )
 
             stage_lang = language_display_name(effective_language) if effective_language else "auto-detect"
             _update_job_stage(
                 job_id,
-                f"Song not in catalog — transcribing ({stage_lang})…"[:64],
+                f"Song not in catalog. Transcribing ({stage_lang})…"[:64],
                 10,
                 {
                     "partial": True,

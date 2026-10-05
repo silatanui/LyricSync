@@ -73,6 +73,11 @@ def trigger_transcription(project_id: str):
 
     body = request.get_json(silent=True) or {}
     language = normalize_language_code(body.get("language"))
+    if not language:
+        # Fall back to the language chosen on upload / last successful sync.
+        language = normalize_language_code(
+            (project.get_canonical_json().get("meta") or {}).get("preferred_language")
+        )
 
     # Create RenderJob record to track progress
     job = RenderJob(

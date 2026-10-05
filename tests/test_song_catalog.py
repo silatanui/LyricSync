@@ -49,17 +49,20 @@ def test_swahili_title_strips_genre_and_infers_language():
 def test_english_title_prefers_english_unless_audio_script_is_clear():
     from app.services.song_catalog import infer_language_hint, choose_transcription_language
 
-    assert infer_language_hint("David Archuleta - From A Distance") == "en"
+    # Latin titles no longer force English (Swahili etc. also use Latin script).
+    # The upload base-language picker is the explicit signal.
+    assert infer_language_hint("David Archuleta - From A Distance") is None
     assert infer_language_hint("夜に駆ける") == "ja"
+    assert choose_transcription_language("sw", force_language=True) == "sw"
 
-    # Name is English; Whisper tag says Japanese but text has no Japanese script → keep English.
+    # Explicit English base; Whisper tag says Japanese but text has no Japanese script → keep English.
     assert choose_transcription_language(
         "en",
         opening_text="thanks for watching please subscribe",
         opening_detected="ja",
     ) == "en"
 
-    # Name is English but opening is clearly Japanese → allow override.
+    # Explicit English base but opening is clearly Japanese script → allow override.
     japanese_opening = "遠い場所から ハーモニーが聞こえる 希望の声"
     assert choose_transcription_language(
         "en",

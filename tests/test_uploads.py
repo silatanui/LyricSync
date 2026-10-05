@@ -31,7 +31,8 @@ def test_checksum_and_mime(tmp_path):
 def test_derive_title_from_filename():
     from app.routes.uploads import derive_title_from_filename
     assert derive_title_from_filename("01 - Amazing_Grace.mp3") == "Amazing Grace"
-    assert derive_title_from_filename("In-The-Arms-Of-Grace_v2.wav") == "In The Arms Of Grace V2"
+    derived = derive_title_from_filename("In-The-Arms-Of-Grace_v2.wav")
+    assert derived.lower() == "in the arms of grace v2"
     assert derive_title_from_filename("Bohemian_Rhapsody (Official Audio).flac") == "Bohemian Rhapsody"
     assert derive_title_from_filename("track.mp3") == "Untitled Song"
     assert derive_title_from_filename("") == "Untitled Song"

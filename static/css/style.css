@@ -1896,6 +1896,71 @@ html[data-theme="dark"] .home-roadmap-status.is-test {
 }
 
 /* —— Upload wizard (one step per page) —— */
+.upload-page {
+    width: min(84%, 1100px);
+    margin: 0 auto;
+    padding: 1.25rem 0.75rem 3rem;
+}
+
+.upload-hero {
+    position: relative;
+    overflow: hidden;
+    min-height: 200px;
+    margin-bottom: 1.25rem;
+    border: 1px solid var(--border-color);
+    background: #120810;
+    color: #fff;
+}
+
+.upload-hero-media { position: absolute; inset: 0; }
+.upload-hero-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 40%;
+}
+.upload-hero-scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, rgba(12,6,10,0.9) 0%, rgba(12,6,10,0.55) 55%, rgba(12,6,10,0.3) 100%);
+}
+.upload-hero-copy {
+    position: relative;
+    z-index: 1;
+    padding: clamp(1.4rem, 3vw, 2.25rem);
+    max-width: 34rem;
+}
+.upload-hero-kicker {
+    margin: 0 0 0.35rem;
+    font: 700 0.72rem Outfit, sans-serif;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #E8A0B0;
+}
+.upload-hero-copy h1 {
+    margin: 0 0 0.45rem;
+    font: 800 clamp(1.6rem, 3.2vw, 2.2rem)/1.1 Outfit, sans-serif;
+    color: #fff !important;
+}
+.upload-hero-copy p {
+    margin: 0;
+    color: rgba(255,245,248,0.86);
+    font-size: 0.98rem;
+    line-height: 1.5;
+}
+
+.upload-wizard-shell { width: 100%; }
+
+.upload-lang-card {
+    padding: 1rem 1.1rem;
+    border: 1px solid var(--brand-burgundy-border);
+    background: var(--brand-burgundy-light);
+}
+.upload-lang-select {
+    max-width: 28rem;
+    font-weight: 600;
+}
+
 .upload-wizard-page {
     min-height: calc(100vh - 80px);
 }
@@ -1903,7 +1968,11 @@ html[data-theme="dark"] .home-roadmap-status.is-test {
 .upload-wizard .wizard-form {
     display: flex;
     flex-direction: column;
-    min-height: min(72vh, 820px);
+    min-height: min(64vh, 760px);
+}
+
+@media (max-width: 767.98px) {
+    .upload-page { width: 100%; padding-left: 0.65rem; padding-right: 0.65rem; }
 }
 
 .wizard-progress {
