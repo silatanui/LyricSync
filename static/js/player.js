@@ -549,6 +549,20 @@ class SynchronizedPlayer {
             this.audio.addEventListener('error', (err) => {
                 console.warn("Audio stream error:", err);
             });
+            this.audio.addEventListener('waiting', () => {
+                window.dispatchEvent(new CustomEvent('player-buffering', { detail: { buffering: true, reason: 'waiting' } }));
+            });
+            this.audio.addEventListener('stalled', () => {
+                window.dispatchEvent(new CustomEvent('player-buffering', { detail: { buffering: true, reason: 'stalled' } }));
+            });
+            this.audio.addEventListener('playing', () => {
+                window.dispatchEvent(new CustomEvent('player-buffering', { detail: { buffering: false, reason: 'playing' } }));
+            });
+            this.audio.addEventListener('canplay', () => {
+                if (!this.audio.paused) {
+                    window.dispatchEvent(new CustomEvent('player-buffering', { detail: { buffering: false, reason: 'canplay' } }));
+                }
+            });
         }
 
     }

@@ -559,6 +559,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 player.pause();
             }
             setStreamBanner('waiting');
+            setCanvasBuffering(true, 'Syncing…');
             cur = Math.min(cur, Math.max(0, frontier - 0.05));
         }
         if (safeDur > 0) {
@@ -582,17 +583,78 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Play/Pause icon sync (ignore theme-video play/pause/loop events)
+    const canvasPlayToggle = document.getElementById('canvasPlayToggle');
+    const canvasPlayToggleIcon = document.getElementById('canvasPlayToggleIcon');
+    const canvasBuffering = document.getElementById('canvasBuffering');
+    let canvasBufferingActive = false;
+    let canvasPlayFlashTimer = null;
+
+    const setCanvasBuffering = (on, label) => {
+        canvasBufferingActive = !!on;
+        if (videoContainer) videoContainer.classList.toggle('is-buffering', canvasBufferingActive);
+        if (canvasBuffering) {
+            canvasBuffering.classList.toggle('d-none', !canvasBufferingActive);
+            const labelEl = canvasBuffering.querySelector('.canvas-buffer-label');
+            if (labelEl && label) labelEl.textContent = label;
+        }
+        if (canvasPlayToggle) {
+            canvasPlayToggle.classList.toggle('is-hidden', canvasBufferingActive);
+            if (canvasBufferingActive) canvasPlayToggle.classList.remove('is-visible', 'is-flash', 'is-playing-hint');
+        }
+    };
+
+    const syncCanvasPlayUi = (playing, { flash = false } = {}) => {
+        if (!canvasPlayToggle || !canvasPlayToggleIcon) return;
+        canvasPlayToggleIcon.className = playing ? 'bi bi-pause-fill' : 'bi bi-play-fill';
+        canvasPlayToggle.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+        canvasPlayToggle.classList.toggle('is-playing-hint', !!playing);
+        if (canvasBufferingActive) {
+            canvasPlayToggle.classList.remove('is-visible', 'is-flash');
+            canvasPlayToggle.classList.add('is-hidden');
+            return;
+        }
+        canvasPlayToggle.classList.remove('is-hidden');
+        if (!playing) {
+            canvasPlayToggle.classList.add('is-visible');
+            canvasPlayToggle.classList.remove('is-flash');
+            return;
+        }
+        // While playing, keep the control hidden unless briefly flashing after a tap.
+        canvasPlayToggle.classList.remove('is-visible');
+        if (flash) {
+            canvasPlayToggle.classList.add('is-flash');
+            if (canvasPlayFlashTimer) clearTimeout(canvasPlayFlashTimer);
+            canvasPlayFlashTimer = setTimeout(() => {
+                canvasPlayToggle.classList.remove('is-flash');
+            }, 700);
+        } else {
+            canvasPlayToggle.classList.remove('is-flash');
+        }
+    };
+
     window.addEventListener('player-play', () => {
         playIcon.className = 'bi bi-pause-fill fs-4';
+        syncCanvasPlayUi(true, { flash: true });
+        setCanvasBuffering(false);
     });
     window.addEventListener('player-pause', () => {
         playIcon.className = 'bi bi-play-fill fs-4';
+        // Stream/network waits keep the spinner; user pauses show the play button.
+        if (!canvasBufferingActive) syncCanvasPlayUi(false);
+    });
+    window.addEventListener('player-buffering', (e) => {
+        const buffering = !!e.detail?.buffering;
+        if (buffering) setCanvasBuffering(true, 'Loading…');
+        else setCanvasBuffering(false);
+        if (!buffering) syncCanvasPlayUi(!player.isPaused);
     });
     audioEl.addEventListener('play', () => {
         playIcon.className = 'bi bi-pause-fill fs-4';
+        syncCanvasPlayUi(true, { flash: true });
     });
     audioEl.addEventListener('pause', () => {
         playIcon.className = 'bi bi-play-fill fs-4';
+        if (!canvasBufferingActive) syncCanvasPlayUi(false);
     });
 
     // Play/Pause toggle
@@ -600,6 +662,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         player.togglePlay();
     };
     playPauseBtn.addEventListener('click', togglePlayback);
+    if (canvasPlayToggle) {
+        canvasPlayToggle.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            togglePlayback();
+        });
+    }
+    // Initial paused state: show center play control.
+    syncCanvasPlayUi(false);
 
     // Keyboard Space shortcut
     window.addEventListener('keydown', (e) => {
@@ -1349,6 +1420,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         if (isAiTheme) {
             videoContainer.classList.add('is-ai-painting');
+            videoContainer.setAttribute('data-loading-label', 'Painting AI lyric scene…');
             if (aiBusy) aiBusy.classList.remove('d-none');
             if (generateBtn) {
                 generateBtn.disabled = true;
@@ -1356,9 +1428,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             if (themeApplyStatus) themeApplyStatus.classList.add('d-none');
         } else if (themeApplyStatus) {
+            videoContainer.setAttribute('data-loading-label', 'Loading theme…');
             themeApplyStatus.classList.remove('d-none', 'text-danger');
             themeApplyStatus.classList.add('text-success');
-            themeApplyStatus.innerHTML = '<span class="ai-busy-orbit me-2" aria-hidden="true" style="display:inline-block;vertical-align:-0.15rem;width:0.85rem;height:0.85rem;margin:0;"></span> Applying theme…';
+            themeApplyStatus.innerHTML = '<span class="ai-busy-skeleton-inline" aria-hidden="true"></span> Applying theme…';
         }
         const aiPromptPreview = document.getElementById('aiThemePromptPreview');
         try {
@@ -1411,6 +1484,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         } finally {
             videoContainer.classList.remove('theme-preview-loading', 'is-ai-painting');
+            videoContainer.removeAttribute('data-loading-label');
             videoContainer.style.backgroundImage = '';
             if (isAiTheme) {
                 if (aiBusy && !aiBusy.querySelector('.ai-busy-copy strong')?.textContent?.includes('Couldn’t')) {
@@ -2275,13 +2349,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         if (mode === 'waiting') {
             text.textContent = `Paused at ${until}. Next lines are still streaming in.`;
+            setCanvasBuffering(true, 'Syncing…');
         } else if (mode === 'blocked') {
             text.textContent = `Preview ends at ${until}. Scrub back or wait for more sync.`;
+            setCanvasBuffering(false);
         } else if (mode === 'done') {
             text.textContent = activeStream?.language_name
                 ? `Sync finished · ${activeStream.language_name}.`
                 : 'Sync finished. The full song is ready.';
             if (meter) meter.style.width = '100%';
+            setCanvasBuffering(false);
         } else if (synced > 0.2) {
             const chunkHint = activeStream?.chunk_index && activeStream?.chunk_count
                 ? ` · slice ${activeStream.chunk_index}/${activeStream.chunk_count}`
@@ -2321,6 +2398,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const frontier = streamFrontierSeconds();
         if (frontier == null || frontier > player.currentTime + 0.45) {
             resumeWhenStreamAdvances = false;
+            setCanvasBuffering(false);
             player.play();
         }
     }

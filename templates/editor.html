@@ -788,7 +788,11 @@
                                 <i class="bi bi-magic me-1"></i> Generate from lyrics
                             </button>
                             <div id="aiThemeBusy" class="ai-busy-status d-none" role="status" aria-live="polite" aria-atomic="true">
-                                <span class="ai-busy-orbit" aria-hidden="true"></span>
+                                <div class="ai-busy-skeleton" aria-hidden="true">
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
                                 <div class="ai-busy-copy">
                                     <strong>Generating your lyric scene</strong>
                                     <span>Reading your song and painting a backdrop…</span>
@@ -1010,6 +1014,17 @@
                             <!-- Dynamic lyrics rendered cleanly without illumination -->
                         </span>
                     </div>
+                </div>
+
+                <!-- Center play / pause + buffering chrome -->
+                <div id="canvasMediaChrome" class="canvas-media-chrome" aria-hidden="false">
+                    <div id="canvasBuffering" class="canvas-buffering d-none" role="status" aria-live="polite">
+                        <span class="canvas-buffer-spinner" aria-hidden="true"></span>
+                        <span class="canvas-buffer-label">Loading…</span>
+                    </div>
+                    <button type="button" id="canvasPlayToggle" class="canvas-play-toggle is-visible" aria-label="Play">
+                        <i class="bi bi-play-fill" id="canvasPlayToggleIcon" aria-hidden="true"></i>
+                    </button>
                 </div>
 
                 <!-- Floating Canvas Direct Edit Trigger -->
