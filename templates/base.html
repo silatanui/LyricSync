@@ -101,12 +101,11 @@
                     <a class="nav-link-studio text-decoration-none" href="{{ url_for('views.dashboard') }}">
                         <i class="bi bi-grid-1x2"></i><span>Projects</span>
                     </a>
-                    <a class="nav-link-studio text-decoration-none" href="{{ url_for('views.upload_page') }}">
-                        <i class="bi bi-cloud-arrow-up"></i><span>Upload</span>
-                    </a>
+                    {% if request.endpoint == 'views.home' %}
                     <a class="nav-link-studio text-decoration-none" href="{{ url_for('views.docs_page') }}">
                         <i class="bi bi-journal-code"></i><span>Docs</span>
                     </a>
+                    {% endif %}
                 </nav>
             </div>
 
@@ -189,22 +188,15 @@
                             <a class="dropdown-item user-menu-item" href="{{ url_for('views.upload_page') }}">
                                 <div class="menu-icon-box"><i class="bi bi-plus-circle-fill"></i></div>
                                 <div class="user-menu-copy">
-                                    <span class="user-menu-title">New Lyric Project</span>
-                                    <span class="user-menu-sub">Upload song &amp; auto-sync</span>
+                                    <span class="user-menu-title">New Project</span>
+                                    <span class="user-menu-sub">Upload a song and open the studio</span>
                                 </div>
                             </a>
                             <a class="dropdown-item user-menu-item" href="{{ url_for('views.dashboard') }}">
                                 <div class="menu-icon-box"><i class="bi bi-folder2-open"></i></div>
                                 <div class="user-menu-copy">
                                     <span class="user-menu-title">My Projects</span>
-                                    <span class="user-menu-sub">Browse revisions &amp; videos</span>
-                                </div>
-                            </a>
-                            <a class="dropdown-item user-menu-item" href="{{ url_for('views.upload_page') }}?quick=1">
-                                <div class="menu-icon-box"><i class="bi bi-magic"></i></div>
-                                <div class="user-menu-copy">
-                                    <span class="user-menu-title">AI Quick Sync</span>
-                                    <span class="user-menu-sub">One-click transcription draft</span>
+                                    <span class="user-menu-sub">Browse and continue your work</span>
                                 </div>
                             </a>
                         </div>
@@ -275,7 +267,9 @@
     </div>
 
     <footer class="site-legal-footer">
+        {% if request.endpoint == 'views.home' %}
         <a href="{{ url_for('views.docs_page') }}">Documentation</a>
+        {% endif %}
         <a href="{{ url_for('views.privacy_page') }}">Privacy</a>
         <a href="{{ url_for('views.terms_page') }}">Terms</a>
         <button type="button" id="cookieSettingsBtn">Cookie settings</button>

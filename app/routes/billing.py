@@ -11,6 +11,7 @@ from app.services.image_credits import (
     grant_premium_credits,
     premium_image_credits,
     premium_price_label,
+    revoke_premium_credits,
 )
 
 billing_bp = Blueprint("billing", __name__, url_prefix="/api/billing")
@@ -135,7 +136,7 @@ def image_credits_status():
 def create_checkout_session():
     """
     Start a Stripe Checkout session for Premium image credits.
-    Requires STRIPE_SECRET_KEY. Prefer STRIPE_PRICE_ID for a recurring $5/mo Price;
+    Requires STRIPE_SECRET_KEY. Prefer STRIPE_PRICE_ID for a $5 / 100-image Price;
     otherwise creates a one-time payment for IMAGE_PREMIUM_PRICE_CENTS.
     """
     if current_user.is_admin:
@@ -250,6 +251,38 @@ def create_checkout_session():
         "success": True,
         "checkout_url": session.url,
         "session_id": session.id,
+    })
+
+
+@billing_bp.route("/admin/clear-premium", methods=["POST"])
+@login_required
+def admin_clear_premium():
+    """Admin-only: revoke Premium / bonus credits for a user by email."""
+    if not getattr(current_user, "is_admin", False):
+        return jsonify({
+            "success": False,
+            "error": {"code": "FORBIDDEN", "message": "Admin only.", "retryable": False},
+        }), 403
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email") or "").strip().lower()
+    if not email:
+        return jsonify({
+            "success": False,
+            "error": {"code": "EMAIL_REQUIRED", "message": "Provide an email.", "retryable": False},
+        }), 400
+    _ensure_billing_columns()
+    user = db.session.query(User).filter(db.func.lower(User.email) == email).first()
+    if not user:
+        return jsonify({
+            "success": False,
+            "error": {"code": "USER_NOT_FOUND", "message": f"No user for {email}.", "retryable": False},
+        }), 404
+    credits = revoke_premium_credits(user, clear_customer=True)
+    return jsonify({
+        "success": True,
+        "email": user.email,
+        "credits": credits,
+        "note": "Also cancel any active Stripe subscription in the Stripe Dashboard if needed.",
     })
 
 

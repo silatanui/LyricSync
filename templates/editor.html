@@ -161,11 +161,11 @@
                     <i class="bi bi-stars"></i>
                     <span>Effects</span>
                 </button>
+                <button type="button" class="dock-tab-btn" data-dock-tab="files" title="Your private project files">
+                    <i class="bi bi-folder2-open"></i>
+                    <span>Files</span>
+                </button>
             </div>
-            <button type="button" class="dock-tab-btn dock-tab-files" data-dock-tab="files" title="Your private project files">
-                <i class="bi bi-folder2-open"></i>
-                <span>Files</span>
-            </button>
         </nav>
 
         <!-- Canva-Style Expandable Left Tool Drawer (Canvas stays 100% visible) -->
@@ -804,11 +804,11 @@
                             <div class="ai-theme-locked-icon" aria-hidden="true"><i class="bi bi-lock-fill"></i></div>
                             <div class="ai-theme-locked-copy">
                                 <strong>Today's free AI images used up</strong>
-                                <span>You get {{ image_credits_status.daily_allowance or image_credits_status.free_allowance or 2 }} free generations each day. Come back tomorrow, or upgrade to Premium for {{ image_credits_status.premium_credits }} bonus images{% if image_credits_status.premium_price_label %} ({{ image_credits_status.premium_price_label }}){% endif %}.</span>
+                                <span>You get {{ image_credits_status.daily_allowance or image_credits_status.free_allowance or 2 }} free generations each day. Come back tomorrow, or upgrade to Premium — $5/100 images.</span>
                             </div>
                             <button type="button" class="btn btn-sm btn-burgundy w-100" id="upgradePremiumBtn">
                                 <i class="bi bi-credit-card me-1"></i>
-                                Upgrade to Premium ({{ image_credits_status.premium_price_label }} for {{ image_credits_status.premium_credits }} images)
+                                Upgrade to Premium ($5/100)
                             </button>
                             <a class="ai-theme-locked-login d-none" id="aiThemeSignInLink" href="{{ url_for('auth.login_page') }}">
                                 <i class="bi bi-google me-1"></i> Sign in to claim free credits
@@ -927,7 +927,7 @@
                 <!-- Panel: Project Files -->
                 <div class="drawer-panel d-none" id="drawerPanelFiles">
                     <p class="text-secondary small mb-2">
-                        Private to you — audio, AI scenes, uploads, and videos for this project. Nobody else can browse them.
+                        Private to you — every song, AI scene, upload, and video for this project stays here. Scroll the dock to open Files anytime.
                     </p>
                     <div class="files-upload-row mb-3">
                         <input type="file" id="projectFilesUploadInput" class="d-none" accept="image/*,video/*,.webp,.png,.jpg,.jpeg,.gif,.mp4,.mov,.webm">
@@ -1336,9 +1336,9 @@
                     Keep generating AI lyric scenes from your songs. Free accounts get a starter pack of credits; Premium adds {{ image_credits_status.premium_credits }} more images.
                 </p>
                 <div class="premium-upgrade-card mb-3">
-                    <div class="premium-upgrade-price">{{ image_credits_status.premium_price_label }}</div>
+                    <div class="premium-upgrade-price">$5/100</div>
                     <ul class="premium-upgrade-perks">
-                        <li><i class="bi bi-check2-circle"></i> {{ image_credits_status.premium_credits }} AI lyric scene images</li>
+                        <li><i class="bi bi-check2-circle"></i> 100 AI lyric scene images</li>
                         <li><i class="bi bi-check2-circle"></i> Card checkout via Stripe (when enabled)</li>
                         <li><i class="bi bi-check2-circle"></i> Same studio tools you already use</li>
                     </ul>

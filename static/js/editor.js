@@ -1515,7 +1515,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         unlimited: workspace.getAttribute('data-image-unlimited') === 'true',
         can_generate: workspace.getAttribute('data-can-generate-ai') === 'true',
         image_credits: Number(workspace.getAttribute('data-image-credits') || 0),
-        premium_price_label: workspace.getAttribute('data-premium-price') || '$5/month',
+        premium_price_label: workspace.getAttribute('data-premium-price') || '$5/100',
         premium_credits: Number(workspace.getAttribute('data-premium-credits') || 100),
         stripe_enabled: workspace.getAttribute('data-stripe-enabled') === 'true',
     };

@@ -28,7 +28,7 @@ def premium_image_credits() -> int:
 
 
 def premium_price_label() -> str:
-    return str(current_app.config.get("IMAGE_PREMIUM_PRICE_LABEL", "$5/month"))
+    return str(current_app.config.get("IMAGE_PREMIUM_PRICE_LABEL", "$5/100"))
 
 
 def _utc_today():
@@ -140,7 +140,7 @@ def ensure_user_can_generate(user: User) -> tuple[bool, dict | None]:
             f"You've used today's {daily} free AI image"
             f"{'s' if daily != 1 else ''}. "
             f"Come back tomorrow for {daily} more, or upgrade to Premium "
-            f"({premium_price_label()} for {premium_image_credits()} bonus images)."
+            f"({premium_price_label()})."
         ),
         "retryable": False,
         "credits": credits_payload(user),
@@ -183,3 +183,13 @@ def grant_premium_credits(user: User, credits: int | None = None) -> dict:
             "bonus_credits": int(getattr(user, "bonus_image_credits", 0) or 0),
             "can_generate": True,
         }
+
+
+def revoke_premium_credits(user: User, *, clear_customer: bool = True) -> dict:
+    """Remove Premium flag and bonus image credits (does not cancel Stripe itself)."""
+    user.is_premium = False
+    user.bonus_image_credits = 0
+    if clear_customer:
+        user.stripe_customer_id = None
+    db.session.commit()
+    return credits_payload(user)

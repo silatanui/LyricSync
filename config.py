@@ -78,10 +78,10 @@ class Config:
     IMAGE_FREE_CREDITS = IMAGE_DAILY_CREDITS
     IMAGE_PREMIUM_CREDITS = int(os.getenv("IMAGE_PREMIUM_CREDITS", "100"))
     IMAGE_PREMIUM_PRICE_CENTS = int(os.getenv("IMAGE_PREMIUM_PRICE_CENTS", "500"))  # $5.00
-    IMAGE_PREMIUM_PRICE_LABEL = os.getenv("IMAGE_PREMIUM_PRICE_LABEL", "$5/month")
+    IMAGE_PREMIUM_PRICE_LABEL = os.getenv("IMAGE_PREMIUM_PRICE_LABEL", "$5/100")
     IMAGE_PREMIUM_PRODUCT_NAME = os.getenv(
         "IMAGE_PREMIUM_PRODUCT_NAME",
-        "LyricSync Premium — 100 AI images / month",
+        "LyricSync Premium — 100 AI images",
     )
 
     # Stripe (optional — leave blank until you enable card payments)

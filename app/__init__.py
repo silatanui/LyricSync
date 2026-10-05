@@ -97,6 +97,26 @@ def create_app(config_class=Config):
                     db.session.commit()
                 db.session.execute(db.text("UPDATE users SET email_verified = 1 WHERE email = 'silatanuikipngetich@gmail.com' OR google_id IS NOT NULL"))
                 db.session.commit()
+                # One-shot: clear Premium for the KYU student test account (once per host).
+                try:
+                    from pathlib import Path as _Path
+                    from app.models import User as _User
+                    from app.services.image_credits import revoke_premium_credits
+                    _clear_email = "tanui.kipngetichsila@students.kyu.ac.ke"
+                    _data_root = flask_app.config.get("DATA_ROOT") or flask_app.instance_path
+                    _marker = _Path(_data_root) / ".cleared_premium_kyu_2026_04"
+                    if not _marker.exists():
+                        _target = db.session.query(_User).filter(
+                            db.func.lower(_User.email) == _clear_email
+                        ).first()
+                        if _target:
+                            revoke_premium_credits(_target, clear_customer=True)
+                            flask_app.logger.info("Cleared Premium for %s", _clear_email)
+                        _marker.parent.mkdir(parents=True, exist_ok=True)
+                        _marker.write_text(_clear_email + "\n", encoding="utf-8")
+                except Exception as clear_err:
+                    db.session.rollback()
+                    flask_app.logger.warning("Premium clear warning: %s", clear_err)
                 # Legacy projects were created without an owner and appeared in every
                 # dashboard. Assign orphans to the admin account and keep them private
                 # unless meta.is_public was explicitly set to true.
