@@ -780,12 +780,19 @@
                             </span>
                         </div>
                         <p class="ai-theme-banner-copy">
-                            OpenAI reads your song title and lyrics, writes a visual brief, then paints a still backdrop for your canvas.
+                            OpenAI paints a custom still from your title and lyrics. That generation is costly — please consider supporting it with Premium ($5/100 images). Upload, sync, themes, styling, and export stay free.
                         </p>
+                        <div class="ai-support-appeal" role="note">
+                            <i class="bi bi-heart" aria-hidden="true"></i>
+                            <span>AI image themes consume real compute. A small Premium pack keeps LyricSync sustainable; everything else in the studio remains free.</span>
+                        </div>
 
                         <div id="aiThemeGenerateWrap">
                             <button type="button" class="btn btn-sm btn-burgundy w-100" id="generateAiThemeBtn">
                                 <i class="bi bi-magic me-1"></i> Generate from lyrics
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-burgundy w-100 mt-2" id="supportAiImagesBtn">
+                                <i class="bi bi-credit-card me-1"></i> Support AI images — $5/100
                             </button>
                             <div id="aiThemeBusy" class="ai-busy-status d-none" role="status" aria-live="polite" aria-atomic="true">
                                 <div class="ai-busy-skeleton" aria-hidden="true">
@@ -804,11 +811,11 @@
                             <div class="ai-theme-locked-icon" aria-hidden="true"><i class="bi bi-lock-fill"></i></div>
                             <div class="ai-theme-locked-copy">
                                 <strong>Today's free AI images used up</strong>
-                                <span>You get {{ image_credits_status.daily_allowance or image_credits_status.free_allowance or 2 }} free generations each day. Come back tomorrow, or upgrade to Premium — $5/100 images.</span>
+                                <span>You get {{ image_credits_status.daily_allowance or image_credits_status.free_allowance or 2 }} free AI generations each day. Premium adds 100 more for $5 — sync, themes, and export stay free.</span>
                             </div>
                             <button type="button" class="btn btn-sm btn-burgundy w-100" id="upgradePremiumBtn">
                                 <i class="bi bi-credit-card me-1"></i>
-                                Upgrade to Premium ($5/100)
+                                Support AI images ($5/100)
                             </button>
                             <a class="ai-theme-locked-login d-none" id="aiThemeSignInLink" href="{{ url_for('auth.login_page') }}">
                                 <i class="bi bi-google me-1"></i> Sign in to claim free credits
@@ -1333,14 +1340,14 @@
             </div>
             <div class="modal-body pt-2">
                 <p class="text-secondary small mb-3">
-                    Keep generating AI lyric scenes from your songs. Free accounts get a starter pack of credits; Premium adds {{ image_credits_status.premium_credits }} more images.
+                    AI lyric scenes use paid image models and cost real resources. Supporting with Premium helps keep generation available — while upload, transcription, themes, styling, and export stay free for everyone.
                 </p>
                 <div class="premium-upgrade-card mb-3">
                     <div class="premium-upgrade-price">$5/100</div>
                     <ul class="premium-upgrade-perks">
                         <li><i class="bi bi-check2-circle"></i> 100 AI lyric scene images</li>
-                        <li><i class="bi bi-check2-circle"></i> Card checkout via Stripe (when enabled)</li>
-                        <li><i class="bi bi-check2-circle"></i> Same studio tools you already use</li>
+                        <li><i class="bi bi-check2-circle"></i> Helps cover OpenAI generation costs</li>
+                        <li><i class="bi bi-check2-circle"></i> Rest of the studio stays free</li>
                     </ul>
                 </div>
                 <button type="button" class="btn btn-burgundy w-100 mb-2" id="payWithCardBtn">

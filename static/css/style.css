@@ -3213,7 +3213,24 @@ html[data-theme="dark"] .template-card-body .text-muted {
     color: var(--text-secondary);
     font-size: 0.72rem;
     line-height: 1.4;
-    margin-bottom: 0.7rem;
+    margin-bottom: 0.55rem;
+}
+.ai-support-appeal {
+    display: flex;
+    gap: 0.45rem;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+    padding: 0.55rem 0.65rem;
+    border: 1px dashed var(--brand-burgundy-border);
+    background: var(--brand-burgundy-light);
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    line-height: 1.4;
+}
+.ai-support-appeal i {
+    color: var(--brand-burgundy);
+    margin-top: 0.1rem;
+    flex: 0 0 auto;
 }
 .ai-busy-status {
     display: flex;

@@ -1,8 +1,20 @@
 {% extends "base.html" %}
 {% block title %}{{ project.name }} | LyricSync Studio{% endblock %}
 
+{% set style = canonical.get('style', {}) or {} %}
+{% set project_font = style.get('font') or 'Caveat' %}
+{% set project_font_size = style.get('font_size') or style.get('fontSize') or 36 %}
+{% set project_primary = style.get('primary_color') or style.get('primaryColor') or '#FFFFFF' %}
+{% set project_highlight = style.get('highlight_color') or style.get('highlightColor') or '#10B981' %}
+{% set project_weight = style.get('font_weight') or style.get('fontWeight') or 600 %}
+
 {% block content %}
-<div class="public-project-page container">
+<div class="public-project-page container"
+     data-font="{{ project_font|e }}"
+     data-font-size="{{ project_font_size }}"
+     data-primary="{{ project_primary|e }}"
+     data-highlight="{{ project_highlight|e }}"
+     data-weight="{{ project_weight }}">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <a class="home-text-link" href="{{ url_for('views.home') }}">
             <i class="bi bi-arrow-left"></i> Back to LyricSync
@@ -15,40 +27,36 @@
     </div>
 
     <!-- Main Player Stage -->
-    <div class="public-project-hero position-relative rounded overflow-hidden shadow-sm" style="background: #12050B; aspect-ratio: 16 / 9;">
+    <div class="public-project-hero position-relative overflow-hidden shadow-sm" style="background: #12050B; aspect-ratio: 16 / 9;">
         {% if has_render %}
-            <!-- Rendered Video Player with Burned-In Typography -->
             <video id="sharedMedia" controls playsinline preload="auto" class="w-100 h-100 object-fit-contain" style="display: block; background: #000;">
                 <source src="{{ url_for('projects.stream_project_media', project_id=project.id, kind='rendered') }}" type="video/mp4">
                 Your browser does not support HTML5 video.
             </video>
         {% elif is_video_bg %}
-            <!-- Synchronized Video Background Player -->
             <video id="sharedMedia" playsinline loop preload="auto" class="w-100 h-100 object-fit-cover position-absolute top-0 start-0">
                 <source src="{{ url_for('projects.stream_project_media', project_id=project.id, kind='video') }}" type="video/mp4">
             </video>
-            <div class="shared-lyric-overlay position-absolute top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center align-items-center p-4 text-center pointer-events-none" style="background: rgba(0,0,0,0.35);">
-                <div id="sharedActiveLyric" class="display-6 fw-bold text-white px-4 py-3 rounded" style="background: rgba(15,10,14,0.75); backdrop-filter: blur(8px); max-width: 90%; transition: opacity 0.2s ease;">
+            <div class="shared-lyric-overlay position-absolute top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center align-items-center p-4 text-center pointer-events-none">
+                <div id="sharedActiveLyric" class="shared-active-lyric">
                     {{ project.name }}
                 </div>
             </div>
         {% else %}
-            <!-- Template / Image Background with Synchronized Lyric Overlay -->
-            <img id="sharedBgImg" 
-                 src="{{ url_for('projects.stream_project_media', project_id=project.id, kind='video') }}" 
-                 class="w-100 h-100 object-fit-cover position-absolute top-0 start-0" 
+            <img id="sharedBgImg"
+                 src="{{ url_for('projects.stream_project_media', project_id=project.id, kind='video') }}"
+                 class="w-100 h-100 object-fit-cover position-absolute top-0 start-0"
                  alt="Project Artwork">
-            <div class="shared-lyric-overlay position-absolute top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center align-items-center p-4 text-center pointer-events-none" style="background: rgba(0,0,0,0.35);">
-                <div id="sharedActiveLyric" class="display-6 fw-bold text-white px-4 py-3 rounded" style="background: rgba(15,10,14,0.75); backdrop-filter: blur(8px); max-width: 90%; transition: opacity 0.2s ease;">
+            <div class="shared-lyric-overlay position-absolute top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center align-items-center p-4 text-center pointer-events-none">
+                <div id="sharedActiveLyric" class="shared-active-lyric">
                     {{ project.name }}
                 </div>
             </div>
         {% endif %}
     </div>
 
-    <!-- Master Audio Bar for non-rendered projects -->
     {% if not has_render and has_audio %}
-    <div class="bg-white border rounded p-3 mt-3 shadow-sm d-flex align-items-center gap-3">
+    <div class="bg-white border p-3 mt-3 shadow-sm d-flex align-items-center gap-3">
         <audio id="sharedAudio" controls preload="auto" class="w-100" style="accent-color: var(--brand-burgundy);">
             <source src="{{ url_for('projects.stream_project_media', project_id=project.id, kind='audio') }}" type="audio/mpeg">
             Your browser does not support HTML5 audio.
@@ -56,12 +64,15 @@
     </div>
     {% endif %}
 
-    <!-- Project Heading & Metadata -->
     <div class="public-project-heading mt-4">
         <div>
             <div class="home-section-label">Shared project</div>
             <h1>{{ project.name }}</h1>
             <p>{{ canonical.get('meta', {}).get('description', '') or 'Synchronized lyric video project' }}</p>
+            <p class="public-style-meta small text-secondary mb-0">
+                Typography: <strong id="publicFontLabel">{{ project_font }}</strong>
+                · {{ project_font_size }}px
+            </p>
         </div>
         <div class="d-flex gap-2">
             <a class="btn btn-burgundy" href="{{ url_for('views.upload_page') }}">
@@ -70,26 +81,23 @@
         </div>
     </div>
 
-    <!-- Interactive Lyrics Sheet -->
     <div class="public-lyrics mt-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <div class="home-section-label mb-0">Synchronized lyrics</div>
             <span class="small text-muted font-mono">{{ canonical.get('lyrics', [])|length }} lines</span>
         </div>
 
-        <div class="public-lyrics-container bg-white border rounded p-4 shadow-sm" style="max-height: 480px; overflow-y: auto;">
+        <div class="public-lyrics-container bg-white border p-4 shadow-sm" style="max-height: 480px; overflow-y: auto;">
             {% if canonical.get('lyrics') %}
                 {% for line in canonical.get('lyrics', []) %}
-                <div class="public-lyric-row d-flex align-items-baseline p-2 rounded" 
-                     data-start="{{ line.start }}" 
+                <div class="public-lyric-row d-flex align-items-baseline p-2"
+                     data-start="{{ line.start }}"
                      data-end="{{ line.end }}"
                      style="cursor: pointer; transition: background 0.15s ease;">
                     <span class="font-mono text-muted me-3" style="font-size: 0.8rem; min-width: 48px;">
                         {{ '%02d:%02d' | format((line.start // 60)|int, (line.start % 60)|int) }}
                     </span>
-                    <span class="public-lyric-text" style="font-size: 1.05rem; line-height: 1.4;">
-                        {{ line.text }}
-                    </span>
+                    <span class="public-lyric-text">{{ line.text }}</span>
                 </div>
                 {% endfor %}
             {% else %}
@@ -98,9 +106,13 @@
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/fonts.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    const page = document.querySelector('.public-project-page');
     const hasRender = {{ 'true' if has_render else 'false' }};
     const isVideoBg = {{ 'true' if is_video_bg else 'false' }};
     const mediaEl = document.getElementById('sharedMedia');
@@ -108,12 +120,77 @@ document.addEventListener('DOMContentLoaded', () => {
     const activeLyricEl = document.getElementById('sharedActiveLyric');
     const lyricRows = document.querySelectorAll('.public-lyric-row');
 
-    // Primary timing source is audio element if present, otherwise video element
-    const primaryTimer = (!hasRender && audioEl) ? audioEl : mediaEl;
+    const fontName = page?.dataset.font || 'Caveat';
+    const fontSize = Number(page?.dataset.fontSize || 36);
+    const primary = page?.dataset.primary || '#FFFFFF';
+    const highlight = page?.dataset.highlight || '#10B981';
+    const weight = page?.dataset.weight || '600';
+    const fontFamily = (window.LyricSyncFonts && LyricSyncFonts.resolve)
+        ? LyricSyncFonts.resolve(fontName)
+        : `"${fontName}", sans-serif`;
 
+    // Ensure the project font family is loaded for this shared view.
+    const GOOGLE_FAMILIES = {
+        Caveat: 'Caveat:wght@600;700',
+        Estelle: 'Great+Vibes',
+        'Great Vibes': 'Great+Vibes',
+        Anton: 'Anton',
+        'Bebas Neue': 'Bebas+Neue',
+        Bodoni: 'Bodoni+Moda:opsz,wght@6..96,500;6..96,700',
+        Cinzel: 'Cinzel:wght@600;800',
+        'Cormorant Garamond': 'Cormorant+Garamond:wght@500;600;700',
+        'DM Sans': 'DM+Sans:wght@400;500;700',
+        Garamond: 'EB+Garamond:wght@500;600;700',
+        'Minion Pro': 'EB+Garamond:wght@500;600;700',
+        Inter: 'Inter:wght@400;500;600;700',
+        Lato: 'Lato:wght@400;700',
+        'League Spartan': 'League+Spartan:wght@500;700',
+        'Libre Baskerville': 'Libre+Baskerville:wght@400;700',
+        Baskerville: 'Libre+Baskerville:wght@400;700',
+        Merriweather: 'Merriweather:wght@400;700',
+        Montserrat: 'Montserrat:wght@500;700;800',
+        'Proxima Nova': 'Montserrat:wght@500;700;800',
+        Nunito: 'Nunito:wght@400;600;800',
+        'Open Sans': 'Open+Sans:wght@400;600;700',
+        Oswald: 'Oswald:wght@400;600;700',
+        Outfit: 'Outfit:wght@400;600;700;800',
+        'PT Sans': 'PT+Sans:wght@400;700',
+        'Playfair Display': 'Playfair+Display:ital,wght@0,600;0,700;1,600',
+        Poppins: 'Poppins:wght@400;500;600;700',
+        Raleway: 'Raleway:wght@400;600;800',
+        Roboto: 'Roboto:wght@400;500;700',
+        'Source Sans Pro': 'Source+Sans+3:wght@400;600;700',
+        Ubuntu: 'Ubuntu:wght@400;500;700',
+    };
+    const familyQuery = GOOGLE_FAMILIES[fontName];
+    if (familyQuery) {
+        const href = `https://fonts.googleapis.com/css2?family=${familyQuery}&display=swap`;
+        if (![...document.styleSheets].some((s) => (s.href || '').includes(encodeURIComponent(familyQuery.split(':')[0].replace(/\+/g, ' ')) ) || (s.href || '').includes(familyQuery.split(':')[0]))) {
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = href;
+            document.head.appendChild(link);
+        }
+    }
+
+    const overlaySize = Math.max(22, Math.round(fontSize * 1.15));
+    if (activeLyricEl) {
+        activeLyricEl.style.fontFamily = fontFamily;
+        activeLyricEl.style.fontSize = `${overlaySize}px`;
+        activeLyricEl.style.fontWeight = weight;
+        activeLyricEl.style.color = primary;
+        activeLyricEl.style.textShadow = `0 2px 18px rgba(0,0,0,0.55), 0 0 2px ${highlight}`;
+    }
+    document.querySelectorAll('.public-lyric-text').forEach((el) => {
+        el.style.fontFamily = fontFamily;
+        el.style.fontSize = '1.08rem';
+        el.style.fontWeight = weight;
+        el.style.lineHeight = '1.45';
+    });
+
+    const primaryTimer = (!hasRender && audioEl) ? audioEl : mediaEl;
     if (!primaryTimer) return;
 
-    // Synchronize background video with audio playback if both are active
     if (audioEl && mediaEl && isVideoBg) {
         audioEl.addEventListener('play', () => {
             mediaEl.currentTime = audioEl.currentTime;
@@ -125,15 +202,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Interactive lyric synchronization on timeupdate
     const lyricData = [];
     lyricRows.forEach((row) => {
         const start = parseFloat(row.dataset.start);
         const end = parseFloat(row.dataset.end);
         const text = row.querySelector('.public-lyric-text')?.textContent.trim() || '';
         lyricData.push({ row, start, end, text });
-
-        // Click lyric line to seek and play
         row.addEventListener('click', () => {
             primaryTimer.currentTime = start;
             primaryTimer.play().catch(() => {});
@@ -143,51 +217,57 @@ document.addEventListener('DOMContentLoaded', () => {
     primaryTimer.addEventListener('timeupdate', () => {
         const t = primaryTimer.currentTime;
         let activeFound = false;
-
         for (let i = 0; i < lyricData.length; i++) {
             const item = lyricData[i];
             if (t >= item.start && t <= (item.end + 0.35)) {
                 if (activeLyricEl) {
                     activeLyricEl.textContent = item.text;
                     activeLyricEl.style.opacity = '1';
+                    activeLyricEl.style.color = primary;
                 }
-                lyricRows.forEach(r => r.classList.remove('active-sync-line'));
+                lyricRows.forEach((r) => r.classList.remove('active-sync-line'));
                 item.row.classList.add('active-sync-line');
-
-                // Smoothly scroll active line into view inside container
                 const container = item.row.parentElement;
                 if (container) {
                     const offsetTop = item.row.offsetTop - container.offsetTop;
-                    const halfHeight = container.clientHeight / 2;
-                    container.scrollTo({ top: offsetTop - halfHeight, behavior: 'smooth' });
+                    container.scrollTo({ top: offsetTop - container.clientHeight / 2, behavior: 'smooth' });
                 }
                 activeFound = true;
                 break;
             }
         }
-
         if (!activeFound && activeLyricEl && t < (lyricData[0]?.start || 0)) {
             activeLyricEl.textContent = {{ project.name|tojson }};
         }
     });
 });
 </script>
-
 <style>
-.public-lyric-row:hover {
-    background-color: #F8F4F5;
+.shared-lyric-overlay {
+    background: rgba(0,0,0,0.32);
 }
-.public-lyric-row.active-sync-line {
-    background-color: #E8F5E9 !important;
+.shared-active-lyric {
+    max-width: 92%;
+    padding: 0.85rem 1.25rem;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    transition: opacity 0.2s ease;
 }
+.public-lyric-row:hover { background-color: #F8F4F5; }
+.public-lyric-row.active-sync-line { background-color: rgba(123, 17, 46, 0.08) !important; }
 .public-lyric-row.active-sync-line .public-lyric-text {
     font-weight: 700;
-    color: var(--brand-burgundy, #210914);
+    color: var(--brand-burgundy, #7B112E);
 }
 .public-lyric-row.active-sync-line .font-mono {
     color: #10B981 !important;
     font-weight: 700;
 }
+html[data-theme="dark"] .public-lyrics-container.bg-white,
+html[data-theme="dark"] .public-project-page .bg-white {
+    background: var(--surface-card) !important;
+    color: var(--text-primary);
+}
+html[data-theme="dark"] .public-lyric-row:hover { background-color: var(--surface-muted); }
 </style>
 {% endblock %}
-

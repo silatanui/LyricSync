@@ -85,9 +85,9 @@ def export_size_scale(aspect_ratio: str, play_res_x: int) -> float:
     ref = preview_reference_width(aspect_ratio)
     if ref <= 0:
         return 1.0
-    # Preview canvas is much narrower than export PlayRes; bump slightly so
-    # burned-in lyrics read closer to the studio preview (were appearing small).
-    return max(1.0, float(play_res_x) / ref) * 1.4
+    # Preview canvas is much narrower than export PlayRes; scale so burned-in
+    # lyrics read at a similar visual weight to the studio preview on a full display.
+    return max(1.0, float(play_res_x) / ref) * 1.85
 
 
 def split_song_credit(full_title: str) -> tuple[str, str]:

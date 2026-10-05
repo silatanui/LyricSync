@@ -1546,6 +1546,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (generateAiThemeBtn) {
             generateAiThemeBtn.disabled = showLocked;
         }
+        const supportAiImagesBtn = document.getElementById('supportAiImagesBtn');
+        if (supportAiImagesBtn) {
+            supportAiImagesBtn.classList.toggle('d-none', unlimited || !authenticated);
+        }
         if (premiumCheckoutHint && typeof imageCreditState.stripe_enabled === 'boolean') {
             premiumCheckoutHint.textContent = imageCreditState.stripe_enabled
                 ? 'Secure checkout opens in Stripe. Credits are added automatically after payment.'
@@ -1617,6 +1621,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (upgradePremiumBtn) {
         upgradePremiumBtn.addEventListener('click', openPremiumUpgradeModal);
+    }
+    const supportAiImagesBtn = document.getElementById('supportAiImagesBtn');
+    if (supportAiImagesBtn) {
+        supportAiImagesBtn.addEventListener('click', openPremiumUpgradeModal);
     }
     if (payWithCardBtn) {
         payWithCardBtn.addEventListener('click', startCardCheckout);
