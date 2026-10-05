@@ -287,6 +287,28 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         def _cased_word(word_obj) -> str:
             return escape_ass_text(apply_text_case(word_obj.get("text", ""), text_case))
 
+        def _timed_words(line: Dict[str, Any]) -> List[Dict[str, Any]]:
+            """Word list with timings; synthesize evenly if ASR words are missing."""
+            raw = [w for w in (line.get("words") or []) if str(w.get("text", "")).strip()]
+            if raw:
+                return raw
+            tokens = [t for t in str(line.get("text", "")).strip().split() if t]
+            if not tokens:
+                return []
+            start = float(line.get("start", 0.0) or 0.0)
+            end = float(line.get("end", start + 1.0) or (start + 1.0))
+            if end <= start:
+                end = start + max(0.35, len(tokens) * 0.28)
+            step = (end - start) / len(tokens)
+            return [
+                {
+                    "text": tok,
+                    "start": start + i * step,
+                    "end": start + (i + 1) * step,
+                }
+                for i, tok in enumerate(tokens)
+            ]
+
         def _active_override(word_text: str) -> str:
             """Per-word tracking tags for classic-style timed modes."""
             if mode == "underline":
@@ -311,7 +333,39 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             # classic color flash (default for unknown timed modes)
             return f"{{\\c{secondary_color}}}{word_text}{{\\c{primary_color}}}"
 
-        if mode == "karaoke":
+        if effect == "typewriter":
+            # Word-after-word reveal across the whole chunk (never clip all lines at once).
+            for chunk in chunks:
+                if not chunk:
+                    continue
+                raw_chunk_end = float(chunk[-1].get("end", 0.0) or 0.0)
+                flat: List[tuple[int, Dict[str, Any]]] = []
+                for line_idx, line in enumerate(chunk):
+                    for w in _timed_words(line):
+                        flat.append((line_idx, w))
+                if not flat:
+                    continue
+                for i, (line_idx, active_word) in enumerate(flat):
+                    w_start = float(active_word.get("start", 0.0) or 0.0)
+                    if i + 1 < len(flat):
+                        w_end = float(flat[i + 1][1].get("start", w_start + 0.25) or (w_start + 0.25))
+                    else:
+                        w_end = max(w_start + 0.2, raw_chunk_end)
+                    if w_end <= w_start:
+                        w_end = w_start + 0.2
+
+                    # Build text with only words revealed so far, line breaks preserved.
+                    revealed_by_line: List[List[str]] = [[] for _ in chunk]
+                    for j in range(i + 1):
+                        lj, wj = flat[j]
+                        revealed_by_line[lj].append(_cased_word(wj))
+                    line_parts = [" ".join(parts) for parts in revealed_by_line if parts]
+                    dialogue_text = "\\N".join(line_parts)
+                    events.append(
+                        f"Dialogue: 0,{format_ass_time(w_start)},{format_ass_time(w_end)},"
+                        f"Default,,0,0,0,,{shad_override}{dialogue_text}"
+                    )
+        elif mode == "karaoke":
             for chunk in chunks:
                 if not chunk:
                     continue
@@ -329,7 +383,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 line_parts = []
 
                 for line in chunk:
-                    words = line.get("words", [])
+                    words = _timed_words(line)
                     karaoke_text_parts = []
                     for w in words:
                         w_start_raw = float(w.get("start", raw_chunk_start))
@@ -368,7 +422,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 chunk_end = format_ass_time(raw_chunk_end)
                 line_parts = []
                 for line in chunk:
-                    words = line.get("words", [])
+                    words = _timed_words(line)
                     if words:
                         line_parts.append(" ".join(_cased_word(w) for w in words))
                     else:
@@ -385,14 +439,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 # Entrance motion once per chunk (stanza/couplet), not on every word/line.
                 chunk_motion_applied = False
                 for line_idx, line in enumerate(chunk):
-                    words = line.get("words", [])
+                    words = _timed_words(line)
                     for active_word_idx, active_word in enumerate(words):
                         w_start = format_ass_time(active_word["start"])
                         w_end = format_ass_time(active_word["end"])
 
                         chunk_lines_styled = []
                         for curr_l_idx, curr_line in enumerate(chunk):
-                            curr_words = curr_line.get("words", [])
+                            curr_words = _timed_words(curr_line)
                             line_tokens = []
                             for curr_w_idx, w in enumerate(curr_words):
                                 word_text = _cased_word(w)

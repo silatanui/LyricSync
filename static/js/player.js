@@ -642,28 +642,58 @@ class SynchronizedPlayer {
         return raw;
     }
 
-    _renderLineWordsHtml(line, time, isLineActive) {
-        const words = line.words || [];
+    _lineWordsTimed(line) {
+        const existing = Array.isArray(line?.words) ? line.words.filter((w) => (w?.text || '').trim()) : [];
+        if (existing.length) {
+            return existing.map((w) => ({
+                text: w.text || '',
+                start: Number(w.start) || 0,
+                end: Number(w.end) || (Number(w.start) || 0) + 0.25,
+            }));
+        }
+        const tokens = String(line?.text || '').trim().split(/\s+/).filter(Boolean);
+        if (!tokens.length) return [];
+        const start = Number(line?.start) || 0;
+        const end = Math.max(start + tokens.length * 0.28, Number(line?.end) || start + 1);
+        const span = Math.max(0.05, end - start);
+        const step = span / tokens.length;
+        return tokens.map((text, i) => ({
+            text,
+            start: start + i * step,
+            end: start + (i + 1) * step,
+        }));
+    }
+
+    _renderLineWordsHtml(line, time, isLineActive, options = {}) {
+        const words = this._lineWordsTimed(line);
         const effectShadow = this.composeTextEffectsCss();
         const mode = (this.style.mode || 'karaoke').toLowerCase();
         const highlight = this.style.highlightColor || '#10B981';
         const primary = this.style.primaryColor || '#FFFFFF';
+        const typewriter = Boolean(options.typewriter);
 
         if (!words.length) {
+            if (typewriter && time < (Number(line?.start) || 0)) return '';
             const plain = this._escapeHtml(this.applyTextCase(line.text || ''));
             return `<span style="text-shadow: ${effectShadow};">${plain}</span>`;
         }
-        return words.map((w) => {
+
+        const parts = [];
+        for (const w of words) {
+            // Typewriter: word-after-word — never show future words (no parallel line clip).
+            if (typewriter && time < w.start) break;
+
             const isWordActive = time >= w.start && time <= w.end;
             const isPast = time > w.end;
             const displayText = this._escapeHtml(this.applyTextCase(w.text || ''));
 
             let color = primary;
-            let extraClass = '';
+            let extraClass = typewriter ? 'tw-revealed' : '';
             let extraStyle = '';
 
-            if (mode === 'none') {
+            if (mode === 'none' || typewriter) {
                 color = primary;
+                if (typewriter && isWordActive) extraClass += ' active';
             } else if (mode === 'karaoke') {
                 if (isWordActive || isPast) {
                     color = highlight;
@@ -699,8 +729,11 @@ class SynchronizedPlayer {
                 }
             }
 
-            return `<span class="karaoke-word ${extraClass}" style="color: ${color}; text-shadow: ${effectShadow}; ${extraStyle}" data-start="${w.start}" data-end="${w.end}">${displayText}</span>`;
-        }).join(' ');
+            parts.push(
+                `<span class="karaoke-word ${extraClass}" style="color: ${color}; text-shadow: ${effectShadow}; ${extraStyle}" data-start="${w.start}" data-end="${w.end}">${displayText}</span>`
+            );
+        }
+        return parts.join(' ');
     }
 
     _clearEffectClasses(el) {
@@ -784,6 +817,8 @@ class SynchronizedPlayer {
         }
 
         const format = this.style.format || 'stanza';
+        const globalFx = this._resolveEffect(activeLine || this.lines[0]);
+        const isTypewriter = globalFx === 'typewriter';
 
         if (format === 'line') {
             if (!activeLine) {
@@ -791,9 +826,15 @@ class SynchronizedPlayer {
                 this._playEffect(this.displayActiveText, 'none', null);
                 return;
             }
-            this.displayActiveText.innerHTML = this._renderLineWordsHtml(activeLine, time, true);
-            const fx = this._resolveEffect(activeLine);
-            this._playEffect(this.displayActiveText, fx, `line-${activeLine.id || activeLineIdx}-${fx}`);
+            this.displayActiveText.innerHTML = this._renderLineWordsHtml(activeLine, time, true, {
+                typewriter: isTypewriter,
+            });
+            // Typewriter is word-timed in HTML — do not clip the whole line as one block.
+            this._playEffect(
+                this.displayActiveText,
+                isTypewriter ? 'none' : globalFx,
+                isTypewriter ? null : `line-${activeLine.id || activeLineIdx}-${globalFx}`
+            );
             return;
         }
 
@@ -827,22 +868,34 @@ class SynchronizedPlayer {
 
         const chunkKey = activeChunk.map((l) => l.id || l.start).join('|');
         this._lastChunkKey = chunkKey;
+        const fxLine = activeChunk[0] || activeLine;
+        const fx = this._resolveEffect(fxLine);
+        const chunkTypewriter = fx === 'typewriter';
 
-        // Render each line in activeChunk
+        // Render each line in activeChunk. Typewriter: only lines/words reached so far.
         const linesHtml = activeChunk.map((line) => {
             const isCurrLineActive = (activeLine && line.id === activeLine.id);
-            const lineContent = this._renderLineWordsHtml(line, time, isCurrLineActive);
-            const opacity = isCurrLineActive ? '1' : '0.62';
-            const fontWeight = isCurrLineActive ? (this.style.fontWeight || '600') : Math.max(400, (this.style.fontWeight || 600) - 100);
+            const lineContent = this._renderLineWordsHtml(line, time, isCurrLineActive, {
+                typewriter: chunkTypewriter,
+            });
+            if (chunkTypewriter && !String(lineContent || '').trim()) {
+                return '';
+            }
+            const opacity = chunkTypewriter || isCurrLineActive ? '1' : '0.62';
+            const fontWeight = isCurrLineActive || chunkTypewriter
+                ? (this.style.fontWeight || '600')
+                : Math.max(400, (this.style.fontWeight || 600) - 100);
             return `<div class="canvas-stanza-line my-1" style="opacity: ${opacity}; font-weight: ${fontWeight}; transition: opacity 0.15s ease;">${lineContent}</div>`;
         }).join('');
 
         this.displayActiveText.innerHTML = linesHtml;
 
-        // Entrance effects fire once per stanza/couplet chunk — not again on each line inside it.
-        const fxLine = activeChunk[0] || activeLine;
-        const fx = this._resolveEffect(fxLine);
-        this._playEffect(this.displayActiveText, fx, `chunk-${chunkKey}-${fx}`);
+        // Entrance effects once per chunk — except typewriter, which reveals word-by-word.
+        this._playEffect(
+            this.displayActiveText,
+            chunkTypewriter ? 'none' : fx,
+            chunkTypewriter ? null : `chunk-${chunkKey}-${fx}`
+        );
     }
 
     seekTo(seconds) {

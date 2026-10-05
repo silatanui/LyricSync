@@ -130,6 +130,52 @@ def test_ass_generation_with_typewriter_title(tmp_path):
     assert "Dialogue: 1," in content
 
 
+def test_ass_typewriter_reveals_word_by_word(tmp_path):
+    canonical = {
+        "media": {"width": 1920, "height": 1080},
+        "style": {
+            "format": "sentence",
+            "mode": "karaoke",
+            "effect": "typewriter",
+            "font": "Inter",
+            "font_size": 40,
+        },
+        "lyrics": [
+            {
+                "id": 1,
+                "text": "Hello world",
+                "start": 1.0,
+                "end": 2.0,
+                "words": [
+                    {"text": "Hello", "start": 1.0, "end": 1.4},
+                    {"text": "world", "start": 1.4, "end": 2.0},
+                ],
+            },
+            {
+                "id": 2,
+                "text": "Next line",
+                "start": 2.0,
+                "end": 3.0,
+                "words": [
+                    {"text": "Next", "start": 2.0, "end": 2.4},
+                    {"text": "line", "start": 2.4, "end": 3.0},
+                ],
+            },
+        ],
+    }
+    ass_path = tmp_path / "typewriter_words.ass"
+    SubtitleGenerator.generate_ass(canonical, ass_path)
+    content = ass_path.read_text(encoding="utf-8")
+    # First word alone — second line must not appear yet.
+    assert "0:00:01.00,0:00:01.40,Default,,0,0,0,," in content
+    assert content.count("\\N") >= 1
+    assert "Hello world\\NNext" in content
+    # First event text should end with Hello (no second line yet).
+    first_event = next(line for line in content.splitlines() if line.startswith("Dialogue: 0,0:00:01.00"))
+    assert first_event.endswith("Hello")
+    assert "\\N" not in first_event
+
+
 def test_ass_typography_and_motion_effects(tmp_path):
     canonical = {
         "media": {"width": 1920, "height": 1080},
