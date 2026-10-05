@@ -5,7 +5,20 @@ const lyricSyncProjectsUrl = document.querySelector('meta[name="lyricsync-api-ro
 const lyricSyncApiBase = lyricSyncProjectsUrl.endsWith('/projects')
     ? lyricSyncProjectsUrl.slice(0, -'/projects'.length)
     : '/api';
-const lyricSyncApiUrl = (path) => `${lyricSyncApiBase}${path}`;
+const lyricSyncAppRoot = lyricSyncApiBase.replace(/\/api\/?$/, '') || '';
+const lyricSyncApiUrl = (path) => `${lyricSyncApiBase}${path.startsWith('/') ? path : `/${path}`}`;
+
+/** Prefix root-relative URLs with the app mount (e.g. /LyricSync) when hosted in a subfolder. */
+function lyricSyncAbsoluteUrl(path) {
+    if (!path) return path;
+    if (/^(https?:|data:|blob:)/i.test(path)) return path;
+    if (lyricSyncAppRoot && (path === lyricSyncAppRoot || path.startsWith(`${lyricSyncAppRoot}/`))) {
+        return path;
+    }
+    if (path.startsWith('/')) return `${lyricSyncAppRoot}${path}`;
+    return `${lyricSyncAppRoot}/${path}`;
+}
+window.lyricSyncAbsoluteUrl = lyricSyncAbsoluteUrl;
 
 const LyricSyncAPI = {
     createProject(formData, onProgress = null) {
@@ -221,12 +234,12 @@ const LyricSyncAPI = {
     },
 
     async getImageCredits() {
-        const response = await fetch('/api/billing/image-credits', { cache: 'no-store' });
+        const response = await fetch(lyricSyncApiUrl('/billing/image-credits'), { cache: 'no-store' });
         return await response.json();
     },
 
     async startPremiumCheckout() {
-        const response = await fetch('/api/billing/checkout', {
+        const response = await fetch(lyricSyncApiUrl('/billing/checkout'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({}),
@@ -238,6 +251,30 @@ const LyricSyncAPI = {
         const formData = new FormData();
         formData.append('video', file);
         const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}/background/video`, {
+            method: 'POST',
+            body: formData,
+        });
+        return await response.json();
+    },
+
+    async getProjectFiles(projectId) {
+        const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}/files`, { cache: 'no-store' });
+        return await response.json();
+    },
+
+    async applyProjectFile(projectId, assetId) {
+        const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}/files/${assetId}/apply`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+        });
+        return await response.json();
+    },
+
+    async uploadProjectFile(projectId, file) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}/files/upload`, {
             method: 'POST',
             body: formData,
         });

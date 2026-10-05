@@ -2570,6 +2570,87 @@ html[data-theme="dark"] .ai-theme-locked {
 }
 .premium-upgrade-perks i { color: var(--brand-burgundy); margin-top: 0.1rem; }
 
+.files-section-head {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 0.45rem;
+}
+.files-section-head i { color: var(--brand-burgundy); }
+.files-empty {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    padding: 0.55rem 0.65rem;
+    border: 1px dashed var(--border-color);
+    border-radius: 4px;
+    background: var(--surface-muted);
+}
+.files-list { display: flex; flex-direction: column; gap: 0.45rem; }
+.files-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.55rem;
+}
+.files-row {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.5rem 0.55rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--surface-card);
+}
+.files-row-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--brand-burgundy-light);
+    color: var(--brand-burgundy);
+    flex-shrink: 0;
+}
+.files-row-meta strong { font-size: 0.78rem; color: var(--text-primary); }
+.files-row-meta span { font-size: 0.66rem; }
+.files-card {
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--surface-card);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding-bottom: 0.45rem;
+}
+.files-card-thumb {
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    background: #111;
+}
+.files-card-thumb img,
+.files-card-thumb video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.files-card-meta {
+    padding: 0 0.45rem;
+}
+.files-card-meta strong { font-size: 0.7rem; color: var(--text-primary); }
+.files-card-meta span { font-size: 0.62rem; }
+.files-apply-btn {
+    margin: 0 0.45rem;
+    font-size: 0.68rem !important;
+    padding: 0.28rem 0.4rem !important;
+}
+
 .transcription-disclaimer-toggle:hover,
 .transcription-disclaimer-toggle:focus {
     color: var(--brand-burgundy);

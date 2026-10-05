@@ -88,6 +88,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         backgrounds: document.getElementById('drawerPanelBackgrounds'),
         canvas: document.getElementById('drawerPanelCanvas'),
         lyrics: document.getElementById('drawerPanelLyrics'),
+        files: document.getElementById('drawerPanelFiles'),
     };
 
     // Font Preview Picker Elements
@@ -621,6 +622,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         canvas: '<i class="bi bi-aspect-ratio me-1" style="color: var(--brand-burgundy);"></i> Canvas Format',
         lyrics: '<i class="bi bi-file-earmark-text me-1" style="color: var(--brand-burgundy);"></i> Custom Lyrics',
         effects: '<i class="bi bi-stars me-1" style="color: var(--brand-burgundy);"></i> Lyric Effects',
+        files: '<i class="bi bi-folder2-open me-1" style="color: var(--brand-burgundy);"></i> Project Files',
     };
 
     function openDrawerTab(tabName) {
@@ -655,6 +657,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
         });
+
+        if (tabName === 'files') {
+            refreshProjectFiles();
+        }
     }
 
     function closeDrawer() {
@@ -1227,7 +1233,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const col = document.createElement('div');
             col.className = 'col-6';
             const color = theme.preview_color || '#334155';
-            const thumb = theme.thumbnail || `/api/projects/templates/preview/${theme.id}`;
+            const abs = (typeof window.lyricSyncAbsoluteUrl === 'function')
+                ? window.lyricSyncAbsoluteUrl
+                : (p) => p;
+            const thumb = abs(theme.thumbnail || `/api/projects/templates/preview/${theme.id}`);
             col.innerHTML = `
                 <div class="template-visual-card p-1${theme.id === selectedBackgroundTemplate ? ' active' : ''}" data-template-id="${theme.id}">
                     <div class="template-thumb-box position-relative" style="background:${color};">
@@ -1255,14 +1264,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             : player.currentTime;
         const wasPlaying = player.isPlaying;
         const isVideoBg = res.media_type === 'video' || res.is_image === false;
+        const abs = (typeof window.lyricSyncAbsoluteUrl === 'function')
+            ? window.lyricSyncAbsoluteUrl
+            : (p) => p;
         const posterUrl = videoContainer?.getAttribute('data-bg-poster')
-            || `/api/projects/templates/preview/${res.template || selectedBackgroundTemplate || 'burgundy_studio'}`;
+            || abs(`/api/projects/templates/preview/${res.template || selectedBackgroundTemplate || 'burgundy_studio'}`);
         if (videoContainer) {
             videoContainer.setAttribute('data-has-video', isVideoBg ? 'true' : 'false');
             if (res.video_url) videoContainer.setAttribute('data-bg-stream', res.video_url);
             if (res.template) {
                 videoContainer.setAttribute('data-bg-template', res.template);
-                videoContainer.setAttribute('data-bg-poster', `/api/projects/templates/preview/${res.template}`);
+                videoContainer.setAttribute('data-bg-poster', abs(`/api/projects/templates/preview/${res.template}`));
             }
         }
         await player.setMediaMode({
@@ -1317,6 +1329,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             if (isAiTheme && res.credits) {
                 syncAiCreditUi(res.credits);
+            }
+            if (isAiTheme) {
+                refreshProjectFiles();
             }
         } catch (err) {
             console.warn('Background update error:', err);
@@ -1460,6 +1475,154 @@ document.addEventListener('DOMContentLoaded', async () => {
         payWithCardBtn.addEventListener('click', startCardCheckout);
     }
 
+    // ================= PROJECT FILES DRAWER =================
+    const projectFilesAudioList = document.getElementById('projectFilesAudioList');
+    const projectFilesImagesList = document.getElementById('projectFilesImagesList');
+    const projectFilesVideosList = document.getElementById('projectFilesVideosList');
+    const projectFilesUploadBtn = document.getElementById('projectFilesUploadBtn');
+    const projectFilesUploadInput = document.getElementById('projectFilesUploadInput');
+    const projectFilesStatus = document.getElementById('projectFilesStatus');
+
+    function formatFileBytes(bytes) {
+        const n = Number(bytes || 0);
+        if (!n) return '';
+        if (n < 1024) return `${n} B`;
+        if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+        return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    function renderFilesEmpty(el, label) {
+        if (!el) return;
+        el.innerHTML = `<div class="files-empty">${label}</div>`;
+    }
+
+    function renderFileCard(file, { applyable = false } = {}) {
+        const url = (typeof window.lyricSyncAbsoluteUrl === 'function')
+            ? window.lyricSyncAbsoluteUrl(file.url)
+            : file.url;
+        const meta = [formatFileBytes(file.size_bytes), file.source === 'generated' ? 'AI generated' : ''].filter(Boolean).join(' · ');
+        if (file.section === 'audio') {
+            return `
+                <div class="files-row" data-asset-id="${file.id}">
+                    <div class="files-row-icon"><i class="bi bi-music-note-beamed"></i></div>
+                    <div class="files-row-meta min-w-0">
+                        <strong class="text-truncate d-block">${file.name}</strong>
+                        <span class="text-secondary">${meta || 'Project audio'}</span>
+                    </div>
+                </div>`;
+        }
+        const isImage = file.section === 'images';
+        return `
+            <div class="files-card" data-asset-id="${file.id}">
+                <div class="files-card-thumb" style="background:${isImage ? '#1e293b' : '#31121c'};">
+                    ${isImage
+                        ? `<img src="${url}" alt="${file.name}" loading="lazy">`
+                        : `<video src="${url}" muted preload="metadata"></video>`}
+                </div>
+                <div class="files-card-meta">
+                    <strong class="text-truncate d-block">${file.name}</strong>
+                    <span class="text-secondary">${meta || (isImage ? 'Image' : 'Video')}</span>
+                </div>
+                ${applyable ? `<button type="button" class="btn btn-sm btn-burgundy files-apply-btn" data-apply-id="${file.id}">Use as background</button>` : ''}
+            </div>`;
+    }
+
+    async function refreshProjectFiles() {
+        if (!projectFilesAudioList && !projectFilesImagesList && !projectFilesVideosList) return;
+        try {
+            const res = await LyricSyncAPI.getProjectFiles(projectId);
+            if (!res.success) throw new Error(res.error?.message || 'Could not load files');
+            const files = res.files || {};
+            const audio = files.audio || [];
+            const images = files.images || [];
+            const videos = files.videos || [];
+
+            if (projectFilesAudioList) {
+                projectFilesAudioList.innerHTML = audio.length
+                    ? audio.map((f) => renderFileCard(f)).join('')
+                    : '';
+                if (!audio.length) renderFilesEmpty(projectFilesAudioList, 'No audio yet — upload a song to start.');
+            }
+            if (projectFilesImagesList) {
+                projectFilesImagesList.innerHTML = images.length
+                    ? images.map((f) => renderFileCard(f, { applyable: true })).join('')
+                    : '';
+                if (!images.length) renderFilesEmpty(projectFilesImagesList, 'No images yet. Generate an AI scene or upload one.');
+            }
+            if (projectFilesVideosList) {
+                projectFilesVideosList.innerHTML = videos.length
+                    ? videos.map((f) => renderFileCard(f, { applyable: true })).join('')
+                    : '';
+                if (!videos.length) renderFilesEmpty(projectFilesVideosList, 'No videos yet. Upload footage from Themes or here.');
+            }
+
+            document.querySelectorAll('.files-apply-btn').forEach((btn) => {
+                btn.addEventListener('click', async () => {
+                    const assetId = btn.getAttribute('data-apply-id');
+                    if (!assetId) return;
+                    btn.disabled = true;
+                    btn.textContent = 'Applying…';
+                    try {
+                        const applyRes = await LyricSyncAPI.applyProjectFile(projectId, assetId);
+                        if (!applyRes.success) throw new Error(applyRes.error?.message || 'Apply failed');
+                        await applyBackgroundResponse(applyRes);
+                        if (projectFilesStatus) {
+                            projectFilesStatus.classList.remove('d-none', 'text-danger');
+                            projectFilesStatus.classList.add('text-success');
+                            projectFilesStatus.textContent = 'Background updated from Files.';
+                        }
+                    } catch (err) {
+                        if (projectFilesStatus) {
+                            projectFilesStatus.classList.remove('d-none', 'text-success');
+                            projectFilesStatus.classList.add('text-danger');
+                            projectFilesStatus.textContent = err.message || 'Could not apply file';
+                        }
+                    } finally {
+                        btn.disabled = false;
+                        btn.textContent = 'Use as background';
+                    }
+                });
+            });
+        } catch (err) {
+            if (projectFilesStatus) {
+                projectFilesStatus.classList.remove('d-none', 'text-success');
+                projectFilesStatus.classList.add('text-danger');
+                projectFilesStatus.textContent = err.message || 'Could not load project files';
+            }
+        }
+    }
+
+    if (projectFilesUploadBtn && projectFilesUploadInput) {
+        projectFilesUploadBtn.addEventListener('click', () => projectFilesUploadInput.click());
+        projectFilesUploadInput.addEventListener('change', async () => {
+            const file = projectFilesUploadInput.files?.[0];
+            if (!file) return;
+            if (projectFilesStatus) {
+                projectFilesStatus.classList.remove('d-none', 'text-danger', 'text-success');
+                projectFilesStatus.classList.add('text-secondary');
+                projectFilesStatus.textContent = `Uploading ${file.name}…`;
+            }
+            try {
+                const res = await LyricSyncAPI.uploadProjectFile(projectId, file);
+                if (!res.success) throw new Error(res.error?.message || 'Upload failed');
+                if (projectFilesStatus) {
+                    projectFilesStatus.classList.remove('text-secondary');
+                    projectFilesStatus.classList.add('text-success');
+                    projectFilesStatus.textContent = 'Saved to Files.';
+                }
+                await refreshProjectFiles();
+            } catch (err) {
+                if (projectFilesStatus) {
+                    projectFilesStatus.classList.remove('text-secondary', 'text-success');
+                    projectFilesStatus.classList.add('text-danger');
+                    projectFilesStatus.textContent = err.message || 'Upload failed';
+                }
+            } finally {
+                projectFilesUploadInput.value = '';
+            }
+        });
+    }
+
     // Custom video upload under Themes drawer
     const studioVideoDropzone = document.getElementById('studioVideoDropzone');
     const studioVideoFileInput = document.getElementById('studioVideoFileInput');
@@ -1497,10 +1660,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 studioVideoFileName.title = `${file.name} · ${formatStudioBytes(file.size)}`;
             }
             await applyBackgroundResponse(res);
+            refreshProjectFiles();
             if (studioVideoUploadStatus) {
                 studioVideoUploadStatus.classList.remove('text-secondary');
                 studioVideoUploadStatus.classList.add('text-success');
-                studioVideoUploadStatus.textContent = 'Custom video applied.';
+                studioVideoUploadStatus.textContent = 'Custom video applied and saved to Files.';
             }
         } catch (err) {
             if (studioVideoUploadStatus) {

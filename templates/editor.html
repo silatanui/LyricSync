@@ -158,6 +158,10 @@
                 <i class="bi bi-stars"></i>
                 <span>Effects</span>
             </button>
+            <button type="button" class="dock-tab-btn" data-dock-tab="files" title="Project Files">
+                <i class="bi bi-folder2-open"></i>
+                <span>Files</span>
+            </button>
         </nav>
 
         <!-- Canva-Style Expandable Left Tool Drawer (Canvas stays 100% visible) -->
@@ -902,6 +906,33 @@
                             <span>Import &amp; Apply Lyrics</span>
                         </button>
                         <div id="drawerLyricsAlert" class="studio-status d-none" role="status" aria-live="polite"></div>
+                    </div>
+                </div>
+
+                <!-- Panel: Project Files -->
+                <div class="drawer-panel d-none" id="drawerPanelFiles">
+                    <p class="text-secondary small mb-2">
+                        Your uploaded audio, AI-generated images, uploads, and videos stay here for this project.
+                    </p>
+                    <div class="files-upload-row mb-3">
+                        <input type="file" id="projectFilesUploadInput" class="d-none" accept="image/*,video/*,.webp,.png,.jpg,.jpeg,.gif,.mp4,.mov,.webm">
+                        <button type="button" class="btn btn-sm btn-outline-burgundy w-100" id="projectFilesUploadBtn">
+                            <i class="bi bi-cloud-arrow-up me-1"></i> Upload image or video
+                        </button>
+                        <div id="projectFilesStatus" class="small text-secondary mt-1 d-none"></div>
+                    </div>
+
+                    <div class="files-section mb-3">
+                        <div class="files-section-head"><i class="bi bi-music-note-beamed"></i> Audio</div>
+                        <div id="projectFilesAudioList" class="files-list"></div>
+                    </div>
+                    <div class="files-section mb-3">
+                        <div class="files-section-head"><i class="bi bi-image"></i> Images</div>
+                        <div id="projectFilesImagesList" class="files-list files-grid"></div>
+                    </div>
+                    <div class="files-section">
+                        <div class="files-section-head"><i class="bi bi-camera-video"></i> Videos</div>
+                        <div id="projectFilesVideosList" class="files-list files-grid"></div>
                     </div>
                 </div>
             </div>

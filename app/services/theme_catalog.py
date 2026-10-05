@@ -28,7 +28,9 @@ def _t(
         resolved_motion = motion if motion not in (None, "", "still") else "kenburns"
     else:
         resolved_motion = "still"
-    thumb = f"/static/{asset}" if asset else f"/api/projects/templates/preview/{id_}"
+    # Keep thumbnail paths relative to the app root so callers can prefix
+    # APPLICATION_ROOT (e.g. /LyricSync) via url_for / JS helpers.
+    thumb = f"static/{asset}" if asset else f"api/projects/templates/preview/{id_}"
     return {
         "id": id_,
         "name": name,
@@ -349,7 +351,7 @@ THEME_CATALOG: List[Dict[str, Any]] = [
 for _theme in THEME_CATALOG:
     if _theme["id"] == " Quiet_sand":
         _theme["id"] = "quiet_sand"
-        _theme["thumbnail"] = "/api/projects/templates/preview/quiet_sand"
+        _theme["thumbnail"] = "api/projects/templates/preview/quiet_sand"
         break
 
 # Video themes must declare a real animated motion (no silent Ken Burns).
@@ -382,6 +384,31 @@ def get_moods() -> List[str]:
     return list(MOODS)
 
 
+def absolutize_thumbnail(thumbnail: str | None, theme_id: str | None = None) -> str:
+    """Build a request-aware absolute URL for a theme thumbnail (respects /LyricSync prefix)."""
+    from flask import has_request_context, url_for
+
+    tid = (theme_id or "").strip().lower() or "burgundy_studio"
+    raw = (thumbnail or "").lstrip("/")
+
+    if has_request_context():
+        if raw.startswith("static/"):
+            return url_for("static", filename=raw[len("static/"):])
+        if raw.startswith("api/projects/templates/preview/"):
+            preview_id = raw.rsplit("/", 1)[-1] or tid
+            return url_for("projects.preview_background_template", template_id=preview_id)
+        if tid:
+            theme = get_theme(tid)
+            if theme and theme.get("asset"):
+                return url_for("static", filename=theme["asset"])
+            return url_for("projects.preview_background_template", template_id=tid)
+
+    # Fallback when called outside a request (tests): keep root-relative paths.
+    if raw.startswith("static/") or raw.startswith("api/"):
+        return f"/{raw}"
+    return f"/api/projects/templates/preview/{tid}"
+
+
 def public_theme_payload(theme: Dict[str, Any]) -> Dict[str, Any]:
     """Strip render-only fields for API clients."""
     motion = theme.get("motion") or "still"
@@ -391,7 +418,7 @@ def public_theme_payload(theme: Dict[str, Any]) -> Dict[str, Any]:
         "name": theme["name"],
         "tagline": theme.get("tagline", ""),
         "preview_color": theme.get("preview_color", "#334155"),
-        "thumbnail": theme.get("thumbnail"),
+        "thumbnail": absolutize_thumbnail(theme.get("thumbnail"), theme.get("id")),
         "moods": theme.get("moods", []),
         "media_type": theme.get("media_type", "image"),
         "motion": motion,

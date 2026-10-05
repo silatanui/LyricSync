@@ -215,6 +215,85 @@ def preview_background_template(template_id: str):
         return send_file(buf, mimetype="image/png", max_age=3600)
 
 
+def _file_entry_from_asset(asset: MediaAsset, project_id: str) -> dict:
+    """Serialize a media asset for the Files drawer."""
+    from app.utils.files import detect_mime_type
+
+    path = Path(asset.file_path) if asset.file_path else None
+    exists = bool(path and path.exists())
+    size = int(asset.size_bytes or 0)
+    if exists and not size:
+        try:
+            size = path.stat().st_size
+        except Exception:
+            size = 0
+    kind = (asset.kind or "").lower()
+    section = "audio" if kind == "audio" else ("images" if kind == "image" else "videos")
+    if kind not in ("audio", "image") and path:
+        suffix = path.suffix.lower()
+        if suffix in {".webp", ".png", ".jpg", ".jpeg", ".gif"}:
+            section = "images"
+            kind = "image"
+        elif suffix in {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac"}:
+            section = "audio"
+            kind = "audio"
+        else:
+            section = "videos"
+            kind = "video"
+    label = asset.storage_key or (path.name if path else asset.id)
+    if label.startswith("files/"):
+        label = label.split("/", 1)[-1]
+    return {
+        "id": asset.id,
+        "kind": kind,
+        "section": section,
+        "name": label,
+        "mime_type": asset.mime_type or (detect_mime_type(path) if path else "application/octet-stream"),
+        "size_bytes": size,
+        "duration": asset.duration,
+        "created_at": asset.created_at.isoformat() if asset.created_at else None,
+        "url": url_for(
+            "projects.stream_project_file",
+            project_id=project_id,
+            asset_id=asset.id,
+            t=int(time.time() * 1000),
+        ),
+        "source": "generated" if "ai_lyric_scene_" in label else ("upload" if kind in ("audio", "image", "video") else "project"),
+    }
+
+
+def _ensure_asset_for_path(project: Project, path: Path, kind: str, storage_key: str | None = None) -> MediaAsset | None:
+    """Create or refresh a MediaAsset row for an on-disk project file."""
+    if not path or not path.exists() or not path.is_file():
+        return None
+    key = storage_key or path.name
+    existing = (
+        db.session.query(MediaAsset)
+        .filter_by(project_id=project.id, storage_key=key)
+        .first()
+    )
+    from app.utils.files import detect_mime_type
+    mime = detect_mime_type(path)
+    size = path.stat().st_size
+    if existing:
+        existing.kind = kind
+        existing.file_path = str(path.resolve())
+        existing.mime_type = mime
+        existing.size_bytes = size
+        return existing
+    asset = MediaAsset(
+        project_id=project.id,
+        kind=kind,
+        storage_key=key,
+        file_path=str(path.resolve()),
+        mime_type=mime,
+        size_bytes=size,
+        duration=project.audio_duration if kind == "audio" else None,
+    )
+    db.session.add(asset)
+    return asset
+
+
 def _apply_background_file(project, bg_file: Path, template_id: str, aspect_ratio: str, w: int, h: int, is_image: bool, extra_meta: dict | None = None):
     """Persist a generated/uploaded background onto the project + canonical JSON."""
     project.video_path = str(bg_file.resolve())
@@ -317,9 +396,12 @@ def update_project_background(project_id: str):
                 or meta.get("preferred_language")
                 or ""
             )
-            bg_file = proj_dir / f"background_{AI_THEME_ID}.webp"
+            files_dir = proj_dir / "files"
+            files_dir.mkdir(parents=True, exist_ok=True)
+            archive_name = f"ai_lyric_scene_{int(time.time() * 1000)}.webp"
+            archive_path = files_dir / archive_name
             ai_meta = generate_ai_background(
-                output_path=bg_file,
+                output_path=archive_path,
                 title=title,
                 artist=artist,
                 lyrics=canonical.get("lyrics") or [],
@@ -328,6 +410,23 @@ def update_project_background(project_id: str):
                 width=w,
                 height=h,
             )
+            # Keep a stable active background path while preserving every generation in Files.
+            bg_file = proj_dir / f"background_{AI_THEME_ID}.webp"
+            try:
+                shutil.copy2(archive_path, bg_file)
+            except Exception:
+                bg_file = archive_path
+
+            image_asset = MediaAsset(
+                project_id=project.id,
+                kind="image",
+                storage_key=f"files/{archive_name}",
+                file_path=str(archive_path.resolve()),
+                mime_type="image/webp",
+                size_bytes=archive_path.stat().st_size if archive_path.exists() else 0,
+            )
+            db.session.add(image_asset)
+
             _apply_background_file(
                 project,
                 bg_file,
@@ -343,6 +442,8 @@ def update_project_background(project_id: str):
                         "chat_model": ai_meta.get("chat_model"),
                         "api_size": ai_meta.get("api_size"),
                         "generated_at": ai_meta.get("generated_at"),
+                        "file_asset_id": image_asset.id,
+                        "archive_path": str(archive_path.resolve()),
                     }
                 },
             )
@@ -363,8 +464,10 @@ def update_project_background(project_id: str):
                     "prompt": ai_meta.get("prompt"),
                     "model": ai_meta.get("model"),
                     "api_size": ai_meta.get("api_size"),
+                    "file_asset_id": image_asset.id,
                 },
                 "credits": credits,
+                "file": _file_entry_from_asset(image_asset, project_id),
             })
         except Exception as e:
             current_app.logger.exception("AI lyric background failed: %s", e)
@@ -497,9 +600,17 @@ def upload_custom_background_video(project_id: str):
         }), 400
 
     proj_dir = get_project_dir(project_id)
+    files_dir = proj_dir / "files"
+    files_dir.mkdir(parents=True, exist_ok=True)
     video_ext = Path(video_file.filename).suffix.lower() or ".mp4"
+    archive_name = f"upload_{int(time.time() * 1000)}{video_ext}"
+    archive_path = files_dir / archive_name
+    video_file.save(str(archive_path))
     bg_file = proj_dir / f"background_custom{video_ext}"
-    video_file.save(str(bg_file))
+    try:
+        shutil.copy2(archive_path, bg_file)
+    except Exception:
+        bg_file = archive_path
 
     try:
         v_probe = MediaProbe.probe(bg_file)
@@ -540,6 +651,16 @@ def upload_custom_background_video(project_id: str):
         except Exception:
             pass
 
+    library_video = MediaAsset(
+        project_id=project.id,
+        kind="library_video",
+        storage_key=f"files/{archive_name}",
+        file_path=str(archive_path.resolve()),
+        mime_type="video/mp4" if video_ext == ".mp4" else f"video/{video_ext.lstrip('.')}",
+        size_bytes=archive_path.stat().st_size if archive_path.exists() else 0,
+        duration=project.video_duration,
+    )
+    db.session.add(library_video)
     db.session.commit()
 
     return jsonify({
@@ -549,5 +670,209 @@ def upload_custom_background_video(project_id: str):
         "is_image": False,
         "media_type": "video",
         "filename": video_file.filename,
+        "file": _file_entry_from_asset(library_video, project_id),
+    })
+
+
+@projects_bp.route("/<project_id>/files", methods=["GET"])
+def list_project_files(project_id: str):
+    """List project audio, generated/uploaded images, and videos for the Files drawer."""
+    project = db.session.get(Project, project_id)
+    if not project:
+        return jsonify({
+            "success": False,
+            "error": {"code": "PROJECT_NOT_FOUND", "message": "Project not found.", "retryable": False}
+        }), 404
+
+    proj_dir = get_project_dir(project_id)
+    files_dir = proj_dir / "files"
+    files_dir.mkdir(parents=True, exist_ok=True)
+
+    # Ensure primary audio is represented.
+    audio_path = resolve_project_media(project, "audio")
+    if audio_path:
+        _ensure_asset_for_path(project, audio_path, "audio", audio_path.name)
+
+    # Index anything already saved under files/.
+    image_exts = {".webp", ".png", ".jpg", ".jpeg", ".gif"}
+    video_exts = {".mp4", ".mov", ".webm", ".mkv", ".avi"}
+    if files_dir.exists():
+        for path in sorted(files_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+            if not path.is_file():
+                continue
+            suffix = path.suffix.lower()
+            if suffix in image_exts:
+                _ensure_asset_for_path(project, path, "image", f"files/{path.name}")
+            elif suffix in video_exts:
+                _ensure_asset_for_path(project, path, "library_video", f"files/{path.name}")
+
+    db.session.commit()
+
+    assets = (
+        db.session.query(MediaAsset)
+        .filter(
+            MediaAsset.project_id == project_id,
+            MediaAsset.kind.in_(("audio", "image", "library_video")),
+        )
+        .order_by(MediaAsset.created_at.desc())
+        .all()
+    )
+    entries = []
+    seen_paths = set()
+    for asset in assets:
+        path = Path(asset.file_path) if asset.file_path else None
+        if path and str(path.resolve()) in seen_paths:
+            continue
+        if path and path.exists():
+            seen_paths.add(str(path.resolve()))
+        entry = _file_entry_from_asset(asset, project_id)
+        if entry["section"] == "videos" or asset.kind == "library_video":
+            entry["section"] = "videos"
+            entry["kind"] = "video"
+        entries.append(entry)
+
+    return jsonify({
+        "success": True,
+        "files": {
+            "audio": [e for e in entries if e["section"] == "audio"],
+            "images": [e for e in entries if e["section"] == "images"],
+            "videos": [e for e in entries if e["section"] == "videos"],
+        },
+        "counts": {
+            "audio": sum(1 for e in entries if e["section"] == "audio"),
+            "images": sum(1 for e in entries if e["section"] == "images"),
+            "videos": sum(1 for e in entries if e["section"] == "videos"),
+        },
+    })
+
+
+@projects_bp.route("/<project_id>/files/<asset_id>/stream", methods=["GET"])
+def stream_project_file(project_id: str, asset_id: str):
+    """Stream a library file (audio / image / video) by asset id."""
+    project = db.session.get(Project, project_id)
+    if not project:
+        return "Project not found", 404
+    asset = db.session.get(MediaAsset, asset_id)
+    if not asset or asset.project_id != project_id:
+        return "File not found", 404
+    path = Path(asset.file_path) if asset.file_path else None
+    if (not path or not path.exists()) and asset.storage_key:
+        path = get_project_dir(project_id) / asset.storage_key
+    if not path or not path.exists():
+        return "File missing on disk", 404
+    from app.utils.files import detect_mime_type
+    response = send_file(str(path), mimetype=asset.mime_type or detect_mime_type(path), conditional=True)
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    response.headers["Accept-Ranges"] = "bytes"
+    return response
+
+
+@projects_bp.route("/<project_id>/files/<asset_id>/apply", methods=["POST"])
+def apply_project_file(project_id: str, asset_id: str):
+    """Use a library image/video as the active project background."""
+    project = db.session.get(Project, project_id)
+    if not project:
+        return jsonify({
+            "success": False,
+            "error": {"code": "PROJECT_NOT_FOUND", "message": "Project not found.", "retryable": False}
+        }), 404
+    asset = db.session.get(MediaAsset, asset_id)
+    if not asset or asset.project_id != project_id:
+        return jsonify({
+            "success": False,
+            "error": {"code": "FILE_NOT_FOUND", "message": "File not found in this project.", "retryable": False}
+        }), 404
+
+    src = Path(asset.file_path) if asset.file_path else None
+    if (not src or not src.exists()) and asset.storage_key:
+        src = get_project_dir(project_id) / asset.storage_key
+    if not src or not src.exists():
+        return jsonify({
+            "success": False,
+            "error": {"code": "FILE_MISSING", "message": "File is missing on disk.", "retryable": False}
+        }), 404
+
+    suffix = src.suffix.lower()
+    is_image = suffix in {".webp", ".png", ".jpg", ".jpeg", ".gif"} or asset.kind == "image"
+    canonical = project.get_canonical_json()
+    aspect_ratio = canonical.get("render", {}).get("aspect_ratio", "16:9")
+    from app.services.background_generator import BackgroundGenerator
+    w, h = BackgroundGenerator.get_dimensions(aspect_ratio)
+    proj_dir = get_project_dir(project_id)
+    if is_image:
+        dest = proj_dir / f"background_library{suffix or '.webp'}"
+        shutil.copy2(src, dest)
+        _apply_background_file(project, dest, "library_image", aspect_ratio, w, h, True)
+        media_type = "image"
+    else:
+        dest = proj_dir / f"background_custom{suffix or '.mp4'}"
+        shutil.copy2(src, dest)
+        _apply_background_file(project, dest, "library_video", aspect_ratio, w, h, False)
+        media_type = "video"
+
+    return jsonify({
+        "success": True,
+        "template": "library_image" if is_image else "library_video",
+        "video_url": url_for(
+            "projects.stream_project_media",
+            project_id=project_id,
+            kind="video",
+            t=int(time.time() * 1000),
+        ),
+        "is_image": is_image,
+        "media_type": media_type,
+        "file": _file_entry_from_asset(asset, project_id),
+    })
+
+
+@projects_bp.route("/<project_id>/files/upload", methods=["POST"])
+def upload_project_file(project_id: str):
+    """Upload an image (or video) into the project Files library."""
+    project = db.session.get(Project, project_id)
+    if not project:
+        return jsonify({
+            "success": False,
+            "error": {"code": "PROJECT_NOT_FOUND", "message": "Project not found.", "retryable": False}
+        }), 404
+
+    upload = request.files.get("file") or request.files.get("image") or request.files.get("video")
+    if not upload or not upload.filename:
+        return jsonify({
+            "success": False,
+            "error": {"code": "FILE_REQUIRED", "message": "Choose an image or video to upload.", "retryable": False}
+        }), 400
+
+    suffix = Path(upload.filename).suffix.lower()
+    image_exts = {".webp", ".png", ".jpg", ".jpeg", ".gif"}
+    video_exts = {".mp4", ".mov", ".webm", ".mkv"}
+    if suffix not in image_exts and suffix not in video_exts:
+        return jsonify({
+            "success": False,
+            "error": {"code": "FILE_TYPE", "message": "Upload a PNG, JPG, WEBP, GIF, MP4, MOV, or WEBM file.", "retryable": False}
+        }), 400
+
+    proj_dir = get_project_dir(project_id)
+    files_dir = proj_dir / "files"
+    files_dir.mkdir(parents=True, exist_ok=True)
+    archive_name = f"upload_{int(time.time() * 1000)}{suffix}"
+    archive_path = files_dir / archive_name
+    upload.save(str(archive_path))
+
+    kind = "image" if suffix in image_exts else "library_video"
+    from app.utils.files import detect_mime_type
+    asset = MediaAsset(
+        project_id=project.id,
+        kind=kind,
+        storage_key=f"files/{archive_name}",
+        file_path=str(archive_path.resolve()),
+        mime_type=detect_mime_type(archive_path),
+        size_bytes=archive_path.stat().st_size,
+    )
+    db.session.add(asset)
+    db.session.commit()
+
+    return jsonify({
+        "success": True,
+        "file": _file_entry_from_asset(asset, project_id),
     })
 
