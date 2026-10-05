@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,11 +7,11 @@
         (() => {
             try {
                 const saved = localStorage.getItem('lyricsync-theme');
-                // Light is the product default; dark only when the user picks it.
-                const theme = saved === 'dark' ? 'dark' : 'light';
+                // Dark is the product default; light only when the user picks it.
+                const theme = saved === 'light' ? 'light' : 'dark';
                 document.documentElement.setAttribute('data-theme', theme);
             } catch (_) {
-                document.documentElement.setAttribute('data-theme', 'light');
+                document.documentElement.setAttribute('data-theme', 'dark');
             }
         })();
     </script>
@@ -297,7 +297,7 @@
                     toggleBtn.title = next === 'dark' ? 'Switch to light theme' : 'Switch to dark theme';
                 }
             };
-            applyTheme(root.getAttribute('data-theme') || 'light');
+            applyTheme(root.getAttribute('data-theme') || 'dark');
             toggleBtn?.addEventListener('click', () => {
                 applyTheme(root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
             });
