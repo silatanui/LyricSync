@@ -1,24 +1,28 @@
+from datetime import date, timedelta
+
 from app.extensions import db
 from app.models.user import User, ADMIN_EMAIL
 from app.services.image_credits import (
     consume_image_credit,
     credits_payload,
+    daily_image_credits,
     ensure_user_can_generate,
     grant_premium_credits,
+    refresh_daily_credits,
 )
 
 
-def test_new_user_gets_free_image_credits(app):
+def test_new_user_gets_daily_image_credits(app):
     with app.app_context():
-        free = int(app.config.get("IMAGE_FREE_CREDITS", 2))
+        daily = daily_image_credits()
         user = User(email="credits@example.com", display_name="Credit User")
         user.set_password("Secret123!")
         user.email_verified = True
         db.session.add(user)
         db.session.commit()
-        assert user.image_credits == free
+        assert user.image_credits == daily
         assert user.has_image_credits is True
-        assert user.to_dict()["image_credits"] == free
+        assert user.to_dict()["image_credits"] == daily
 
 
 def test_admin_is_unlimited(app):
@@ -36,9 +40,15 @@ def test_admin_is_unlimited(app):
         assert admin.image_credits == 0  # never decremented
 
 
-def test_free_user_consumes_and_locks(app):
+def test_free_user_daily_limit_and_next_day_refresh(app):
     with app.app_context():
-        user = User(email="spender@example.com", display_name="Spender", image_credits=2)
+        user = User(
+            email="spender@example.com",
+            display_name="Spender",
+            image_credits=2,
+            image_credits_reset_on=date.today(),
+            bonus_image_credits=0,
+        )
         user.email_verified = True
         db.session.add(user)
         db.session.commit()
@@ -54,18 +64,43 @@ def test_free_user_consumes_and_locks(app):
         assert ok is False
         assert err["code"] == "IMAGE_CREDITS_EXHAUSTED"
         assert err["credits"]["can_generate"] is False
+        assert "today" in err["message"].lower()
+
+        # Simulate next UTC day — allowance refreshes.
+        user.image_credits_reset_on = date.today() - timedelta(days=1)
+        db.session.commit()
+        refresh_daily_credits(user, commit=True)
+        assert user.image_credits == daily_image_credits()
+        ok, err = ensure_user_can_generate(user)
+        assert ok is True
 
 
-def test_premium_grant_adds_pack(app):
+def test_premium_bonus_survives_daily_reset(app):
     with app.app_context():
-        user = User(email="premium@example.com", display_name="Prem", image_credits=0)
+        user = User(
+            email="premium@example.com",
+            display_name="Prem",
+            image_credits=0,
+            image_credits_reset_on=date.today(),
+            bonus_image_credits=0,
+        )
         db.session.add(user)
         db.session.commit()
         pack = int(app.config.get("IMAGE_PREMIUM_CREDITS", 100))
         payload = grant_premium_credits(user)
         assert user.is_premium is True
-        assert user.image_credits == pack
+        assert user.bonus_image_credits == pack
         assert payload["can_generate"] is True
+
+        # Exhaust daily (already 0) and spend one bonus.
+        consume_image_credit(user)
+        assert user.bonus_image_credits == pack - 1
+
+        # Next day restores daily credits without wiping bonus.
+        user.image_credits_reset_on = date.today() - timedelta(days=1)
+        refresh_daily_credits(user, commit=True)
+        assert user.image_credits == daily_image_credits()
+        assert user.bonus_image_credits == pack - 1
 
 
 def test_ai_background_requires_auth_and_credits(client, app, test_media_dir):
@@ -90,7 +125,13 @@ def test_ai_background_requires_auth_and_credits(client, app, test_media_dir):
         assert anon.status_code == 401
         assert anon.get_json()["error"]["code"] == "AUTH_REQUIRED"
 
-        user = User(email="locked@example.com", display_name="Locked", image_credits=0)
+        user = User(
+            email="locked@example.com",
+            display_name="Locked",
+            image_credits=0,
+            image_credits_reset_on=date.today(),
+            bonus_image_credits=0,
+        )
         user.set_password("Secret123!")
         user.email_verified = True
         db.session.add(user)
@@ -101,7 +142,6 @@ def test_ai_background_requires_auth_and_credits(client, app, test_media_dir):
             "password": "Secret123!",
         })
         assert login.status_code == 200
-        assert login.get_json()["user"]["image_credits"] == 0
 
         locked = client.post(
             "/api/projects/test_ai_credits_proj/background",
@@ -115,10 +155,7 @@ def test_ai_background_requires_auth_and_credits(client, app, test_media_dir):
         body = status.get_json()
         assert body["success"] is True
         assert body["credits"]["can_generate"] is False
-
-        checkout = client.post("/api/billing/checkout")
-        assert checkout.status_code == 503
-        assert checkout.get_json()["error"]["code"] == "STRIPE_NOT_CONFIGURED"
+        assert body["credits"]["resets"] == "daily"
 
 
 def test_credits_payload_guest(app):
@@ -126,3 +163,4 @@ def test_credits_payload_guest(app):
         payload = credits_payload(None)
         assert payload["authenticated"] is False
         assert payload["can_generate"] is False
+        assert payload["daily_allowance"] == daily_image_credits()

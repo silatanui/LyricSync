@@ -62,12 +62,29 @@ def create_app(config_class=Config):
                 if "email_verified" not in user_cols:
                     db.session.execute(db.text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT 0"))
                     db.session.commit()
-                free_credits = int(flask_app.config.get("IMAGE_FREE_CREDITS", 2))
+                daily_credits = int(
+                    flask_app.config.get("IMAGE_DAILY_CREDITS")
+                    or flask_app.config.get("IMAGE_FREE_CREDITS")
+                    or 2
+                )
                 if "image_credits" not in user_cols:
                     db.session.execute(db.text(
-                        f"ALTER TABLE users ADD COLUMN image_credits INTEGER NOT NULL DEFAULT {free_credits}"
+                        f"ALTER TABLE users ADD COLUMN image_credits INTEGER NOT NULL DEFAULT {daily_credits}"
                     ))
                     db.session.commit()
+                    user_cols.append("image_credits")
+                if "image_credits_reset_on" not in user_cols:
+                    db.session.execute(db.text(
+                        "ALTER TABLE users ADD COLUMN image_credits_reset_on DATE NULL"
+                    ))
+                    db.session.commit()
+                    user_cols.append("image_credits_reset_on")
+                if "bonus_image_credits" not in user_cols:
+                    db.session.execute(db.text(
+                        "ALTER TABLE users ADD COLUMN bonus_image_credits INTEGER NOT NULL DEFAULT 0"
+                    ))
+                    db.session.commit()
+                    user_cols.append("bonus_image_credits")
                 if "is_premium" not in user_cols:
                     db.session.execute(db.text(
                         "ALTER TABLE users ADD COLUMN is_premium BOOLEAN NOT NULL DEFAULT 0"

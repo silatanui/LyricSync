@@ -72,8 +72,10 @@ class Config:
     GOOGLE_DISCOVERY_URL = "https://accounts.google.com/.well-known/openid-configuration"
 
     # Freemium AI image credits (OpenAI image cost control)
-    # New signed-in users get IMAGE_FREE_CREDITS; admin is unlimited.
-    IMAGE_FREE_CREDITS = int(os.getenv("IMAGE_FREE_CREDITS", "2"))
+    # Signed-in users get IMAGE_DAILY_CREDITS per UTC day; admin is unlimited.
+    # IMAGE_FREE_CREDITS is kept as a legacy alias for IMAGE_DAILY_CREDITS.
+    IMAGE_DAILY_CREDITS = int(os.getenv("IMAGE_DAILY_CREDITS", os.getenv("IMAGE_FREE_CREDITS", "2")))
+    IMAGE_FREE_CREDITS = IMAGE_DAILY_CREDITS
     IMAGE_PREMIUM_CREDITS = int(os.getenv("IMAGE_PREMIUM_CREDITS", "100"))
     IMAGE_PREMIUM_PRICE_CENTS = int(os.getenv("IMAGE_PREMIUM_PRICE_CENTS", "500"))  # $5.00
     IMAGE_PREMIUM_PRICE_LABEL = os.getenv("IMAGE_PREMIUM_PRICE_LABEL", "$5/month")

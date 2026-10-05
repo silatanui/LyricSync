@@ -1398,10 +1398,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         const remaining = Number(imageCreditState.image_credits ?? 0);
 
         if (aiCreditChip) {
+            const daily = Number(imageCreditState.daily_credits ?? remaining);
+            const bonus = Number(imageCreditState.bonus_credits ?? 0);
             aiCreditChip.classList.toggle('is-empty', authenticated && !unlimited && remaining <= 0);
             if (unlimited) aiCreditChip.textContent = 'Unlimited';
             else if (!authenticated) aiCreditChip.textContent = 'Sign in';
-            else aiCreditChip.textContent = `${Math.max(0, remaining)} left`;
+            else if (bonus > 0) aiCreditChip.textContent = `${Math.max(0, daily)} today · ${bonus} bonus`;
+            else aiCreditChip.textContent = `${Math.max(0, daily)} today`;
         }
 
         const showLocked = !canGenerate;

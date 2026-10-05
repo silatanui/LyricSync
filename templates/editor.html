@@ -771,7 +771,7 @@
                                 {% elif not image_credits_status.authenticated %}
                                     Sign in
                                 {% else %}
-                                    {{ image_credits_status.image_credits }} left
+                                    {{ image_credits_status.daily_credits if image_credits_status.daily_credits is not none else image_credits_status.image_credits }} today
                                 {% endif %}
                             </span>
                         </div>
@@ -788,8 +788,8 @@
                         <div id="aiThemeLockedState" class="ai-theme-locked d-none" role="status">
                             <div class="ai-theme-locked-icon" aria-hidden="true"><i class="bi bi-lock-fill"></i></div>
                             <div class="ai-theme-locked-copy">
-                                <strong>Free AI images used up</strong>
-                                <span>Upgrade to Premium for {{ image_credits_status.premium_credits }} more lyric scenes{% if image_credits_status.premium_price_label %} ({{ image_credits_status.premium_price_label }}){% endif %}.</span>
+                                <strong>Today's free AI images used up</strong>
+                                <span>You get {{ image_credits_status.daily_allowance or image_credits_status.free_allowance or 2 }} free generations each day. Come back tomorrow, or upgrade to Premium for {{ image_credits_status.premium_credits }} bonus images{% if image_credits_status.premium_price_label %} ({{ image_credits_status.premium_price_label }}){% endif %}.</span>
                             </div>
                             <button type="button" class="btn btn-sm btn-burgundy w-100" id="upgradePremiumBtn">
                                 <i class="bi bi-credit-card me-1"></i>

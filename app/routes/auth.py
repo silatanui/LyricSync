@@ -89,12 +89,19 @@ def register():
 
     # Admin email is auto-verified for administrative operations
     is_admin_user = (email == ADMIN_EMAIL.lower())
-    free_credits = int(current_app.config.get("IMAGE_FREE_CREDITS", 2))
+    from datetime import datetime, timezone
+    daily_credits = int(
+        current_app.config.get("IMAGE_DAILY_CREDITS")
+        or current_app.config.get("IMAGE_FREE_CREDITS")
+        or 2
+    )
     user = User(
         email=email,
         display_name=display_name or email.split("@")[0],
         email_verified=is_admin_user,
-        image_credits=free_credits,
+        image_credits=daily_credits,
+        image_credits_reset_on=datetime.now(timezone.utc).date(),
+        bonus_image_credits=0,
         is_premium=False,
     )
     user.set_password(password)
@@ -247,12 +254,19 @@ def google_callback():
         # Link to an existing email/password account, or create a new one
         user = db.session.query(User).filter_by(email=email).first()
         if not user:
-            free_credits = int(current_app.config.get("IMAGE_FREE_CREDITS", 2))
+            from datetime import datetime, timezone
+            daily_credits = int(
+                current_app.config.get("IMAGE_DAILY_CREDITS")
+                or current_app.config.get("IMAGE_FREE_CREDITS")
+                or 2
+            )
             user = User(
                 email=email,
                 display_name=userinfo.get("name") or email.split("@")[0],
                 email_verified=True,
-                image_credits=free_credits,
+                image_credits=daily_credits,
+                image_credits_reset_on=datetime.now(timezone.utc).date(),
+                bonus_image_credits=0,
                 is_premium=False,
             )
             db.session.add(user)
