@@ -102,15 +102,27 @@
                     <option value="th">Thai</option>
                     <option value="tl">Tagalog</option>
                 </select>
-                <button type="button" class="transcription-disclaimer-toggle" data-bs-toggle="collapse" data-bs-target="#transcriptionDisclaimer" aria-expanded="false" aria-controls="transcriptionDisclaimer">
-                    Accuracy note
-                </button>
             </div>
 
             <div class="editor-header-actions">
-                <button id="transcribeBtn" class="btn btn-outline-burgundy editor-action-btn">
-                    <i class="bi bi-stars"></i><span>Transcribe</span>
-                </button>
+                <div class="editor-transcribe-group">
+                    <button id="transcribeBtn" class="btn btn-outline-burgundy editor-action-btn">
+                        <i class="bi bi-stars"></i><span>Transcribe</span>
+                    </button>
+                    <button type="button"
+                            class="editor-accuracy-tip"
+                            id="transcriptionAccuracyTip"
+                            title="About transcription accuracy"
+                            aria-label="About transcription accuracy"
+                            data-bs-toggle="popover"
+                            data-bs-placement="bottom"
+                            data-bs-trigger="focus"
+                            data-bs-custom-class="editor-accuracy-popover"
+                            data-bs-html="true"
+                            data-bs-content="<strong>Best-effort transcription.</strong> Known catalog songs are strongest. Sung dialects, rare languages, and dense harmonies may be incomplete — paste official lyrics when accuracy matters.">
+                        <i class="bi bi-info-circle" aria-hidden="true"></i>
+                    </button>
+                </div>
                 <button id="saveRevisionBtn" class="btn btn-outline-secondary editor-action-btn">
                     <i class="bi bi-bookmark-check"></i><span>Save</span>
                 </button>
@@ -124,41 +136,33 @@
         </div>
     </header>
 
-    <div class="collapse border-bottom" id="transcriptionDisclaimer">
-        <div class="transcription-disclaimer px-4 py-2">
-            <strong>Disclaimer:</strong>
-            Songs outside our known-lyrics catalog are transcribed best-effort.
-            Results are stronger in major / well-supported languages; sung dialects,
-            rare languages, and dense gospel harmonies may still come back incomplete or inaccurate.
-            We can’t guarantee perfect lyrics for every track — paste the correct lyrics when accuracy matters.
-        </div>
-    </div>
-
     <!-- Studio Body: Canva-Style Left Dock & Drawer, Split Center Artboard & Right Lyrics Sheet -->
     <div class="editor-main-area d-flex flex-grow-1 overflow-hidden">
         <!-- Canva-Style Left Tool Dock (Narrow 72px Strip) -->
         <nav class="studio-left-dock" id="studioLeftDock">
-            <button type="button" class="dock-tab-btn active" data-dock-tab="typography" title="Typography & Styles">
-                <i class="bi bi-fonts"></i>
-                <span>Type</span>
-            </button>
-            <button type="button" class="dock-tab-btn" data-dock-tab="backgrounds" title="Aesthetic Backgrounds">
-                <i class="bi bi-palette"></i>
-                <span>Themes</span>
-            </button>
-            <button type="button" class="dock-tab-btn" data-dock-tab="canvas" title="Canvas Format">
-                <i class="bi bi-aspect-ratio"></i>
-                <span>Format</span>
-            </button>
-            <button type="button" class="dock-tab-btn" data-dock-tab="lyrics" title="Upload Custom Lyrics">
-                <i class="bi bi-file-earmark-text"></i>
-                <span>Lyrics</span>
-            </button>
-            <button type="button" class="dock-tab-btn" data-dock-tab="effects" title="Lyric Motion Effects">
-                <i class="bi bi-stars"></i>
-                <span>Effects</span>
-            </button>
-            <button type="button" class="dock-tab-btn" data-dock-tab="files" title="Project Files">
+            <div class="dock-tab-stack">
+                <button type="button" class="dock-tab-btn active" data-dock-tab="typography" title="Typography & Styles">
+                    <i class="bi bi-fonts"></i>
+                    <span>Type</span>
+                </button>
+                <button type="button" class="dock-tab-btn" data-dock-tab="backgrounds" title="Aesthetic Backgrounds">
+                    <i class="bi bi-palette"></i>
+                    <span>Themes</span>
+                </button>
+                <button type="button" class="dock-tab-btn" data-dock-tab="canvas" title="Canvas Format">
+                    <i class="bi bi-aspect-ratio"></i>
+                    <span>Format</span>
+                </button>
+                <button type="button" class="dock-tab-btn" data-dock-tab="lyrics" title="Upload Custom Lyrics">
+                    <i class="bi bi-file-earmark-text"></i>
+                    <span>Lyrics</span>
+                </button>
+                <button type="button" class="dock-tab-btn" data-dock-tab="effects" title="Lyric Motion Effects">
+                    <i class="bi bi-stars"></i>
+                    <span>Effects</span>
+                </button>
+            </div>
+            <button type="button" class="dock-tab-btn dock-tab-files" data-dock-tab="files" title="Your private project files">
                 <i class="bi bi-folder2-open"></i>
                 <span>Files</span>
             </button>
@@ -783,6 +787,13 @@
                             <button type="button" class="btn btn-sm btn-burgundy w-100" id="generateAiThemeBtn">
                                 <i class="bi bi-magic me-1"></i> Generate from lyrics
                             </button>
+                            <div id="aiThemeBusy" class="ai-busy-status d-none" role="status" aria-live="polite" aria-atomic="true">
+                                <span class="ai-busy-orbit" aria-hidden="true"></span>
+                                <div class="ai-busy-copy">
+                                    <strong>Generating your lyric scene</strong>
+                                    <span>Reading your song and painting a backdrop…</span>
+                                </div>
+                            </div>
                         </div>
 
                         <div id="aiThemeLockedState" class="ai-theme-locked d-none" role="status">
@@ -912,7 +923,7 @@
                 <!-- Panel: Project Files -->
                 <div class="drawer-panel d-none" id="drawerPanelFiles">
                     <p class="text-secondary small mb-2">
-                        Your uploaded audio, AI-generated images, uploads, and videos stay here for this project.
+                        Private to you — audio, AI scenes, uploads, and videos for this project. Nobody else can browse them.
                     </p>
                     <div class="files-upload-row mb-3">
                         <input type="file" id="projectFilesUploadInput" class="d-none" accept="image/*,video/*,.webp,.png,.jpg,.jpeg,.gif,.mp4,.mov,.webm">

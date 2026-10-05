@@ -5,6 +5,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const workspace = document.querySelector('.editor-workspace');
     if (!workspace) return;
 
+    const accuracyTip = document.getElementById('transcriptionAccuracyTip');
+    if (accuracyTip && window.bootstrap?.Popover) {
+        bootstrap.Popover.getOrCreateInstance(accuracyTip, {
+            container: 'body',
+            sanitize: true,
+        });
+    }
+
     const projectId = workspace.getAttribute('data-project-id');
     const isAdmin = workspace.getAttribute('data-is-admin') === 'true';
     let activeStream = null;
@@ -495,7 +503,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // If a rendered video is already available, reveal header download button immediately
             if (res.has_render && downloadHeaderBtn) {
-                downloadHeaderBtn.href = res.download_url || `/api/projects/${projectId}/download`;
+                const fallbackDl = (typeof window.lyricSyncAbsoluteUrl === 'function')
+                    ? window.lyricSyncAbsoluteUrl(`/api/projects/${projectId}/download`)
+                    : `/api/projects/${projectId}/download`;
+                downloadHeaderBtn.href = res.download_url || fallbackDl;
                 downloadHeaderBtn.classList.remove('d-none');
                 downloadHeaderBtn.classList.add('d-flex');
             }
@@ -1309,6 +1320,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function applyThemeCard(card, tid) {
         selectTemplate(tid);
         const isAiTheme = tid === 'ai_lyric_scene';
+        const aiBusy = document.getElementById('aiThemeBusy');
+        const generateBtn = document.getElementById('generateAiThemeBtn');
         const previewImage = card?.querySelector?.('img');
         if (previewImage && previewImage.src && !isAiTheme) {
             videoContainer.style.backgroundImage = `url("${previewImage.src}")`;
@@ -1316,12 +1329,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
             videoContainer.classList.add('theme-preview-loading');
         }
-        if (themeApplyStatus) {
+        if (isAiTheme) {
+            videoContainer.classList.add('is-ai-painting');
+            if (aiBusy) aiBusy.classList.remove('d-none');
+            if (generateBtn) {
+                generateBtn.disabled = true;
+                generateBtn.setAttribute('aria-busy', 'true');
+            }
+            if (themeApplyStatus) themeApplyStatus.classList.add('d-none');
+        } else if (themeApplyStatus) {
             themeApplyStatus.classList.remove('d-none', 'text-danger');
             themeApplyStatus.classList.add('text-success');
-            themeApplyStatus.innerHTML = isAiTheme
-                ? '<span class="spinner-border spinner-border-sm me-1"></span> Painting AI lyric scene from your song…'
-                : '<span class="spinner-border spinner-border-sm me-1"></span> Applying theme...';
+            themeApplyStatus.innerHTML = '<span class="ai-busy-orbit me-2" aria-hidden="true" style="display:inline-block;vertical-align:-0.15rem;width:0.85rem;height:0.85rem;margin:0;"></span> Applying theme…';
         }
         const aiPromptPreview = document.getElementById('aiThemePromptPreview');
         try {
@@ -1353,7 +1372,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (isAiTheme && (err?.code === 'IMAGE_CREDITS_EXHAUSTED' || err?.error?.code === 'IMAGE_CREDITS_EXHAUSTED')) {
                 openPremiumUpgradeModal();
             }
-            if (themeApplyStatus) {
+            if (isAiTheme && aiBusy) {
+                aiBusy.classList.remove('d-none');
+                const copy = aiBusy.querySelector('.ai-busy-copy');
+                if (copy) {
+                    copy.innerHTML = `<strong>Couldn’t finish</strong><span>${err.message || 'Generation failed. Try again.'}</span>`;
+                }
+                setTimeout(() => {
+                    aiBusy.classList.add('d-none');
+                    if (copy) {
+                        copy.innerHTML = '<strong>Generating your lyric scene</strong><span>Reading your song and painting a backdrop…</span>';
+                    }
+                }, 4500);
+            } else if (themeApplyStatus) {
                 themeApplyStatus.classList.remove('text-success');
                 themeApplyStatus.classList.add('text-danger');
                 themeApplyStatus.textContent = err.message || 'Could not apply theme';
@@ -1361,9 +1392,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
         } finally {
-            videoContainer.classList.remove('theme-preview-loading');
+            videoContainer.classList.remove('theme-preview-loading', 'is-ai-painting');
             videoContainer.style.backgroundImage = '';
-            if (themeApplyStatus && !themeApplyStatus.classList.contains('text-danger')) {
+            if (isAiTheme) {
+                if (aiBusy && !aiBusy.querySelector('.ai-busy-copy strong')?.textContent?.includes('Couldn’t')) {
+                    aiBusy.classList.add('d-none');
+                }
+                if (generateBtn) {
+                    generateBtn.removeAttribute('aria-busy');
+                    syncAiCreditUi(imageCreditState);
+                }
+            } else if (themeApplyStatus && !themeApplyStatus.classList.contains('text-danger')) {
                 themeApplyStatus.classList.add('d-none');
             }
         }
@@ -2725,7 +2764,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 setExportBusy(false);
                 showExportDockExpanded();
 
-                const downloadUrl = `/api/projects/${projectId}/download`;
+                const downloadUrl = (typeof window.lyricSyncAbsoluteUrl === 'function')
+                    ? window.lyricSyncAbsoluteUrl(`/api/projects/${projectId}/download`)
+                    : `/api/projects/${projectId}/download`;
                 if (downloadFinalVideoBtn) {
                     downloadFinalVideoBtn.href = downloadUrl;
                     downloadFinalVideoBtn.classList.remove('d-none');

@@ -380,6 +380,15 @@ def update_project_background(project_id: str):
             "success": False,
             "error": {"code": "PROJECT_NOT_FOUND", "message": "Project not found.", "retryable": False}
         }), 404
+    if not user_can_edit_project(current_user, project):
+        return jsonify({
+            "success": False,
+            "error": {
+                "code": "FORBIDDEN",
+                "message": "Only the project owner can change backgrounds.",
+                "retryable": False,
+            },
+        }), 403
 
     data = request.get_json() or {}
     template_id = data.get("template", "burgundy_studio").strip() or "burgundy_studio"
@@ -618,6 +627,15 @@ def upload_custom_background_video(project_id: str):
             "success": False,
             "error": {"code": "PROJECT_NOT_FOUND", "message": "Project not found.", "retryable": False}
         }), 404
+    if not user_can_edit_project(current_user, project):
+        return jsonify({
+            "success": False,
+            "error": {
+                "code": "FORBIDDEN",
+                "message": "Only the project owner can upload custom video backgrounds.",
+                "retryable": False,
+            },
+        }), 403
 
     video_file = request.files.get("video")
     if not video_file or not video_file.filename:
@@ -719,6 +737,16 @@ def list_project_files(project_id: str):
             "success": False,
             "error": {"code": "PROJECT_NOT_FOUND", "message": "Project not found.", "retryable": False}
         }), 404
+    # Library is always private to the owner — even if the project is public.
+    if not user_can_edit_project(current_user, project):
+        return jsonify({
+            "success": False,
+            "error": {
+                "code": "FORBIDDEN",
+                "message": "Project files are private to the owner.",
+                "retryable": False,
+            },
+        }), 403
 
     proj_dir = get_project_dir(project_id)
     files_dir = proj_dir / "files"
@@ -788,7 +816,8 @@ def stream_project_file(project_id: str, asset_id: str):
     project = db.session.get(Project, project_id)
     if not project:
         return "Project not found", 404
-    if not user_can_access_project(current_user, project):
+    # Never expose library assets to non-owners (public projects only share the active background).
+    if not user_can_edit_project(current_user, project):
         return "Forbidden", 403
     asset = db.session.get(MediaAsset, asset_id)
     if not asset or asset.project_id != project_id:
@@ -800,7 +829,7 @@ def stream_project_file(project_id: str, asset_id: str):
         return "File missing on disk", 404
     from app.utils.files import detect_mime_type
     response = send_file(str(path), mimetype=asset.mime_type or detect_mime_type(path), conditional=True)
-    response.headers["Cache-Control"] = "public, max-age=86400"
+    response.headers["Cache-Control"] = "private, max-age=3600"
     response.headers["Accept-Ranges"] = "bytes"
     return response
 
@@ -814,6 +843,15 @@ def apply_project_file(project_id: str, asset_id: str):
             "success": False,
             "error": {"code": "PROJECT_NOT_FOUND", "message": "Project not found.", "retryable": False}
         }), 404
+    if not user_can_edit_project(current_user, project):
+        return jsonify({
+            "success": False,
+            "error": {
+                "code": "FORBIDDEN",
+                "message": "Only the project owner can apply library files.",
+                "retryable": False,
+            },
+        }), 403
     asset = db.session.get(MediaAsset, asset_id)
     if not asset or asset.project_id != project_id:
         return jsonify({
@@ -872,6 +910,15 @@ def upload_project_file(project_id: str):
             "success": False,
             "error": {"code": "PROJECT_NOT_FOUND", "message": "Project not found.", "retryable": False}
         }), 404
+    if not user_can_edit_project(current_user, project):
+        return jsonify({
+            "success": False,
+            "error": {
+                "code": "FORBIDDEN",
+                "message": "Only the project owner can upload files to this library.",
+                "retryable": False,
+            },
+        }), 403
 
     upload = request.files.get("file") or request.files.get("image") or request.files.get("video")
     if not upload or not upload.filename:
