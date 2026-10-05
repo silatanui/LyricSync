@@ -1,10 +1,12 @@
 import os
+import re
 import subprocess
 import tempfile
 import time
 import random
 import logging
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 from flask import has_app_context, current_app
@@ -141,7 +143,7 @@ _LANGUAGE_PROMPTS = {
     "pt": "Letra de música com timing claro das palavras.",
     "de": "Songtext mit klarer Wortzeitgebung.",
     "it": "Testo della canzone con timing chiaro delle parole.",
-    "sw": "Maneno ya wimbo yaliyopangwa kwa muda sahihi.",
+    "sw": "Accurate Swahili song lyrics with clear word timing.",
     "yo": "Ọrọ orin pẹlu àkókò ọ̀rọ̀ tó yé.",
     "ha": "Kalmomin waƙa tare da lokaci mai kyau.",
     "ar": "كلمات أغنية بتوقيت واضح للكلمات.",
@@ -190,10 +192,60 @@ def lyric_language_prompt(language: str | None, continuity: str = "") -> str | N
     """Build a Whisper prompt that keeps later slices in the song's language."""
     code = normalize_language_code(language)
     base = _LANGUAGE_PROMPTS.get(code) if code else "Song lyrics transcribed accurately in the sung language."
-    continuity = (continuity or "").strip()
+    continuity = sanitize_continuity_prompt(continuity)
     if continuity:
         return f"{base} {continuity}"[:220]
     return base
+
+
+def _normalize_lyric_token(text: str) -> str:
+    return re.sub(r"[^\w]+", "", str(text or ""), flags=re.UNICODE).casefold()
+
+
+def sanitize_continuity_prompt(continuity: str) -> str:
+    """Drop continuity text that would reinforce a Whisper repetition loop."""
+    text = (continuity or "").strip()
+    if not text:
+        return ""
+    tokens = [_normalize_lyric_token(part) for part in text.split()]
+    tokens = [token for token in tokens if token]
+    if len(tokens) < 6:
+        return text
+    top_count = Counter(tokens).most_common(1)[0][1]
+    if top_count / len(tokens) >= 0.5:
+        return ""
+    return text
+
+
+def collapse_repetitive_words(words: List[Dict[str, Any]], max_run: int = 2) -> List[Dict[str, Any]]:
+    """Collapse Whisper loops like 'kwa kwa kwa…' while keeping short legitimate repeats."""
+    if not words:
+        return []
+    limit = max(1, int(max_run))
+    collapsed: List[Dict[str, Any]] = []
+    run_token = None
+    run_count = 0
+    for word in words:
+        token = _normalize_lyric_token(word.get("text", ""))
+        if token and token == run_token:
+            run_count += 1
+            if run_count <= limit:
+                collapsed.append(word)
+            continue
+        run_token = token or None
+        run_count = 1 if token else 0
+        collapsed.append(word)
+    return collapsed
+
+
+def words_look_repetition_locked(words: List[Dict[str, Any]], min_words: int = 8, ratio: float = 0.55) -> bool:
+    """True when one token dominates a chunk — typical Whisper hallucination."""
+    tokens = [_normalize_lyric_token(word.get("text", "")) for word in (words or [])]
+    tokens = [token for token in tokens if token]
+    if len(tokens) < min_words:
+        return False
+    top_count = Counter(tokens).most_common(1)[0][1]
+    return (top_count / len(tokens)) >= ratio
 
 
 def plan_audio_chunks(duration: float, first_seconds: float = 12.0, chunk_seconds: float = 20.0, overlap_seconds: float = 1.5) -> List[Tuple[float, float | None]]:
@@ -393,8 +445,30 @@ class OpenAITranscriber:
                         "start": round(float(word["start"]) + piece_start, 3),
                         "end": round(float(word["end"]) + piece_start, 3),
                     })
-                accumulated = merge_chunk_words(accumulated, shifted, piece_start, 1.5)
+                # Whisper sometimes locks onto one syllable (e.g. Swahili "kwa") when the
+                # continuity prompt feeds the loop back. Retry the slice once clean.
+                if continuity and words_look_repetition_locked(shifted):
+                    clean = self._request_transcript(
+                        piece_path,
+                        language=locked_language,
+                        prompt=lyric_language_prompt(locked_language, ""),
+                    )
+                    clean_shifted = []
+                    for word in clean.get("words", []):
+                        clean_shifted.append({
+                            "text": word["text"],
+                            "start": round(float(word["start"]) + piece_start, 3),
+                            "end": round(float(word["end"]) + piece_start, 3),
+                        })
+                    if clean_shifted and not words_look_repetition_locked(clean_shifted):
+                        shifted = clean_shifted
+                        piece = clean
+                shifted = collapse_repetitive_words(shifted)
+                accumulated = collapse_repetitive_words(
+                    merge_chunk_words(accumulated, shifted, piece_start, 1.5)
+                )
                 continuity = " ".join(word["text"] for word in accumulated)[-160:].strip()
+                continuity = sanitize_continuity_prompt(continuity)
                 frontier = piece_end if piece_end else song_duration
                 if not is_last and frontier:
                     frontier = float(frontier)
@@ -540,10 +614,11 @@ def _transcript_from_response(result, fallback_language: str = "") -> Dict[str, 
 
     # Preserve chronological order; never drop leading words.
     words.sort(key=lambda item: (float(item["start"]), float(item["end"])))
+    words = collapse_repetitive_words(words)
 
     detected = _field(result, "language", None) or fallback_language or ""
     return {
-        "text": _field(result, "text", "") or "",
+        "text": " ".join(word["text"] for word in words).strip() or (_field(result, "text", "") or ""),
         "language": detected,
         "duration": _field(result, "duration", None),
         "words": words,

@@ -64,3 +64,28 @@ def test_bcp47_language_tags_normalize():
     assert normalize_language_code("en-US") == "en"
     assert normalize_language_code("zh-CN") == "zh"
     assert language_display_name("sw") == "Swahili"
+
+
+def test_swahili_prompt_avoids_kwa_and_drops_loop_continuity():
+    from app.services.openai_transcription import (
+        collapse_repetitive_words,
+        lyric_language_prompt,
+        sanitize_continuity_prompt,
+        words_look_repetition_locked,
+    )
+
+    prompt = lyric_language_prompt("sw")
+    assert prompt
+    assert "kwa" not in prompt.casefold()
+
+    stuck = " ".join(["Kwa"] * 12)
+    assert sanitize_continuity_prompt(stuck) == ""
+    assert "Accurate Swahili" in lyric_language_prompt("sw", stuck)
+
+    words = [{"text": "Kwa", "start": i * 0.2, "end": i * 0.2 + 0.15} for i in range(10)]
+    words = [{"text": "Fani", "start": 0.0, "end": 0.3}] + words
+    assert words_look_repetition_locked(words)
+    collapsed = collapse_repetitive_words(words, max_run=2)
+    texts = [w["text"] for w in collapsed]
+    assert texts.count("Kwa") == 2
+    assert texts[0] == "Fani"
