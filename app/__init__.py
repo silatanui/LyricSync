@@ -148,6 +148,34 @@ def create_app(config_class=Config):
                 if "detail_json" not in job_cols:
                     db.session.execute(db.text("ALTER TABLE render_jobs ADD COLUMN detail_json TEXT"))
                     db.session.commit()
+            # MySQL TEXT (~64KB) truncates full word-timed lyric JSON — widen to MEDIUMTEXT.
+            if db.engine.dialect.name == "mysql":
+                large_text_columns = (
+                    ("projects", "canonical_data"),
+                    ("transcriptions", "raw_text"),
+                    ("transcriptions", "json_payload"),
+                )
+                for table_name, column_name in large_text_columns:
+                    if table_name not in inspector.get_table_names():
+                        continue
+                    col_meta = next(
+                        (c for c in inspector.get_columns(table_name) if c["name"] == column_name),
+                        None,
+                    )
+                    if not col_meta:
+                        continue
+                    col_type = str(col_meta.get("type") or "").upper()
+                    if "MEDIUMTEXT" in col_type or "LONGTEXT" in col_type:
+                        continue
+                    db.session.execute(db.text(
+                        f"ALTER TABLE {table_name} MODIFY COLUMN {column_name} MEDIUMTEXT"
+                    ))
+                    db.session.commit()
+                    flask_app.logger.info(
+                        "Widened %s.%s to MEDIUMTEXT for full lyric storage",
+                        table_name,
+                        column_name,
+                    )
         except Exception as db_err:
             db.session.rollback()
             flask_app.logger.warning(f"Database schema migration warning on startup: {db_err}")

@@ -1351,7 +1351,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </div>
                     <div class="p-1 text-center">
                         <div class="fw-bold small text-dark text-truncate" style="font-size: 0.74rem;">${theme.name}</div>
-                        <div class="text-secondary text-truncate" style="font-size: 0.62rem;">${theme.is_ai ? 'From your lyrics' : (theme.moods || []).slice(0, 2).join(' · ')}</div>
+                        <div class="text-secondary text-truncate" style="font-size: 0.62rem;">${theme.is_ai ? 'Lyrics or your draft' : (theme.moods || []).slice(0, 2).join(' · ')}</div>
                     </div>
                 </div>`;
             const card = col.querySelector('.template-visual-card');
@@ -1410,11 +1410,100 @@ document.addEventListener('DOMContentLoaded', async () => {
         videoContainer.style.backgroundImage = '';
     }
 
+    const generateAiThemeBtn = document.getElementById('generateAiThemeBtn');
+    const aiCreditChip = document.getElementById('aiCreditChip');
+    const aiThemeGenerateWrap = document.getElementById('aiThemeGenerateWrap');
+    const aiThemeLockedState = document.getElementById('aiThemeLockedState');
+    const aiThemeSignInLink = document.getElementById('aiThemeSignInLink');
+    const upgradePremiumBtn = document.getElementById('upgradePremiumBtn');
+    const payWithCardBtn = document.getElementById('payWithCardBtn');
+    const premiumCheckoutHint = document.getElementById('premiumCheckoutHint');
+    const premiumCheckoutStatus = document.getElementById('premiumCheckoutStatus');
+    const aiPromptModeLyrics = document.getElementById('aiPromptModeLyrics');
+    const aiPromptModeDraft = document.getElementById('aiPromptModeDraft');
+    const aiUserPromptWrap = document.getElementById('aiUserPromptWrap');
+    const aiUserPromptInput = document.getElementById('aiUserPromptInput');
+    const aiUserPromptCount = document.getElementById('aiUserPromptCount');
+    let aiPromptMode = 'lyrics';
+
+    function syncAiPromptModeUi() {
+        const isDraft = aiPromptMode === 'draft';
+        if (aiPromptModeLyrics) {
+            aiPromptModeLyrics.classList.toggle('active', !isDraft);
+            aiPromptModeLyrics.setAttribute('aria-pressed', (!isDraft).toString());
+        }
+        if (aiPromptModeDraft) {
+            aiPromptModeDraft.classList.toggle('active', isDraft);
+            aiPromptModeDraft.setAttribute('aria-pressed', isDraft.toString());
+        }
+        if (aiUserPromptWrap) aiUserPromptWrap.classList.toggle('d-none', !isDraft);
+        if (generateAiThemeBtn) {
+            generateAiThemeBtn.innerHTML = isDraft
+                ? '<i class="bi bi-magic me-1"></i> Generate from draft'
+                : '<i class="bi bi-magic me-1"></i> Generate from lyrics';
+        }
+        const busyCopy = document.querySelector('#aiThemeBusy .ai-busy-copy');
+        if (busyCopy) {
+            busyCopy.innerHTML = isDraft
+                ? '<strong>Generating your scene</strong><span>Reading your draft and painting a backdrop…</span>'
+                : '<strong>Generating your lyric scene</strong><span>Reading your song and painting a backdrop…</span>';
+        }
+    }
+
+    function updateAiUserPromptCount() {
+        if (!aiUserPromptCount || !aiUserPromptInput) return;
+        aiUserPromptCount.textContent = `${aiUserPromptInput.value.length} / 1200`;
+    }
+
+    function getAiGenerationOptions() {
+        if (aiPromptMode !== 'draft') {
+            return { prompt_mode: 'lyrics' };
+        }
+        const draft = (aiUserPromptInput?.value || '').trim();
+        return { prompt_mode: 'draft', user_prompt: draft };
+    }
+
+    function setAiPromptMode(mode) {
+        aiPromptMode = mode === 'draft' ? 'draft' : 'lyrics';
+        syncAiPromptModeUi();
+        if (aiPromptMode === 'draft' && aiUserPromptInput) {
+            aiUserPromptInput.focus();
+        }
+    }
+
+    if (aiPromptModeLyrics) {
+        aiPromptModeLyrics.addEventListener('click', () => setAiPromptMode('lyrics'));
+    }
+    if (aiPromptModeDraft) {
+        aiPromptModeDraft.addEventListener('click', () => setAiPromptMode('draft'));
+    }
+    if (aiUserPromptInput) {
+        aiUserPromptInput.addEventListener('input', updateAiUserPromptCount);
+        updateAiUserPromptCount();
+    }
+    syncAiPromptModeUi();
+
     async function applyThemeCard(card, tid) {
         selectTemplate(tid);
         const isAiTheme = tid === 'ai_lyric_scene';
         const aiBusy = document.getElementById('aiThemeBusy');
         const generateBtn = document.getElementById('generateAiThemeBtn');
+        const aiOptions = isAiTheme ? getAiGenerationOptions() : null;
+        if (isAiTheme && aiOptions?.prompt_mode === 'draft' && !(aiOptions.user_prompt || '').trim()) {
+            setAiPromptMode('draft');
+            if (aiUserPromptInput) {
+                aiUserPromptInput.focus();
+                aiUserPromptInput.classList.add('is-invalid');
+                setTimeout(() => aiUserPromptInput.classList.remove('is-invalid'), 1600);
+            }
+            if (themeApplyStatus) {
+                themeApplyStatus.classList.remove('d-none', 'text-success');
+                themeApplyStatus.classList.add('text-danger');
+                themeApplyStatus.textContent = 'Write a short scene draft first, or switch to From lyrics.';
+                setTimeout(() => themeApplyStatus.classList.add('d-none'), 4000);
+            }
+            return;
+        }
         const previewImage = card?.querySelector?.('img');
         if (previewImage && previewImage.src && !isAiTheme) {
             videoContainer.style.backgroundImage = `url("${previewImage.src}")`;
@@ -1424,7 +1513,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         if (isAiTheme) {
             videoContainer.classList.add('is-ai-painting');
-            videoContainer.setAttribute('data-loading-label', 'Painting AI lyric scene…');
+            videoContainer.setAttribute(
+                'data-loading-label',
+                aiOptions?.prompt_mode === 'draft' ? 'Painting your draft scene…' : 'Painting AI lyric scene…'
+            );
             if (aiBusy) aiBusy.classList.remove('d-none');
             if (generateBtn) {
                 generateBtn.disabled = true;
@@ -1439,7 +1531,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         const aiPromptPreview = document.getElementById('aiThemePromptPreview');
         try {
-            const res = await LyricSyncAPI.updateBackgroundTemplate(projectId, tid, currentAspectRatio);
+            const res = await LyricSyncAPI.updateBackgroundTemplate(
+                projectId,
+                tid,
+                currentAspectRatio,
+                aiOptions
+            );
             if (!res.success) {
                 const fail = new Error(res.error?.message || 'Theme apply failed');
                 fail.code = res.error?.code;
@@ -1452,7 +1549,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             if (isAiTheme && res.ai?.prompt && aiPromptPreview) {
                 aiPromptPreview.classList.remove('d-none');
-                aiPromptPreview.textContent = res.ai.prompt;
+                const sourceLabel = res.ai.prompt_source === 'user_draft' ? 'Your draft → ' : 'From lyrics → ';
+                aiPromptPreview.textContent = sourceLabel + res.ai.prompt;
             }
             if (isAiTheme && res.credits) {
                 syncAiCreditUi(res.credits);
@@ -1475,9 +1573,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 setTimeout(() => {
                     aiBusy.classList.add('d-none');
-                    if (copy) {
-                        copy.innerHTML = '<strong>Generating your lyric scene</strong><span>Reading your song and painting a backdrop…</span>';
-                    }
+                    syncAiPromptModeUi();
                 }, 4500);
             } else if (themeApplyStatus) {
                 themeApplyStatus.classList.remove('text-success');
@@ -1503,16 +1599,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
     }
-
-    const generateAiThemeBtn = document.getElementById('generateAiThemeBtn');
-    const aiCreditChip = document.getElementById('aiCreditChip');
-    const aiThemeGenerateWrap = document.getElementById('aiThemeGenerateWrap');
-    const aiThemeLockedState = document.getElementById('aiThemeLockedState');
-    const aiThemeSignInLink = document.getElementById('aiThemeSignInLink');
-    const upgradePremiumBtn = document.getElementById('upgradePremiumBtn');
-    const payWithCardBtn = document.getElementById('payWithCardBtn');
-    const premiumCheckoutHint = document.getElementById('premiumCheckoutHint');
-    const premiumCheckoutStatus = document.getElementById('premiumCheckoutStatus');
 
     let imageCreditState = {
         authenticated: workspace.getAttribute('data-auth-required-ai') !== 'true',

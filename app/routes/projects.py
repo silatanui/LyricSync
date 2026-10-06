@@ -373,10 +373,15 @@ def update_project_background(project_id: str):
     """
     Re-generates the background for an existing project using a chosen template.
     Image themes produce WebP stills; video themes produce short looping MP4 beds.
-    The special `ai_lyric_scene` theme builds a custom still from the song lyrics via OpenAI.
+    The special `ai_lyric_scene` theme builds a custom still from lyrics or a user draft via OpenAI.
     """
     from app.services.theme_catalog import get_theme
-    from app.services.ai_background import AI_THEME_ID, generate_ai_background
+    from app.services.ai_background import (
+        AI_THEME_ID,
+        USER_PROMPT_MIN_CHARS,
+        generate_ai_background,
+        sanitize_user_prompt,
+    )
 
     project = db.session.get(Project, project_id)
     if not project:
@@ -435,6 +440,36 @@ def update_project_background(project_id: str):
         if not ok:
             return jsonify({"success": False, "error": credit_err}), 402
 
+        user_prompt = sanitize_user_prompt(
+            data.get("user_prompt") or data.get("custom_prompt") or data.get("prompt")
+        )
+        prompt_mode = str(data.get("prompt_mode") or "").strip().lower()
+        if prompt_mode in ("draft", "user", "custom", "user_draft") and not user_prompt:
+            return jsonify({
+                "success": False,
+                "error": {
+                    "code": "USER_PROMPT_REQUIRED",
+                    "message": (
+                        f"Write a short scene description (at least {USER_PROMPT_MIN_CHARS} "
+                        "characters), or switch back to Generate from lyrics."
+                    ),
+                    "retryable": False,
+                    "credits": credits_payload(current_user),
+                },
+            }), 400
+        if user_prompt and len(user_prompt) < USER_PROMPT_MIN_CHARS:
+            return jsonify({
+                "success": False,
+                "error": {
+                    "code": "USER_PROMPT_TOO_SHORT",
+                    "message": (
+                        f"Describe the scene in at least {USER_PROMPT_MIN_CHARS} characters."
+                    ),
+                    "retryable": False,
+                    "credits": credits_payload(current_user),
+                },
+            }), 400
+
         try:
             meta = canonical.get("meta") or {}
             credit = project.preview_credit()
@@ -458,6 +493,7 @@ def update_project_background(project_id: str):
                 aspect_ratio=aspect_ratio,
                 width=w,
                 height=h,
+                user_prompt=user_prompt or None,
             )
             # Keep a stable active background path while preserving every generation in Files.
             bg_file = proj_dir / f"background_{AI_THEME_ID}.webp"
@@ -487,6 +523,8 @@ def update_project_background(project_id: str):
                 extra_meta={
                     "ai_background": {
                         "prompt": ai_meta.get("prompt"),
+                        "user_prompt": ai_meta.get("user_prompt"),
+                        "prompt_source": ai_meta.get("prompt_source"),
                         "model": ai_meta.get("model"),
                         "chat_model": ai_meta.get("chat_model"),
                         "api_size": ai_meta.get("api_size"),
@@ -511,6 +549,8 @@ def update_project_background(project_id: str):
                 "media_type": "image",
                 "ai": {
                     "prompt": ai_meta.get("prompt"),
+                    "user_prompt": ai_meta.get("user_prompt"),
+                    "prompt_source": ai_meta.get("prompt_source"),
                     "model": ai_meta.get("model"),
                     "api_size": ai_meta.get("api_size"),
                     "file_asset_id": image_asset.id,
@@ -518,6 +558,16 @@ def update_project_background(project_id: str):
                 "credits": credits,
                 "file": _file_entry_from_asset(image_asset, project_id),
             })
+        except ValueError as e:
+            return jsonify({
+                "success": False,
+                "error": {
+                    "code": "USER_PROMPT_INVALID",
+                    "message": str(e),
+                    "retryable": False,
+                    "credits": credits_payload(current_user),
+                },
+            }), 400
         except Exception as e:
             current_app.logger.exception("AI lyric background failed: %s", e)
             return jsonify({

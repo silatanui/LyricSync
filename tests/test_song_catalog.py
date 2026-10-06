@@ -3,6 +3,8 @@ from app.services.song_catalog import (
     clean_title_fragment,
     rank_candidates,
     _result_from_candidate,
+    lyrics_appear_complete,
+    lyric_line_count,
 )
 
 
@@ -106,3 +108,42 @@ def test_rank_prefers_duration_and_synced_match():
     assert result["synced"] is True
     assert result["artist"] == "Justin Timberlake"
     assert "Aren't you somethin'" in result["lyrics_text"]
+
+
+def test_result_prefers_fuller_plain_over_short_synced():
+    candidate = {
+        "id": 9,
+        "artistName": "Hillsong",
+        "trackName": "Shout to the Lord",
+        "duration": 280,
+        "syncedLyrics": (
+            "[00:10.00] I sing for joy at the work of Your hands\n"
+            "[00:15.00] Forever I'll love you, forever I'll stand\n"
+            "[00:20.00] Nothing compares to the promise I have\n"
+            "[00:25.00] In YOU\n"
+        ),
+        "plainLyrics": "\n".join([
+            "My Jesus, my Savior",
+            "Lord there is none like You",
+            "All of my days I want to praise",
+            "The wonders of Your mighty love",
+            "My comfort, my shelter",
+            "Tower of refuge and strength",
+            "Let every breath, all that I am",
+            "Never cease to worship You",
+            "Shout to the Lord all the earth let us sing",
+            "Power and majesty praise to the King",
+            "Mountains bow down and the seas will roar",
+            "At the sound of Your name",
+            "I sing for joy at the work of Your hands",
+            "Forever I'll love You forever I'll stand",
+            "Nothing compares to the promise I have",
+            "In You",
+        ]),
+    }
+    result = _result_from_candidate(candidate, 0.9, audio_duration=280)
+    assert result["synced"] is False
+    assert lyric_line_count(result["lyrics_text"]) >= 12
+    assert "My Jesus, my Savior" in result["lyrics_text"]
+    assert lyrics_appear_complete(result["lyrics_text"], 280, synced=False) is True
+    assert lyrics_appear_complete(candidate["syncedLyrics"], 280, synced=True) is False

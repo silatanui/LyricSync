@@ -762,7 +762,7 @@
 
                 <!-- Panel 3: Backgrounds -->
                 <div class="drawer-panel d-none" id="drawerPanelBackgrounds">
-                    <p class="text-secondary small mb-2">Browse studio themes by mood, or generate a custom AI scene from your lyrics.</p>
+                    <p class="text-secondary small mb-2">Browse studio themes by mood, or generate a custom AI scene from your lyrics or your own draft.</p>
                     <div class="ai-theme-banner mb-3" id="aiThemeBanner">
                         <div class="ai-theme-banner-head">
                             <div class="ai-theme-banner-title">
@@ -780,7 +780,7 @@
                             </span>
                         </div>
                         <p class="ai-theme-banner-copy">
-                            OpenAI paints a custom still from your title and lyrics. That generation is costly, so please consider supporting it with Premium ($5/100 images). Upload, sync, themes, styling, and export stay free.
+                            OpenAI paints a custom still from your lyrics, or from a scene you draft yourself. That generation is costly, so please consider supporting it with Premium ($5/100 images). Upload, sync, themes, styling, and export stay free.
                         </p>
                         <div class="ai-support-appeal" role="note">
                             <i class="bi bi-heart" aria-hidden="true"></i>
@@ -788,6 +788,30 @@
                         </div>
 
                         <div id="aiThemeGenerateWrap">
+                            <div class="ai-prompt-mode" role="radiogroup" aria-label="AI scene source">
+                                <button type="button" class="ai-prompt-mode-btn active" id="aiPromptModeLyrics" data-mode="lyrics" aria-pressed="true">
+                                    <i class="bi bi-music-note-list" aria-hidden="true"></i> From lyrics
+                                </button>
+                                <button type="button" class="ai-prompt-mode-btn" id="aiPromptModeDraft" data-mode="draft" aria-pressed="false">
+                                    <i class="bi bi-pencil-square" aria-hidden="true"></i> My draft
+                                </button>
+                            </div>
+                            <div id="aiUserPromptWrap" class="ai-user-prompt-wrap d-none">
+                                <label class="form-label fw-bold text-dark mb-1 small text-uppercase tracking-wider" for="aiUserPromptInput">
+                                    Scene draft
+                                </label>
+                                <textarea
+                                    id="aiUserPromptInput"
+                                    class="form-control form-control-sm studio-input"
+                                    rows="3"
+                                    maxlength="1200"
+                                    placeholder="e.g. Soft golden sunrise over misty hills, warm amber light, quiet worship atmosphere, clean center for lyrics"
+                                ></textarea>
+                                <div class="ai-user-prompt-meta">
+                                    <span class="text-secondary">Describe mood, place, light, and color.</span>
+                                    <span id="aiUserPromptCount" class="text-secondary" aria-live="polite">0 / 1200</span>
+                                </div>
+                            </div>
                             <button type="button" class="btn btn-sm btn-burgundy w-100" id="generateAiThemeBtn">
                                 <i class="bi bi-magic me-1"></i> Generate from lyrics
                             </button>

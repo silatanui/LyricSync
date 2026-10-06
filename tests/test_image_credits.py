@@ -107,9 +107,22 @@ def test_ai_background_requires_auth_and_credits(client, app, test_media_dir):
     from app.models import Project
 
     with app.app_context():
+        owner = User(
+            email="ai-owner@example.com",
+            display_name="AI Owner",
+            image_credits=2,
+            image_credits_reset_on=date.today(),
+            bonus_image_credits=0,
+        )
+        owner.set_password("Secret123!")
+        owner.email_verified = True
+        db.session.add(owner)
+        db.session.flush()
+
         proj = Project(
             id="test_ai_credits_proj",
             name="AI Credits Project",
+            user_id=owner.id,
             audio_path=str(test_media_dir["audio"]),
             video_path=str(test_media_dir["video"]),
             audio_duration=3.0,
@@ -122,8 +135,8 @@ def test_ai_background_requires_auth_and_credits(client, app, test_media_dir):
             "/api/projects/test_ai_credits_proj/background",
             json={"template": "ai_lyric_scene"},
         )
-        assert anon.status_code == 401
-        assert anon.get_json()["error"]["code"] == "AUTH_REQUIRED"
+        # Guests cannot edit a private project (ownership gate runs before AI auth).
+        assert anon.status_code in (401, 403)
 
         user = User(
             email="locked@example.com",
@@ -135,6 +148,8 @@ def test_ai_background_requires_auth_and_credits(client, app, test_media_dir):
         user.set_password("Secret123!")
         user.email_verified = True
         db.session.add(user)
+        db.session.flush()
+        proj.user_id = user.id
         db.session.commit()
 
         login = client.post("/api/auth/login", json={
@@ -156,6 +171,59 @@ def test_ai_background_requires_auth_and_credits(client, app, test_media_dir):
         assert body["success"] is True
         assert body["credits"]["can_generate"] is False
         assert body["credits"]["resets"] == "daily"
+
+
+def test_ai_background_draft_mode_requires_prompt(client, app, test_media_dir):
+    from app.models import Project
+
+    with app.app_context():
+        user = User(
+            email="draft@example.com",
+            display_name="Draft",
+            image_credits=2,
+            image_credits_reset_on=date.today(),
+            bonus_image_credits=0,
+        )
+        user.set_password("Secret123!")
+        user.email_verified = True
+        db.session.add(user)
+        db.session.flush()
+
+        proj = Project(
+            id="test_ai_draft_proj",
+            name="AI Draft Project",
+            user_id=user.id,
+            audio_path=str(test_media_dir["audio"]),
+            video_path=str(test_media_dir["video"]),
+            audio_duration=3.0,
+            video_duration=3.0,
+        )
+        db.session.add(proj)
+        db.session.commit()
+
+        login = client.post("/api/auth/login", json={
+            "email": "draft@example.com",
+            "password": "Secret123!",
+        })
+        assert login.status_code == 200
+
+        missing = client.post(
+            "/api/projects/test_ai_draft_proj/background",
+            json={"template": "ai_lyric_scene", "prompt_mode": "draft"},
+        )
+        assert missing.status_code == 400
+        assert missing.get_json()["error"]["code"] == "USER_PROMPT_REQUIRED"
+
+        short = client.post(
+            "/api/projects/test_ai_draft_proj/background",
+            json={
+                "template": "ai_lyric_scene",
+                "prompt_mode": "draft",
+                "user_prompt": "hi",
+            },
+        )
+        assert short.status_code == 400
+        assert short.get_json()["error"]["code"] == "USER_PROMPT_TOO_SHORT"
 
 
 def test_credits_payload_guest(app):

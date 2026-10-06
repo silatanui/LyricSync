@@ -111,27 +111,22 @@ class LyricsImporter:
 
         num_lines = len(raw_lines)
         total_duration = max(10.0, total_duration)
-        lead_in = 1.5
-        end_margin = 2.0
+        lead_in = min(1.5, total_duration * 0.05)
+        end_margin = min(2.0, total_duration * 0.05)
         usable_time = max(5.0, total_duration - lead_in - end_margin)
 
-        # Target 2.5 to 5.0 seconds per line
+        # Spread every line across the full song. A hard ceiling used to leave
+        # late verses piled near t=0 for long tracks with few lines.
         pace = usable_time / num_lines
-        if pace > 5.5:
-            pace = 5.0
-        elif pace < 1.2:
-            pace = 1.2
+        pace = max(0.55, pace)
 
         result_lines = []
         for i, line_text in enumerate(raw_lines):
             line_start = round(lead_in + (i * pace), 3)
-            line_duration = max(1.0, pace * 0.9)
-            line_end = round(line_start + line_duration, 3)
-
-            # Ensure within total duration if possible
-            if line_start >= total_duration:
-                line_start = round(total_duration - 1.5, 3)
-                line_end = round(total_duration - 0.2, 3)
+            line_duration = max(0.5, min(pace * 0.92, usable_time - (i * pace)))
+            line_end = round(min(total_duration - 0.05, line_start + line_duration), 3)
+            if line_end <= line_start:
+                line_end = round(min(total_duration, line_start + 0.5), 3)
 
             words = line_text.split()
             word_list = []

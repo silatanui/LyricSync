@@ -22,6 +22,16 @@ def test_lyrics_importer_plain_text():
             assert w["start"] >= line["start"] - 0.01
             assert w["end"] <= line["end"] + 0.01
 
+
+def test_plain_text_spans_full_song_duration():
+    text = "\n".join(f"Line {i}" for i in range(1, 9))
+    lines = LyricsImporter.import_lyrics(text, total_duration=240.0)
+    assert len(lines) == 8
+    assert lines[0]["start"] < 5.0
+    # Late verses must not pile near the start of a long track.
+    assert lines[-1]["start"] > 180.0
+    assert lines[-1]["end"] <= 240.0
+
 def test_lyrics_importer_lrc_format():
     lrc = """
     [ti:Test Song]

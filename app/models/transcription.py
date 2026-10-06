@@ -1,9 +1,12 @@
 from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, DateTime, Text, Integer, ForeignKey
+from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.extensions import db
 from app.utils.ids import generate_id
+
+_LargeText = Text().with_variant(MEDIUMTEXT(), "mysql")
 
 class Transcription(db.Model):
     __tablename__ = "transcriptions"
@@ -12,8 +15,8 @@ class Transcription(db.Model):
     project_id: Mapped[str] = mapped_column(String(64), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
     model: Mapped[str] = mapped_column(String(64), default="whisper-1")
     language: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
-    raw_text: Mapped[str] = mapped_column(Text, default="")
-    json_payload: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    raw_text: Mapped[str] = mapped_column(_LargeText, default="")
+    json_payload: Mapped[Optional[str]] = mapped_column(_LargeText, nullable=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 

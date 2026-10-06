@@ -3445,6 +3445,51 @@ html[data-theme="dark"] .template-card-body .text-muted {
     line-height: 1.4;
     margin-bottom: 0.55rem;
 }
+.ai-prompt-mode {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.35rem;
+    margin-bottom: 0.65rem;
+}
+.ai-prompt-mode-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    border: 1px solid var(--border-color);
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.4rem 0.45rem;
+    border-radius: 4px;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.ai-prompt-mode-btn:hover {
+    border-color: var(--brand-burgundy-border);
+    color: var(--brand-burgundy);
+}
+.ai-prompt-mode-btn.active {
+    border-color: var(--brand-burgundy);
+    background: var(--brand-burgundy-light);
+    color: var(--brand-burgundy);
+}
+.ai-user-prompt-wrap {
+    margin-bottom: 0.65rem;
+}
+.ai-user-prompt-wrap textarea {
+    resize: vertical;
+    min-height: 4.5rem;
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+.ai-user-prompt-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-top: 0.3rem;
+    font-size: 0.66rem;
+}
 .ai-support-appeal {
     display: flex;
     gap: 0.45rem;

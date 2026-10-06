@@ -104,6 +104,21 @@ def _persist_known_lyrics(project_id: str, job_id: str, match: dict, language: s
         return False
 
     duration = float(project.audio_duration or match.get("duration") or 0)
+    from app.services.song_catalog import lyrics_appear_complete, lyric_line_count
+    if not lyrics_appear_complete(
+        lyrics_text,
+        duration,
+        synced=bool(match.get("synced")),
+    ):
+        logger.warning(
+            "Refusing incomplete catalog lyrics for project %s (%s lines / %ss, source=%s)",
+            project_id,
+            lyric_line_count(lyrics_text),
+            int(duration or 0),
+            match.get("source"),
+        )
+        return False
+
     try:
         segmented_lines = LyricsImporter.import_lyrics(lyrics_text, total_duration=duration or 180.0)
     except Exception as exc:

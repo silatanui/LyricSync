@@ -222,9 +222,13 @@ const LyricSyncAPI = {
         return await response.json();
     },
 
-    async updateBackgroundTemplate(projectId, template, aspectRatio = null) {
+    async updateBackgroundTemplate(projectId, template, aspectRatio = null, options = null) {
         const payload = { template };
         if (aspectRatio) payload.aspect_ratio = aspectRatio;
+        if (options && typeof options === 'object') {
+            if (options.user_prompt) payload.user_prompt = options.user_prompt;
+            if (options.prompt_mode) payload.prompt_mode = options.prompt_mode;
+        }
         const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}/background`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

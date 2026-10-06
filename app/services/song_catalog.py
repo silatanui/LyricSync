@@ -1,8 +1,8 @@
 """Look up known commercial tracks and pull published lyrics before Whisper.
 
 Uses the project title (and optional AI identification from a short opening)
-plus the free LRCLIB catalog. Synced LRC lyrics are preferred so the studio
-can skip a full-song transcription for songs it already knows.
+plus the free LRCLIB catalog. Complete lyrics win over short synced snippets
+so the studio does not lock in a truncated chorus for a full-length song.
 """
 
 from __future__ import annotations
@@ -406,6 +406,58 @@ def identify_song_with_ai(
         return None
 
 
+_LRC_TS_RE = re.compile(r"\[(\d{1,3}):(\d{1,2}(?:\.\d{1,3})?)\]")
+
+
+def _strip_lrc_timestamps(text: str) -> str:
+    return _LRC_TS_RE.sub("", text or "")
+
+
+def lyric_line_count(text: str) -> int:
+    """Count non-empty lyric lines, ignoring LRC timestamps and metadata tags."""
+    count = 0
+    for raw in (text or "").splitlines():
+        line = _strip_lrc_timestamps(raw).strip()
+        if not line:
+            continue
+        if re.match(r"^\[[a-zA-Z]{2,4}:.*\]$", line):
+            continue
+        count += 1
+    return count
+
+
+def lrc_coverage_seconds(text: str) -> float:
+    """Return the last LRC timestamp in seconds, or 0 when none are present."""
+    times = []
+    for mins, secs in _LRC_TS_RE.findall(text or ""):
+        try:
+            times.append(int(mins) * 60.0 + float(secs))
+        except (TypeError, ValueError):
+            continue
+    return max(times) if times else 0.0
+
+
+def lyrics_appear_complete(
+    lyrics_text: str,
+    duration: float = 0,
+    *,
+    synced: bool = False,
+) -> bool:
+    """Reject obviously truncated catalog/AI lyrics before they replace Whisper."""
+    lines = lyric_line_count(lyrics_text)
+    if lines < 4:
+        return False
+    duration = float(duration or 0)
+    if synced and duration >= 60:
+        coverage = lrc_coverage_seconds(lyrics_text)
+        if coverage > 0 and coverage < duration * 0.55:
+            return False
+    # Full-length songs almost never have only a handful of lines.
+    if duration >= 120 and lines < max(6, int(duration / 35)):
+        return False
+    return True
+
+
 def fetch_known_lyrics_with_ai(
     openai_client,
     *,
@@ -413,6 +465,7 @@ def fetch_known_lyrics_with_ai(
     title: str,
     language_hint: str | None = None,
     opening_lyrics: str = "",
+    duration: float = 0,
 ) -> Optional[Dict[str, Any]]:
     """Ask the model for published lyrics only when it truly knows the song."""
     if not openai_client or not title:
@@ -421,13 +474,15 @@ def fetch_known_lyrics_with_ai(
         "You recall published song lyrics when you are sure they are correct. "
         "Return JSON with keys: known (boolean), language (ISO 639-1 when possible), "
         "lyrics (plain text, one line per lyric line), confidence (0-1). "
+        "Include the COMPLETE published lyrics (all verses, choruses, bridges). "
         "If you are not sure of the exact lyrics, set known=false and lyrics=\"\". "
-        "Never invent, translate, or paraphrase. Keep the original language."
+        "Never invent, translate, paraphrase, or stop mid-song. Keep the original language."
     )
     user = (
         f"Artist: {artist or 'Unknown'}\n"
         f"Title: {title}\n"
         f"Language hint: {language_hint or 'auto'}\n"
+        f"Approximate duration seconds: {int(duration) if duration else 'unknown'}\n"
         f"Opening lyric snippet from audio (may be noisy):\n{(opening_lyrics or '')[:400]}"
     )
     try:
@@ -437,18 +492,36 @@ def fetch_known_lyrics_with_ai(
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            max_tokens=2500,
+            max_tokens=8000,
             temperature=0,
             response_format={"type": "json_object"},
         )
-        data = json.loads((response.choices[0].message.content or "").strip())
+        choice = response.choices[0]
+        finish_reason = getattr(choice, "finish_reason", None)
+        if finish_reason == "length":
+            logger.warning(
+                "AI known-lyrics truncated by token limit for %s — %s; refusing incomplete text",
+                artist,
+                title,
+            )
+            return None
+        data = json.loads((choice.message.content or "").strip())
         if not data.get("known"):
             return None
         lyrics = str(data.get("lyrics") or "").strip()
         confidence = float(data.get("confidence") or 0)
-        if confidence < 0.7 or len(lyrics.splitlines()) < 4:
+        if confidence < 0.7 or lyric_line_count(lyrics) < 4:
             return None
         if opening_lyrics and not _opening_agrees_with_lyrics(opening_lyrics, lyrics):
+            return None
+        if not lyrics_appear_complete(lyrics, duration, synced=False):
+            logger.warning(
+                "AI known-lyrics look incomplete for %s — %s (%s lines / %ss)",
+                artist,
+                title,
+                lyric_line_count(lyrics),
+                int(duration or 0),
+            )
             return None
         return {
             "artist": artist,
@@ -459,7 +532,7 @@ def fetch_known_lyrics_with_ai(
             "source": "openai-catalog",
             "external_id": None,
             "confidence": round(confidence, 3),
-            "duration": 0,
+            "duration": float(duration or 0),
             "instrumental": False,
             "identified_by": "openai-lyrics",
             "language": data.get("language") or language_hint or "",
@@ -485,20 +558,50 @@ def _opening_agrees_with_lyrics(opening: str, lyrics: str) -> bool:
     return overlap >= 2
 
 
-def _result_from_candidate(candidate: Dict[str, Any], confidence: float) -> Dict[str, Any]:
+def _result_from_candidate(
+    candidate: Dict[str, Any],
+    confidence: float,
+    audio_duration: float = 0,
+) -> Dict[str, Any]:
     synced = (candidate.get("syncedLyrics") or "").strip()
     plain = (candidate.get("plainLyrics") or "").strip()
-    lyrics_text = synced or plain
     try:
         duration = float(candidate.get("duration") or 0)
     except (TypeError, ValueError):
         duration = 0.0
+    check_duration = float(audio_duration or duration or 0)
+
+    synced_lines = lyric_line_count(synced)
+    plain_lines = lyric_line_count(plain)
+    use_synced = False
+    lyrics_text = ""
+
+    if synced and plain:
+        coverage = lrc_coverage_seconds(synced)
+        synced_incomplete = (
+            (check_duration >= 60 and coverage > 0 and coverage < check_duration * 0.55)
+            or (plain_lines >= synced_lines + 4)
+            or (synced_lines > 0 and plain_lines >= int(synced_lines * 1.5) and plain_lines >= 8)
+        )
+        if synced_incomplete:
+            lyrics_text = plain
+            use_synced = False
+        else:
+            lyrics_text = synced
+            use_synced = True
+    elif synced:
+        lyrics_text = synced
+        use_synced = True
+    else:
+        lyrics_text = plain
+        use_synced = False
+
     return {
         "artist": clean_title_fragment(candidate.get("artistName") or ""),
         "title": clean_title_fragment(candidate.get("trackName") or ""),
         "album": clean_title_fragment(candidate.get("albumName") or ""),
         "lyrics_text": lyrics_text,
-        "synced": bool(synced),
+        "synced": use_synced,
         "source": "lrclib",
         "external_id": candidate.get("id"),
         "confidence": round(float(confidence), 3),
@@ -551,13 +654,33 @@ def lookup_known_song(
         seen.add(key)
         unique.append(row)
 
+    def _accept_result(result: Dict[str, Any], *, identified_by: str | None = None) -> Optional[Dict[str, Any]]:
+        if opening_lyrics and not _opening_agrees_with_lyrics(opening_lyrics, result.get("lyrics_text") or ""):
+            logger.info("Rejected catalog hit that did not match opening lyrics: %s", result.get("title"))
+            return None
+        check_duration = float(duration or result.get("duration") or 0)
+        if not lyrics_appear_complete(
+            result.get("lyrics_text") or "",
+            check_duration,
+            synced=bool(result.get("synced")),
+        ):
+            logger.info(
+                "Rejected incomplete catalog lyrics for %s — %s (%s lines, synced=%s)",
+                result.get("artist"),
+                result.get("title"),
+                lyric_line_count(result.get("lyrics_text") or ""),
+                result.get("synced"),
+            )
+            return None
+        if identified_by:
+            result["identified_by"] = identified_by
+        return result
+
     ranked = rank_candidates(unique, artist=artist, title=title or query, query=query, duration=duration)
     if ranked and ranked[0][0] >= min_confidence:
-        result = _result_from_candidate(ranked[0][1], ranked[0][0])
-        if opening_lyrics and not _opening_agrees_with_lyrics(opening_lyrics, result["lyrics_text"]):
-            logger.info("Rejected catalog hit that did not match opening lyrics: %s", result.get("title"))
-        else:
-            return result
+        accepted = _accept_result(_result_from_candidate(ranked[0][1], ranked[0][0], duration))
+        if accepted:
+            return accepted
 
     identified = identify_song_with_ai(
         openai_client,
@@ -584,10 +707,12 @@ def lookup_known_song(
             duration=duration,
         )
         if ranked_retry and ranked_retry[0][0] >= max(0.55, min_confidence - 0.05):
-            result = _result_from_candidate(ranked_retry[0][1], ranked_retry[0][0])
-            if not opening_lyrics or _opening_agrees_with_lyrics(opening_lyrics, result["lyrics_text"]):
-                result["identified_by"] = "openai"
-                return result
+            accepted = _accept_result(
+                _result_from_candidate(ranked_retry[0][1], ranked_retry[0][0], duration),
+                identified_by="openai",
+            )
+            if accepted:
+                return accepted
 
     if artist and title and openai_client:
         ai_lyrics = fetch_known_lyrics_with_ai(
@@ -596,6 +721,7 @@ def lookup_known_song(
             title=title,
             language_hint=language_hint,
             opening_lyrics=opening_lyrics,
+            duration=duration,
         )
         if ai_lyrics:
             return ai_lyrics

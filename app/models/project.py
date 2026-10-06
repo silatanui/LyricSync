@@ -3,6 +3,7 @@ import json
 import re
 from typing import Optional, Dict, Any, List
 from sqlalchemy import String, Float, Integer, DateTime, Text, ForeignKey
+from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.extensions import db
 from app.utils.ids import generate_project_id
@@ -33,8 +34,12 @@ class Project(db.Model):
     width: Mapped[Optional[int]] = mapped_column(Integer, default=1920)
     height: Mapped[Optional[int]] = mapped_column(Integer, default=1080)
     
-    # Canonical JSON (Section 5.1 of specification)
-    canonical_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Canonical JSON (Section 5.1 of specification).
+    # MEDIUMTEXT on MySQL — plain TEXT (~64KB) truncates word-timed songs.
+    canonical_data: Mapped[Optional[str]] = mapped_column(
+        Text().with_variant(MEDIUMTEXT(), "mysql"),
+        nullable=True,
+    )
     current_revision: Mapped[int] = mapped_column(Integer, default=1)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -56,7 +61,8 @@ class Project(db.Model):
         return self._default_canonical_json()
 
     def set_canonical_json(self, data: Dict[str, Any]):
-        self.canonical_data = json.dumps(data, indent=2)
+        # Compact JSON keeps large word-timed payloads well under DB limits.
+        self.canonical_data = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
     def _default_canonical_json(self) -> Dict[str, Any]:
         return {

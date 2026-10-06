@@ -2,11 +2,16 @@ from io import BytesIO
 
 from PIL import Image
 
+import pytest
+
 from app.services.ai_background import (
     AI_THEME_ID,
+    USER_PROMPT_MIN_CHARS,
     _lyrics_excerpt,
+    build_user_draft_prompt,
     fit_to_canvas,
     image_api_size,
+    sanitize_user_prompt,
 )
 from app.services.theme_catalog import get_theme, public_theme_payload
 
@@ -39,3 +44,35 @@ def test_fit_to_canvas_cover_crops():
     src.save(buf, format="PNG")
     out = fit_to_canvas(buf.getvalue(), 640, 360)
     assert out.size == (640, 360)
+
+
+def test_sanitize_user_prompt_trims_and_limits():
+    assert sanitize_user_prompt("  soft gold sunrise  ") == "soft gold sunrise"
+    assert sanitize_user_prompt("x" * 2000) == "x" * 1200
+    assert sanitize_user_prompt(None) == ""
+
+
+def test_build_user_draft_prompt_requires_substance():
+    class DummyClient:
+        pass
+
+    with pytest.raises(ValueError):
+        build_user_draft_prompt(user_prompt="hi", client=DummyClient())
+
+    # Chat polish unavailable → still returns a usable prompt from the draft.
+    class FailingChat:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kwargs):
+                    raise RuntimeError("offline")
+
+    prompt = build_user_draft_prompt(
+        user_prompt="Soft golden sunrise over misty worship hills",
+        title="Shout to the Lord",
+        artist="Hillsong",
+        client=FailingChat(),
+    )
+    assert "Soft golden sunrise" in prompt
+    assert "no text" in prompt.lower()
+    assert len(prompt) >= USER_PROMPT_MIN_CHARS

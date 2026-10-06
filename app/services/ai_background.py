@@ -29,6 +29,31 @@ _PROMPT_SYSTEM = (
     "Return ONLY the prompt text."
 )
 
+_USER_DRAFT_SYSTEM = (
+    "You expand a user's short scene brief into ONE detailed image-generation prompt "
+    "(120-220 words) for a lyric-video backdrop. Preserve their subject, mood, palette, "
+    "and setting — do not invent a different concept. "
+    "Leave the center and lower-third relatively clean for overlaid lyrics "
+    "(soft bokeh / negative space). "
+    "No text, logos, watermarks, UI, or readable lettering in the image. "
+    "No celebrities or real people faces unless the brief clearly asks for silhouettes. "
+    "Return ONLY the prompt text."
+)
+
+_SAFETY_SUFFIX = (
+    "Widescreen cinematic composition, high detail, mood-matched to the song, "
+    "no text, no watermark, no UI, no captions."
+)
+
+USER_PROMPT_MIN_CHARS = 8
+USER_PROMPT_MAX_CHARS = 1200
+
+
+def sanitize_user_prompt(user_prompt: str | None) -> str:
+    """Normalize a user-drafted scene brief for image generation."""
+    draft = re.sub(r"\s+", " ", str(user_prompt or "")).strip()
+    return draft[:USER_PROMPT_MAX_CHARS]
+
 
 def _client() -> OpenAI:
     key = Config.OPENAI_API_KEY
@@ -101,10 +126,53 @@ def build_scene_prompt(
             "soft depth of field, clean center space for lyrics, no text or logos."
         )
     # Hard constraints appended so the image model stays lyric-safe.
-    prompt = (
-        f"{prompt} Widescreen cinematic composition, high detail, mood-matched to the song, "
-        "no text, no watermark, no UI, no captions."
-    )
+    prompt = f"{prompt} {_SAFETY_SUFFIX}"
+    return prompt[:2200]
+
+
+def build_user_draft_prompt(
+    *,
+    user_prompt: str,
+    title: str = "",
+    artist: str = "",
+    client: Optional[OpenAI] = None,
+) -> str:
+    """Expand a user-written scene brief into a safe image-generation prompt."""
+    draft = sanitize_user_prompt(user_prompt)
+    if len(draft) < USER_PROMPT_MIN_CHARS:
+        raise ValueError(
+            f"Describe the scene you want in at least {USER_PROMPT_MIN_CHARS} characters."
+        )
+
+    api = client or _client()
+    user_bits = [
+        f"Song title (optional context): {title or 'Untitled'}",
+        f"Artist (optional context): {artist or 'Unknown'}",
+        f"User scene brief:\n{draft}",
+        "Style: photoreal or painterly cinematic still suitable as a full-bleed lyric video background.",
+    ]
+    try:
+        response = api.chat.completions.create(
+            model=_chat_model(),
+            messages=[
+                {"role": "system", "content": _USER_DRAFT_SYSTEM},
+                {"role": "user", "content": "\n".join(user_bits)},
+            ],
+            max_tokens=420,
+            temperature=0.7,
+        )
+        prompt = (response.choices[0].message.content or "").strip().strip('"')
+    except Exception as exc:
+        logger.warning("User-draft prompt polish failed (%s); using raw brief", exc)
+        prompt = ""
+
+    if not prompt or len(prompt) < 40:
+        prompt = (
+            f"{draft}. Cinematic lyric-video backdrop for '{title or 'Untitled'}' "
+            f"by {artist or 'an unknown artist'}: atmospheric lighting, rich color grading, "
+            "soft depth of field, clean center space for lyrics, no text or logos."
+        )
+    prompt = f"{prompt} {_SAFETY_SUFFIX}"
     return prompt[:2200]
 
 
@@ -195,22 +263,34 @@ def generate_ai_background(
     aspect_ratio: str = "16:9",
     width: int = 1920,
     height: int = 1080,
+    user_prompt: str | None = None,
 ) -> Dict[str, Any]:
     """
-    Build a lyric-aware prompt, generate an image, and save a WebP still
-    sized for the project canvas.
+    Build a scene prompt (from lyrics or a user draft), generate an image,
+    and save a WebP still sized for the project canvas.
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     client = _client()
-    scene_prompt = build_scene_prompt(
-        title=title,
-        artist=artist,
-        lyrics=lyrics,
-        language=language,
-        client=client,
-    )
+    draft = sanitize_user_prompt(user_prompt)
+    if draft:
+        scene_prompt = build_user_draft_prompt(
+            user_prompt=draft,
+            title=title,
+            artist=artist,
+            client=client,
+        )
+        prompt_source = "user_draft"
+    else:
+        scene_prompt = build_scene_prompt(
+            title=title,
+            artist=artist,
+            lyrics=lyrics,
+            language=language,
+            client=client,
+        )
+        prompt_source = "lyrics"
     raw_bytes, model_used, api_size = generate_image_bytes(
         scene_prompt,
         aspect_ratio=aspect_ratio,
@@ -223,6 +303,8 @@ def generate_ai_background(
     return {
         "path": str(output_path.resolve()),
         "prompt": scene_prompt,
+        "user_prompt": draft or None,
+        "prompt_source": prompt_source,
         "model": model_used,
         "chat_model": _chat_model(),
         "api_size": api_size,
