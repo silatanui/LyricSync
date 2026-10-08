@@ -87,8 +87,8 @@ def register():
             "error": {"code": "EMAIL_TAKEN", "message": "An account with this email already exists.", "retryable": False}
         }), 409
 
-    # Admin email is auto-verified for administrative operations
-    is_admin_user = (email == ADMIN_EMAIL.lower())
+    # Never auto-verify by email address alone — knowing ADMIN_EMAIL must not grant admin.
+    # Prefer Google sign-in for the admin mailbox; password signup still requires inbox proof.
     from datetime import datetime, timezone
     daily_credits = int(
         current_app.config.get("IMAGE_DAILY_CREDITS")
@@ -98,7 +98,7 @@ def register():
     user = User(
         email=email,
         display_name=display_name or email.split("@")[0],
-        email_verified=is_admin_user,
+        email_verified=False,
         image_credits=daily_credits,
         image_credits_reset_on=datetime.now(timezone.utc).date(),
         bonus_image_credits=0,
@@ -108,13 +108,7 @@ def register():
     db.session.add(user)
     db.session.commit()
 
-    if is_admin_user:
-        login_user(user)
-        if _wants_json():
-            return jsonify({"success": True, "user": user.to_dict(), "needs_activation": False}), 201
-        return redirect(url_for("views.dashboard"))
-
-    # Send activation token link via email
+    # Send activation token link via email (proves mailbox ownership before login/admin).
     token = generate_activation_token(user.id, user.email)
     activation_url = url_for("auth.activate_account", token=token, _external=True)
     send_activation_email(user.email, user.display_name, activation_url)
@@ -192,8 +186,8 @@ def login():
         flash("Incorrect email or password.", "danger")
         return redirect(url_for("auth.login_page"))
 
-    # Block unverified accounts unless admin or google account
-    if not user.email_verified and not user.is_admin and not user.google_id:
+    # Block unverified password accounts — email match alone never skips this.
+    if not user.email_verified and not user.google_id:
         if _wants_json():
             return jsonify({
                 "success": False,

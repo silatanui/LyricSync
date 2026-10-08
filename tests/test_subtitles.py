@@ -130,7 +130,7 @@ def test_ass_generation_with_typewriter_title(tmp_path):
     assert "Dialogue: 1," in content
 
 
-def test_ass_typewriter_reveals_word_by_word(tmp_path):
+def test_ass_typewriter_reveals_letter_by_letter(tmp_path):
     canonical = {
         "media": {"width": 1920, "height": 1080},
         "style": {
@@ -163,17 +163,16 @@ def test_ass_typewriter_reveals_word_by_word(tmp_path):
             },
         ],
     }
-    ass_path = tmp_path / "typewriter_words.ass"
+    ass_path = tmp_path / "typewriter_letters.ass"
     SubtitleGenerator.generate_ass(canonical, ass_path)
     content = ass_path.read_text(encoding="utf-8")
-    # First word alone — second line must not appear yet.
-    assert "0:00:01.00,0:00:01.40,Default,,0,0,0,," in content
-    assert content.count("\\N") >= 1
-    assert "Hello world\\NNext" in content
-    # First event text should end with Hello (no second line yet).
+    # First glyph alone — rest of the word/line must not appear yet.
     first_event = next(line for line in content.splitlines() if line.startswith("Dialogue: 0,0:00:01.00"))
-    assert first_event.endswith("Hello")
+    assert first_event.endswith("H")
     assert "\\N" not in first_event
+    # After the first word finishes, full "Hello" is visible before "world".
+    assert "Hello world\\NNext" in content
+    assert content.count("\\N") >= 1
 
 
 def test_ass_typography_and_motion_effects(tmp_path):

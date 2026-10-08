@@ -59,7 +59,10 @@ def create_project():
             },
         }), 401
 
-    if "audio" not in request.files:
+    library_audio_id = (request.form.get("library_audio_id") or "").strip()
+    audio_file = request.files.get("audio")
+    has_upload_audio = bool(audio_file and audio_file.filename)
+    if not has_upload_audio and not library_audio_id:
         return jsonify({
             "success": False,
             "error": {
@@ -69,12 +72,11 @@ def create_project():
             }
         }), 400
 
-    audio_file = request.files["audio"]
     video_file = request.files.get("video")
     has_video = bool(video_file and video_file.filename)
     raw_name = request.form.get("name", "").strip()
     is_auto_title = not raw_name or raw_name.lower() in ("untitled", "untitled song", "untitled song project")
-    project_name = raw_name if not is_auto_title else derive_title_from_filename(audio_file.filename or "")
+    audio_display_name = audio_file.filename if has_upload_audio else ""
     aspect_ratio = request.form.get("aspect_ratio", "16:9").strip() or "16:9"
     selected_template = request.form.get("template", "burgundy_studio").strip() or "burgundy_studio"
     from app.services.openai_transcription import normalize_language_code
@@ -83,7 +85,24 @@ def create_project():
     )
     t_width, t_height = BackgroundGenerator.get_dimensions(aspect_ratio)
 
-    if not audio_file.filename:
+    library_audio = None
+    if library_audio_id and not has_upload_audio:
+        from app.services.user_media_library import resolve_library_asset
+        library_audio = resolve_library_asset(current_user.id, library_audio_id)
+        if not library_audio or library_audio.kind != "audio":
+            return jsonify({
+                "success": False,
+                "error": {
+                    "code": "LIBRARY_AUDIO_NOT_FOUND",
+                    "message": "That previous upload was not found in your library.",
+                    "retryable": False,
+                },
+            }), 404
+        audio_display_name = library_audio.display_name or Path(library_audio.file_path).name
+
+    project_name = raw_name if not is_auto_title else derive_title_from_filename(audio_display_name or "")
+
+    if has_upload_audio and not audio_file.filename:
         return jsonify({
             "success": False,
             "error": {
@@ -94,16 +113,16 @@ def create_project():
         }), 400
 
     # Read lengths or stream to disk
-    audio_bytes = audio_file.read()
-    audio_file.seek(0)
-
-    # Validate audio
-    is_valid_audio, err = validate_audio_file(audio_file.filename, len(audio_bytes))
-    if not is_valid_audio:
-        return jsonify({
-            "success": False,
-            "error": {"code": "AUDIO_INVALID", "message": err, "retryable": False}
-        }), 400
+    audio_bytes = b""
+    if has_upload_audio:
+        audio_bytes = audio_file.read()
+        audio_file.seek(0)
+        is_valid_audio, err = validate_audio_file(audio_file.filename, len(audio_bytes))
+        if not is_valid_audio:
+            return jsonify({
+                "success": False,
+                "error": {"code": "AUDIO_INVALID", "message": err, "retryable": False}
+            }), 400
 
     video_bytes = b""
     if has_video:
@@ -120,9 +139,17 @@ def create_project():
     proj_dir = get_project_dir(proj_id)
 
     # Store files with secure generated names
-    audio_ext = Path(audio_file.filename).suffix.lower()
-    audio_saved_path = proj_dir / f"master_audio{audio_ext}"
-    audio_file.save(str(audio_saved_path))
+    import shutil
+    if library_audio and not has_upload_audio:
+        src = Path(library_audio.file_path)
+        audio_ext = src.suffix.lower() or ".mp3"
+        audio_saved_path = proj_dir / f"master_audio{audio_ext}"
+        shutil.copy2(src, audio_saved_path)
+        audio_bytes = audio_saved_path.read_bytes()
+    else:
+        audio_ext = Path(audio_file.filename).suffix.lower()
+        audio_saved_path = proj_dir / f"master_audio{audio_ext}"
+        audio_file.save(str(audio_saved_path))
 
     # Probe audio duration
     try:
@@ -226,6 +253,29 @@ def create_project():
     )
     db.session.add(audio_asset)
     db.session.add(video_asset)
+
+    # Persist uploads in the user's cross-project media library.
+    try:
+        from app.services.user_media_library import register_user_media
+        register_user_media(
+            owner_id,
+            audio_saved_path,
+            "audio",
+            display_name=audio_display_name or audio_saved_path.name,
+            source_project_id=proj_id,
+            duration=audio_dur,
+        )
+        if has_video:
+            register_user_media(
+                owner_id,
+                video_saved_path,
+                "video",
+                display_name=video_file.filename if video_file else video_saved_path.name,
+                source_project_id=proj_id,
+                duration=video_dur,
+            )
+    except Exception as lib_err:
+        current_app.logger.warning("User media library register failed: %s", lib_err)
 
     # Initialize canonical JSON — always private unless the owner later opts in.
     canonical = project.get_canonical_json()

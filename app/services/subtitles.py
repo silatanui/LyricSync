@@ -309,6 +309,33 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 for i, tok in enumerate(tokens)
             ]
 
+        def _timed_letters(line: Dict[str, Any]) -> List[Dict[str, Any]]:
+            """Expand word timings into per-character timings for typewriter reveal."""
+            words = _timed_words(line)
+            letters: List[Dict[str, Any]] = []
+            for wi, word in enumerate(words):
+                # Case the whole word first so Title Case stays correct per word.
+                cased = apply_text_case(str(word.get("text") or ""), text_case)
+                chars = list(cased)
+                if not chars:
+                    continue
+                start = float(word.get("start", 0.0) or 0.0)
+                end = float(word.get("end", start) or start)
+                if end <= start:
+                    end = start + max(0.12, len(chars) * 0.04)
+                step = (end - start) / len(chars)
+                for i, ch in enumerate(chars):
+                    letters.append({
+                        "text": ch,
+                        "start": start + i * step,
+                        "end": start + (i + 1) * step,
+                    })
+                if wi < len(words) - 1:
+                    next_start = float(words[wi + 1].get("start", end) or end)
+                    space_end = max(end + 0.015, min(next_start, end + 0.06))
+                    letters.append({"text": " ", "start": end, "end": space_end})
+            return letters
+
         def _active_override(word_text: str) -> str:
             """Per-word tracking tags for classic-style timed modes."""
             if mode == "underline":
@@ -334,32 +361,33 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             return f"{{\\c{secondary_color}}}{word_text}{{\\c{primary_color}}}"
 
         if effect == "typewriter":
-            # Word-after-word reveal across the whole chunk (never clip all lines at once).
+            # Letter-after-letter reveal across the whole chunk (never clip all lines at once).
             for chunk in chunks:
                 if not chunk:
                     continue
                 raw_chunk_end = float(chunk[-1].get("end", 0.0) or 0.0)
                 flat: List[tuple[int, Dict[str, Any]]] = []
                 for line_idx, line in enumerate(chunk):
-                    for w in _timed_words(line):
-                        flat.append((line_idx, w))
+                    for letter in _timed_letters(line):
+                        flat.append((line_idx, letter))
                 if not flat:
                     continue
-                for i, (line_idx, active_word) in enumerate(flat):
-                    w_start = float(active_word.get("start", 0.0) or 0.0)
+                for i, (line_idx, active_letter) in enumerate(flat):
+                    w_start = float(active_letter.get("start", 0.0) or 0.0)
                     if i + 1 < len(flat):
-                        w_end = float(flat[i + 1][1].get("start", w_start + 0.25) or (w_start + 0.25))
+                        w_end = float(flat[i + 1][1].get("start", w_start + 0.08) or (w_start + 0.08))
                     else:
-                        w_end = max(w_start + 0.2, raw_chunk_end)
+                        w_end = max(w_start + 0.08, raw_chunk_end)
                     if w_end <= w_start:
-                        w_end = w_start + 0.2
+                        w_end = w_start + 0.08
 
-                    # Build text with only words revealed so far, line breaks preserved.
+                    # Build text with only letters revealed so far, line breaks preserved.
                     revealed_by_line: List[List[str]] = [[] for _ in chunk]
                     for j in range(i + 1):
-                        lj, wj = flat[j]
-                        revealed_by_line[lj].append(_cased_word(wj))
-                    line_parts = [" ".join(parts) for parts in revealed_by_line if parts]
+                        lj, letter = flat[j]
+                        ch = str(letter.get("text") or "")
+                        revealed_by_line[lj].append(" " if ch == " " else escape_ass_text(ch))
+                    line_parts = ["".join(parts) for parts in revealed_by_line if parts]
                     dialogue_text = "\\N".join(line_parts)
                     events.append(
                         f"Dialogue: 0,{format_ass_time(w_start)},{format_ass_time(w_end)},"

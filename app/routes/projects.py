@@ -296,6 +296,7 @@ def _file_entry_from_asset(asset: MediaAsset, project_id: str) -> dict:
             t=int(time.time() * 1000),
         ),
         "source": "generated" if "ai_lyric_scene_" in label else ("upload" if kind in ("audio", "image", "video") else "project"),
+        "scope": "project",
     }
 
 
@@ -511,6 +512,17 @@ def update_project_background(project_id: str):
                 size_bytes=archive_path.stat().st_size if archive_path.exists() else 0,
             )
             db.session.add(image_asset)
+            try:
+                from app.services.user_media_library import register_user_media
+                register_user_media(
+                    project.user_id,
+                    archive_path,
+                    "image",
+                    display_name=archive_name,
+                    source_project_id=project.id,
+                )
+            except Exception as lib_err:
+                current_app.logger.warning("User media library register failed: %s", lib_err)
 
             _apply_background_file(
                 project,
@@ -769,6 +781,18 @@ def upload_custom_background_video(project_id: str):
         duration=project.video_duration,
     )
     db.session.add(library_video)
+    try:
+        from app.services.user_media_library import register_user_media
+        register_user_media(
+            project.user_id,
+            archive_path,
+            "video",
+            display_name=video_file.filename or archive_name,
+            source_project_id=project.id,
+            duration=project.video_duration,
+        )
+    except Exception as lib_err:
+        current_app.logger.warning("User media library register failed: %s", lib_err)
     db.session.commit()
 
     return jsonify({
@@ -836,18 +860,43 @@ def list_project_files(project_id: str):
         .all()
     )
     entries = []
-    seen_paths = set()
+    seen_keys = set()
     for asset in assets:
         path = Path(asset.file_path) if asset.file_path else None
-        if path and str(path.resolve()) in seen_paths:
-            continue
+        key = None
         if path and path.exists():
-            seen_paths.add(str(path.resolve()))
+            key = str(path.resolve())
+        if key and key in seen_keys:
+            continue
+        if key:
+            seen_keys.add(key)
+        if getattr(asset, "checksum", None):
+            seen_keys.add(f"ck:{asset.checksum}")
         entry = _file_entry_from_asset(asset, project_id)
         if entry["section"] == "videos" or asset.kind == "library_video":
             entry["section"] = "videos"
             entry["kind"] = "video"
         entries.append(entry)
+
+    # Merge the owner's persistent library so earlier uploads appear in every project.
+    try:
+        from app.services.user_media_library import list_user_library
+        if current_user.is_authenticated and getattr(current_user, "id", None) == project.user_id:
+            library = list_user_library(current_user.id, backfill=True)
+            for section in ("audio", "images", "videos"):
+                for entry in library.get(section, []):
+                    if any(e.get("id") == entry["id"] for e in entries):
+                        continue
+                    if entry.get("name") and any(
+                        e.get("name") == entry["name"]
+                        and e.get("section") == entry["section"]
+                        and e.get("size_bytes") == entry.get("size_bytes")
+                        for e in entries
+                    ):
+                        continue
+                    entries.append(entry)
+    except Exception as lib_err:
+        current_app.logger.warning("Could not merge user media library: %s", lib_err)
 
     return jsonify({
         "success": True,
@@ -1008,6 +1057,17 @@ def upload_project_file(project_id: str):
         size_bytes=archive_path.stat().st_size,
     )
     db.session.add(asset)
+    try:
+        from app.services.user_media_library import register_user_media
+        register_user_media(
+            project.user_id,
+            archive_path,
+            "image" if kind == "image" else "video",
+            display_name=upload.filename or archive_name,
+            source_project_id=project.id,
+        )
+    except Exception as lib_err:
+        current_app.logger.warning("User media library register failed: %s", lib_err)
     db.session.commit()
 
     return jsonify({

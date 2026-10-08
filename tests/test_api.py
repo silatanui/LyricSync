@@ -7,6 +7,23 @@ from app.extensions import db
 
 ADMIN_EMAIL = "silatanuikipngetich@gmail.com"
 
+
+def _login_verified_user(client, app, *, email="creator@example.com", password="Secret123!"):
+    with app.app_context():
+        user = db.session.query(User).filter_by(email=email).first()
+        if not user:
+            user = User(email=email, display_name="Creator", email_verified=True)
+            user.set_password(password)
+            db.session.add(user)
+            db.session.commit()
+        elif not user.email_verified:
+            user.email_verified = True
+            db.session.commit()
+    res = client.post("/api/auth/login", json={"email": email, "password": password})
+    assert res.status_code == 200
+    return res.get_json()["user"]
+
+
 def test_health_check(client):
     res = client.get("/health")
     assert res.status_code == 200
@@ -15,6 +32,7 @@ def test_health_check(client):
     assert data["database"] == "connected"
 
 def test_project_crud_and_canonical_flow(client, test_media_dir, app):
+    _login_verified_user(client, app)
     audio_file = test_media_dir["audio"]
     video_file = test_media_dir["video"]
 
@@ -103,7 +121,8 @@ def test_project_crud_and_canonical_flow(client, test_media_dir, app):
     res = client.get(f"/api/projects/{project_id}")
     assert res.status_code == 404
 
-def test_project_creation_without_name_auto_generates_title(client, test_media_dir):
+def test_project_creation_without_name_auto_generates_title(client, test_media_dir, app):
+    _login_verified_user(client, app)
     audio_file = test_media_dir["audio"]
     video_file = test_media_dir["video"]
 
@@ -120,7 +139,8 @@ def test_project_creation_without_name_auto_generates_title(client, test_media_d
     assert json_data["success"] is True
     assert json_data["project"]["name"] == "Midnight Acoustic Demo"
 
-def test_stream_media_with_fallback_path(client, test_media_dir):
+def test_stream_media_with_fallback_path(client, test_media_dir, app):
+    _login_verified_user(client, app)
     audio_file = test_media_dir["audio"]
     video_file = test_media_dir["video"]
 
@@ -150,6 +170,7 @@ def test_download_rendered_project(client, test_media_dir, app):
     from app.utils.files import get_project_output_dir
     from app.extensions import db
 
+    _login_verified_user(client, app)
     audio_file = test_media_dir["audio"]
     video_file = test_media_dir["video"]
 

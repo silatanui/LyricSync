@@ -91,7 +91,7 @@
                     </div>
                     <div class="docs-feature-card">
                         <h5><i class="bi bi-shield-check text-danger me-1"></i> Strict RBAC Separation</h5>
-                        <p>Technical server internals are restricted exclusively to system admin (silatanuikipngetich@gmail.com).</p>
+                        <p>Technical server internals are restricted exclusively to the configured system administrator (verified sign-in required).</p>
                     </div>
                 </div>
 
@@ -274,7 +274,7 @@ erDiagram
 flowchart TD
     Req["Incoming User Request"] --> Auth{"Authenticated?"}
     Auth -->|No| Pub["Public View: Clean status (200), Zero Server Internals"]
-    Auth -->|Yes| Chk{"Email == silatanuikipngetich@gmail.com?"}
+    Auth -->|Yes| Chk{"Verified admin account?"}
     Chk -->|Yes| Adm["Admin Privilege: Full Diagnostics<br>• Table Names • FFmpeg Binaries<br>• AI Model Specs • Storage Paths<br>• Raw Health Telemetry"]
     Chk -->|No| Usr["Normal Creator Privilege:<br>• Music-Focused UI • Word-Level Sync<br>• 720p/1080p HQ Export<br>• Technical Jargon Completely Hidden"]
                         </pre>
@@ -676,16 +676,17 @@ class Project(db.Model):
                     <pre><code class="language-python">{% raw %}from flask import Blueprint, jsonify, current_app
 from flask_login import current_user
 
-ADMIN_EMAIL = "silatanuikipngetich@gmail.com"
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")  # server .env only — never published
 
 @views_bp.route("/health")
 def health_check():
     """Restricted health diagnostics.
-    Only silatanuikipngetich@gmail.com can inspect technical internals.
+    Only the verified configured administrator can inspect technical internals.
     Normal users receive a clean operational status.
     """
     is_admin = bool(
         current_user.is_authenticated and
+        getattr(current_user, "email_verified", False) and
         current_user.email and
         current_user.email.strip().lower() == ADMIN_EMAIL
     )
@@ -806,7 +807,7 @@ function startSyncLoop() {
                                 <td><span class="badge bg-success">GET</span></td>
                                 <td><code>/health</code></td>
                                 <td>Admin / Public</td>
-                                <td>Diagnostics (Deep stats for silatanuikipngetich@gmail.com)</td>
+                                <td>Diagnostics (deep stats for verified administrator only)</td>
                             </tr>
                         </tbody>
                     </table>

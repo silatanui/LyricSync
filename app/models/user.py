@@ -1,3 +1,4 @@
+import os
 from datetime import date, datetime, timezone
 from sqlalchemy import String, DateTime, Date, Boolean, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -7,7 +8,8 @@ from flask_login import UserMixin
 from app.extensions import db
 from app.utils.ids import generate_user_id
 
-ADMIN_EMAIL = "silatanuikipngetich@gmail.com"
+# Prefer env so the admin identity is not the only source of truth in public docs.
+ADMIN_EMAIL = (os.getenv("ADMIN_EMAIL") or "silatanuikipngetich@gmail.com").strip().lower()
 DEFAULT_DAILY_IMAGE_CREDITS = 2
 
 
@@ -40,8 +42,11 @@ class User(db.Model, UserMixin):
 
     @property
     def is_admin(self) -> bool:
-        """Only silatanuikipngetich@gmail.com has system administrator privileges."""
-        return bool(self.email and self.email.strip().lower() == ADMIN_EMAIL)
+        """Admin only after the configured admin email is authenticated and verified."""
+        if not self.email or self.email.strip().lower() != ADMIN_EMAIL:
+            return False
+        # Password accounts must verify inbox ownership; Google sign-in already proves it.
+        return bool(self.email_verified or self.google_id)
 
     @property
     def has_image_credits(self) -> bool:

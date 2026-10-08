@@ -37,12 +37,11 @@ def create_app(config_class=Config):
         is_admin = bool(current_user.is_authenticated and getattr(current_user, "is_admin", False))
         return {
             "is_admin": is_admin,
-            "admin_email": "silatanuikipngetich@gmail.com",
             "image_credits_status": credits_payload(),
         }
 
     # Register blueprints
-    from app.routes import views_bp, uploads_bp, projects_bp, lyrics_bp, renders_bp, auth_bp, billing_bp
+    from app.routes import views_bp, uploads_bp, projects_bp, lyrics_bp, renders_bp, auth_bp, billing_bp, media_bp
     flask_app.register_blueprint(views_bp)
     flask_app.register_blueprint(uploads_bp)
     flask_app.register_blueprint(projects_bp)
@@ -50,6 +49,7 @@ def create_app(config_class=Config):
     flask_app.register_blueprint(renders_bp)
     flask_app.register_blueprint(auth_bp)
     flask_app.register_blueprint(billing_bp)
+    flask_app.register_blueprint(media_bp)
 
     # Create tables automatically for development
     with flask_app.app_context():
@@ -95,7 +95,15 @@ def create_app(config_class=Config):
                         "ALTER TABLE users ADD COLUMN stripe_customer_id VARCHAR(128) NULL"
                     ))
                     db.session.commit()
-                db.session.execute(db.text("UPDATE users SET email_verified = 1 WHERE email = 'silatanuikipngetich@gmail.com' OR google_id IS NOT NULL"))
+                from app.models.user import ADMIN_EMAIL as _ADMIN_EMAIL
+                # Google-linked accounts are verified by Google; do not auto-verify by email alone.
+                db.session.execute(db.text("UPDATE users SET email_verified = 1 WHERE google_id IS NOT NULL"))
+                db.session.commit()
+                # Keep the existing admin mailbox verified once linked (does not grant access without login).
+                db.session.execute(
+                    db.text("UPDATE users SET email_verified = 1 WHERE lower(email) = :admin AND google_id IS NOT NULL"),
+                    {"admin": _ADMIN_EMAIL.lower()},
+                )
                 db.session.commit()
                 # One-shot: clear Premium for the KYU student test account (once per host).
                 try:

@@ -143,7 +143,8 @@ _LANGUAGE_PROMPTS = {
     "pt": "Letra de música com timing claro das palavras.",
     "de": "Songtext mit klarer Wortzeitgebung.",
     "it": "Testo della canzone con timing chiaro delle parole.",
-    "sw": "Accurate Swahili song lyrics with clear word timing.",
+    # Swahili: leave empty. Seed prompts (English or sample lyrics) get echoed/looped by Whisper.
+    "sw": "",
     "yo": "Ọrọ orin pẹlu àkókò ọ̀rọ̀ tó yé.",
     "ha": "Kalmomin waƙa tare da lokaci mai kyau.",
     "ar": "كلمات أغنية بتوقيت واضح للكلمات.",
@@ -189,13 +190,22 @@ def language_display_name(value) -> str:
 
 
 def lyric_language_prompt(language: str | None, continuity: str = "") -> str | None:
-    """Build a Whisper prompt that keeps later slices in the song's language."""
+    """Build a Whisper prompt that keeps later slices in the song's language.
+
+    Prefer prior transcript continuity over canned seed phrases. Languages such as
+    Swahili hallucinate seed prompts, so an empty base falls back to continuity only.
+    """
     code = normalize_language_code(language)
-    base = _LANGUAGE_PROMPTS.get(code) if code else "Song lyrics transcribed accurately in the sung language."
+    if code and code in _LANGUAGE_PROMPTS:
+        base = _LANGUAGE_PROMPTS.get(code) or ""
+    else:
+        base = "Song lyrics transcribed accurately in the sung language."
     continuity = sanitize_continuity_prompt(continuity)
-    if continuity:
+    if base and continuity:
         return f"{base} {continuity}"[:220]
-    return base
+    if continuity:
+        return continuity[:220]
+    return base or None
 
 
 def _normalize_lyric_token(text: str) -> str:

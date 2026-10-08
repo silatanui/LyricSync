@@ -180,6 +180,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Canvas Aspect Ratio Controls
     const ratioBtns = document.querySelectorAll('.canvas-ratio-choice-btn');
     let currentAspectRatio = '16:9';
+    const mobileWorkspaceMq = window.matchMedia('(max-width: 991px)');
+    let desktopAspectPreference = null;
+    let mobileWorkspaceForced = false;
+
+    function isMobileWorkspace() {
+        return mobileWorkspaceMq.matches;
+    }
+
+    function applyMobileWorkspaceAspect(options = {}) {
+        const rememberCurrent = Boolean(options.rememberCurrent);
+        if (isMobileWorkspace()) {
+            if (!mobileWorkspaceForced || rememberCurrent) {
+                if (currentAspectRatio !== '9:16') {
+                    desktopAspectPreference = currentAspectRatio;
+                }
+                mobileWorkspaceForced = true;
+            }
+            if (currentAspectRatio !== '9:16') {
+                updateAspectContainer('9:16');
+            }
+            return;
+        }
+        if (mobileWorkspaceForced) {
+            mobileWorkspaceForced = false;
+            const restore = desktopAspectPreference || '16:9';
+            desktopAspectPreference = null;
+            updateAspectContainer(restore);
+        }
+    }
 
     // Lyrics Format & Song Sheet Controls
     let currentLyricsFormat = 'stanza';
@@ -476,10 +505,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (canonical.transcription?.partial) setStreamBanner('playing');
             }
 
-            // Apply render aspect ratio
+            // Apply render aspect ratio (phones use 9:16 workspace)
             if (canonical.render?.aspect_ratio) {
                 updateAspectContainer(canonical.render.aspect_ratio);
             }
+            applyMobileWorkspaceAspect({ rememberCurrent: true });
 
             // Apply background template
             if (canonical.meta?.background_template) {
@@ -1249,6 +1279,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     ratioBtns.forEach(btn => {
         btn.addEventListener('click', async () => {
             const aspect = btn.getAttribute('data-ratio');
+            if (isMobileWorkspace()) {
+                mobileWorkspaceForced = true;
+                desktopAspectPreference = aspect === '9:16'
+                    ? (desktopAspectPreference || '16:9')
+                    : aspect;
+            }
             updateAspectContainer(aspect);
 
             try {
@@ -1276,6 +1312,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateAspectContainer(e.target.value);
         });
     }
+
+    const onMobileWorkspaceChange = () => applyMobileWorkspaceAspect();
+    if (typeof mobileWorkspaceMq.addEventListener === 'function') {
+        mobileWorkspaceMq.addEventListener('change', onMobileWorkspaceChange);
+    } else if (typeof mobileWorkspaceMq.addListener === 'function') {
+        mobileWorkspaceMq.addListener(onMobileWorkspaceChange);
+    }
+    window.addEventListener('resize', () => {
+        applyMobileWorkspaceAspect();
+    });
+    applyMobileWorkspaceAspect();
 
     // ================= BACKGROUND TEMPLATE SWITCHER =================
     function selectTemplate(templateId) {
@@ -1745,20 +1792,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         const url = (typeof window.lyricSyncAbsoluteUrl === 'function')
             ? window.lyricSyncAbsoluteUrl(file.url)
             : file.url;
-        const meta = [formatFileBytes(file.size_bytes), file.source === 'generated' ? 'AI generated' : ''].filter(Boolean).join(' · ');
+        const fromLibrary = file.scope === 'library' || file.source === 'library';
+        const meta = [
+            formatFileBytes(file.size_bytes),
+            fromLibrary ? 'Saved library' : '',
+            file.source === 'generated' ? 'AI generated' : '',
+        ].filter(Boolean).join(' · ');
+        const scopeAttr = fromLibrary ? 'library' : 'project';
         if (file.section === 'audio') {
             return `
-                <div class="files-row" data-asset-id="${file.id}">
+                <div class="files-row" data-asset-id="${file.id}" data-scope="${scopeAttr}">
                     <div class="files-row-icon"><i class="bi bi-music-note-beamed"></i></div>
                     <div class="files-row-meta min-w-0">
                         <strong class="text-truncate d-block">${file.name}</strong>
-                        <span class="text-secondary">${meta || 'Project audio'}</span>
+                        <span class="text-secondary">${meta || 'Saved audio'}</span>
                     </div>
                 </div>`;
         }
         const isImage = file.section === 'images';
         return `
-            <div class="files-card" data-asset-id="${file.id}">
+            <div class="files-card" data-asset-id="${file.id}" data-scope="${scopeAttr}">
                 <div class="files-card-thumb sk-media" style="background:${isImage ? '#1e293b' : '#31121c'};">
                     ${isImage
                         ? `<img class="sk-img" src="${url}" alt="${file.name}" loading="lazy">`
@@ -1768,7 +1821,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <strong class="text-truncate d-block">${file.name}</strong>
                     <span class="text-secondary">${meta || (isImage ? 'Image' : 'Video')}</span>
                 </div>
-                ${applyable ? `<button type="button" class="btn btn-sm btn-burgundy files-apply-btn" data-apply-id="${file.id}">Use as background</button>` : ''}
+                ${applyable ? `<button type="button" class="btn btn-sm btn-burgundy files-apply-btn" data-apply-id="${file.id}" data-scope="${scopeAttr}">Use as background</button>` : ''}
             </div>`;
     }
 
@@ -1792,31 +1845,34 @@ document.addEventListener('DOMContentLoaded', async () => {
                 projectFilesAudioList.innerHTML = audio.length
                     ? audio.map((f) => renderFileCard(f)).join('')
                     : '';
-                if (!audio.length) renderFilesEmpty(projectFilesAudioList, 'No audio yet. Upload a song to start.');
+                if (!audio.length) renderFilesEmpty(projectFilesAudioList, 'No audio yet. Upload a song — it stays in your library.');
             }
             if (projectFilesImagesList) {
                 projectFilesImagesList.innerHTML = images.length
                     ? images.map((f) => renderFileCard(f, { applyable: true })).join('')
                     : '';
-                if (!images.length) renderFilesEmpty(projectFilesImagesList, 'No images yet. Generate an AI scene or upload one.');
+                if (!images.length) renderFilesEmpty(projectFilesImagesList, 'No images yet. Generate an AI scene or upload one — they stay in your library.');
                 if (window.LyricSyncSkeleton) LyricSyncSkeleton.bindMedia(projectFilesImagesList);
             }
             if (projectFilesVideosList) {
                 projectFilesVideosList.innerHTML = videos.length
                     ? videos.map((f) => renderFileCard(f, { applyable: true })).join('')
                     : '';
-                if (!videos.length) renderFilesEmpty(projectFilesVideosList, 'No videos yet. Upload footage from Themes or here.');
+                if (!videos.length) renderFilesEmpty(projectFilesVideosList, 'No videos yet. Upload footage — it stays available for later projects.');
                 if (window.LyricSyncSkeleton) LyricSyncSkeleton.bindMedia(projectFilesVideosList);
             }
 
             document.querySelectorAll('.files-apply-btn').forEach((btn) => {
                 btn.addEventListener('click', async () => {
                     const assetId = btn.getAttribute('data-apply-id');
+                    const scope = btn.getAttribute('data-scope') || 'project';
                     if (!assetId) return;
                     btn.disabled = true;
                     btn.textContent = 'Applying…';
                     try {
-                        const applyRes = await LyricSyncAPI.applyProjectFile(projectId, assetId);
+                        const applyRes = scope === 'library'
+                            ? await LyricSyncAPI.useLibraryFile(projectId, assetId, 'background')
+                            : await LyricSyncAPI.applyProjectFile(projectId, assetId);
                         if (!applyRes.success) throw new Error(applyRes.error?.message || 'Apply failed');
                         await applyBackgroundResponse(applyRes);
                         if (projectFilesStatus) {

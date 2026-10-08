@@ -27,7 +27,7 @@ def test_new_user_gets_daily_image_credits(app):
 
 def test_admin_is_unlimited(app):
     with app.app_context():
-        admin = User(email=ADMIN_EMAIL, display_name="Admin")
+        admin = User(email=ADMIN_EMAIL, display_name="Admin", email_verified=True)
         admin.image_credits = 0
         db.session.add(admin)
         db.session.commit()

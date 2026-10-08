@@ -74,13 +74,16 @@ def test_swahili_prompt_avoids_kwa_and_drops_loop_continuity():
         words_look_repetition_locked,
     )
 
-    prompt = lyric_language_prompt("sw")
-    assert prompt
-    assert "kwa" not in prompt.casefold()
+    # Swahili uses no seed prompt — Whisper echoes canned phrases into the transcript.
+    assert lyric_language_prompt("sw") in (None, "")
 
     stuck = " ".join(["Kwa"] * 12)
     assert sanitize_continuity_prompt(stuck) == ""
-    assert "Accurate Swahili" in lyric_language_prompt("sw", stuck)
+    # Looping continuity is dropped; empty seed stays empty.
+    assert lyric_language_prompt("sw", stuck) in (None, "")
+
+    real = "Njooni mchote neema Bwana asifiwe"
+    assert lyric_language_prompt("sw", real) == real
 
     words = [{"text": "Kwa", "start": i * 0.2, "end": i * 0.2 + 0.15} for i in range(10)]
     words = [{"text": "Fani", "start": 0.0, "end": 0.3}] + words

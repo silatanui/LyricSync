@@ -71,6 +71,9 @@ class Config:
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
     GOOGLE_DISCOVERY_URL = "https://accounts.google.com/.well-known/openid-configuration"
 
+    # Administrator identity (keep out of public docs; override via .env)
+    ADMIN_EMAIL = (os.getenv("ADMIN_EMAIL") or "silatanuikipngetich@gmail.com").strip().lower()
+
     # Freemium AI image credits (OpenAI image cost control)
     # Signed-in users get IMAGE_DAILY_CREDITS per UTC day; admin is unlimited.
     # IMAGE_FREE_CREDITS is kept as a legacy alias for IMAGE_DAILY_CREDITS.

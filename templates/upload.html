@@ -115,6 +115,17 @@
                             </div>
                         </div>
 
+                        <div id="libraryAudioPicker" class="library-audio-picker mb-3 d-none">
+                            <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                                <label class="form-label fw-semibold text-dark mb-0">
+                                    <i class="bi bi-clock-history me-1" style="color: var(--brand-burgundy);"></i>
+                                    Or reuse a previous upload
+                                </label>
+                                <button type="button" class="btn btn-link btn-sm text-secondary p-0" id="clearLibraryAudioBtn">Clear</button>
+                            </div>
+                            <div id="libraryAudioList" class="library-audio-list"></div>
+                        </div>
+
                         <div class="mb-3">
                             <label for="projectName" class="form-label fw-semibold text-dark mb-1 d-flex align-items-center justify-content-between">
                                 <span>Song title <span class="text-secondary fw-normal small">(optional)</span></span>
@@ -405,9 +416,103 @@
     }
 
     let audioFile = null;
+    let selectedLibraryAudioId = null;
     let selectedTemplate = 'burgundy_studio';
     let currentStep = 1;
     const totalSteps = 2;
+    const libraryAudioPicker = document.getElementById('libraryAudioPicker');
+    const libraryAudioList = document.getElementById('libraryAudioList');
+    const clearLibraryAudioBtn = document.getElementById('clearLibraryAudioBtn');
+
+    function hasAudioReady() {
+        return Boolean(audioFile || selectedLibraryAudioId);
+    }
+
+    function formatLibraryBytes(bytes) {
+        const n = Number(bytes || 0);
+        if (!n) return '';
+        if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+        return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    function selectLibraryAudio(entry) {
+        if (!entry) return;
+        selectedLibraryAudioId = entry.id;
+        audioFile = null;
+        if (audioInput) audioInput.value = '';
+        document.getElementById('audioLabel')?.classList.add('d-none');
+        document.getElementById('audioFileInfo')?.classList.remove('d-none');
+        const nameEl = document.getElementById('audioFileName');
+        const sizeEl = document.getElementById('audioFileSize');
+        if (nameEl) nameEl.textContent = entry.name || 'Previous upload';
+        if (sizeEl) sizeEl.textContent = formatLibraryBytes(entry.size_bytes) || 'From your library';
+        if (step1Badge) {
+            step1Badge.className = 'badge badge-studio-green px-2 py-1';
+            step1Badge.innerHTML = '<i class="bi bi-check2 me-1"></i> From library';
+        }
+        const cleanName = cleanTitleFromFilename(entry.name || '');
+        if (cleanName && (!projectNameInput.value || projectNameInput.value.trim() === '')) {
+            projectNameInput.value = cleanName;
+            if (autoTitleHint) autoTitleHint.classList.remove('d-none');
+        }
+        document.getElementById('progressStep2').disabled = false;
+        alertBox.classList.add('d-none');
+        libraryAudioList?.querySelectorAll('.library-audio-item').forEach((btn) => {
+            btn.classList.toggle('is-selected', btn.getAttribute('data-library-id') === entry.id);
+        });
+        goToStep(currentStep, { force: true });
+    }
+
+    async function loadLibraryAudioPicker() {
+        if (!libraryAudioPicker || !libraryAudioList || typeof LyricSyncAPI === 'undefined' || !LyricSyncAPI.getMediaLibrary) {
+            return;
+        }
+        try {
+            const res = await LyricSyncAPI.getMediaLibrary();
+            if (!res.success) return;
+            const audio = res.files?.audio || [];
+            if (!audio.length) {
+                libraryAudioPicker.classList.add('d-none');
+                return;
+            }
+            libraryAudioPicker.classList.remove('d-none');
+            libraryAudioList.innerHTML = audio.map((entry) => `
+                <button type="button" class="library-audio-item" data-library-id="${entry.id}">
+                    <i class="bi bi-music-note-beamed"></i>
+                    <span class="library-audio-meta">
+                        <strong>${entry.name || 'Audio'}</strong>
+                        <small>${formatLibraryBytes(entry.size_bytes) || 'Saved upload'}</small>
+                    </span>
+                </button>
+            `).join('');
+            libraryAudioList.querySelectorAll('.library-audio-item').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const id = btn.getAttribute('data-library-id');
+                    const entry = audio.find((a) => a.id === id);
+                    if (entry) selectLibraryAudio(entry);
+                });
+            });
+        } catch (_) {
+            libraryAudioPicker.classList.add('d-none');
+        }
+    }
+
+    clearLibraryAudioBtn?.addEventListener('click', () => {
+        selectedLibraryAudioId = null;
+        libraryAudioList?.querySelectorAll('.library-audio-item').forEach((btn) => btn.classList.remove('is-selected'));
+        if (!audioFile) {
+            document.getElementById('audioLabel')?.classList.remove('d-none');
+            document.getElementById('audioFileInfo')?.classList.add('d-none');
+            if (step1Badge) {
+                step1Badge.className = 'badge bg-light text-secondary border px-2 py-1';
+                step1Badge.textContent = 'Required';
+            }
+            document.getElementById('progressStep2').disabled = true;
+        }
+        goToStep(currentStep, { force: true });
+    });
+
+    loadLibraryAudioPicker();
 
     function cleanTitleFromFilename(name) {
         if (!name) return "";
@@ -422,7 +527,7 @@
 
     function goToStep(step, { force = false } = {}) {
         const next = Math.max(1, Math.min(totalSteps, Number(step) || 1));
-        if (!force && next > 1 && !audioFile) {
+        if (!force && next > 1 && !hasAudioReady()) {
             alertBox.textContent = "Please select an audio file before continuing.";
             alertBox.classList.remove('d-none');
             audioDropzone?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -449,8 +554,8 @@
             const btn = document.getElementById(`progressStep${i}`);
             if (!btn) continue;
             btn.classList.toggle('active', i === currentStep);
-            btn.classList.toggle('done', i < currentStep || (i === 1 && !!audioFile && currentStep > 1));
-            btn.disabled = i === 1 ? false : (!audioFile && currentStep < i);
+            btn.classList.toggle('done', i < currentStep || (i === 1 && hasAudioReady() && currentStep > 1));
+            btn.disabled = i === 1 ? false : (!hasAudioReady() && currentStep < i);
         }
         const line1 = document.getElementById('progressLine1');
         if (line1) line1.classList.toggle('filled', currentStep >= 2);
@@ -463,7 +568,7 @@
     }
 
     wizardNextBtn?.addEventListener('click', () => {
-        if (currentStep === 1 && !audioFile) {
+        if (currentStep === 1 && !hasAudioReady()) {
             alertBox.textContent = "Please select an audio file for the song.";
             alertBox.classList.remove('d-none');
             return;
@@ -474,9 +579,9 @@
     document.querySelectorAll('[data-goto-step]').forEach((btn) => {
         btn.addEventListener('click', () => {
             const target = Number(btn.dataset.gotoStep);
-            if (target < currentStep || (audioFile && target <= totalSteps)) {
+            if (target < currentStep || (hasAudioReady() && target <= totalSteps)) {
                 goToStep(target, { force: target <= currentStep });
-            } else if (audioFile) {
+            } else if (hasAudioReady()) {
                 goToStep(target);
             }
         });
@@ -532,6 +637,8 @@
     function handleAudio(file) {
         if (!file) return;
         audioFile = file;
+        selectedLibraryAudioId = null;
+        libraryAudioList?.querySelectorAll('.library-audio-item').forEach((btn) => btn.classList.remove('is-selected'));
         document.getElementById('audioLabel').classList.add('d-none');
         document.getElementById('audioFileInfo').classList.remove('d-none');
         document.getElementById('audioFileName').textContent = file.name;
@@ -558,7 +665,7 @@
         e.preventDefault();
         alertBox.classList.add('d-none');
 
-        if (!audioFile) {
+        if (!hasAudioReady()) {
             alertBox.textContent = "Please select an audio file for the song.";
             alertBox.classList.remove('d-none');
             goToStep(1, { force: true });
@@ -574,8 +681,8 @@
         progressContainer.classList.remove('d-none');
         progressBar.style.width = '5%';
         progressText.textContent = '5%';
-        statusText.textContent = 'Uploading song track...';
-        subText.textContent = 'Sending audio file to server...';
+        statusText.textContent = selectedLibraryAudioId ? 'Preparing song from your library...' : 'Uploading song track...';
+        subText.textContent = selectedLibraryAudioId ? 'Copying a previous upload into this project...' : 'Sending audio file to server...';
         if (timerText) timerText.textContent = '0s elapsed';
 
         const preferredLanguage = document.getElementById('preferredLanguage')?.value || 'auto';
@@ -583,7 +690,11 @@
 
         const formData = new FormData();
         formData.append('name', projectName);
-        formData.append('audio', audioFile);
+        if (audioFile) {
+            formData.append('audio', audioFile);
+        } else if (selectedLibraryAudioId) {
+            formData.append('library_audio_id', selectedLibraryAudioId);
+        }
         formData.append('template', selectedTemplate);
         formData.append('aspect_ratio', selectedAspect);
         if (preferredLanguage && preferredLanguage !== 'auto') {

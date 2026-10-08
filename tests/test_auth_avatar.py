@@ -13,14 +13,24 @@ def test_user_initials_and_admin_computation():
     assert u2.initials == "SI"
     assert u2.is_admin is False
 
-    # Admin email check (case-insensitive)
-    admin_user = User(email="silatanuikipngetich@gmail.com", display_name="Sila Kipngetich")
+    # Admin email alone is not enough — mailbox must be verified (or Google-linked).
+    admin_unverified = User(email="silatanuikipngetich@gmail.com", display_name="Sila Kipngetich")
+    assert admin_unverified.is_admin is False
+
+    admin_user = User(
+        email="silatanuikipngetich@gmail.com",
+        display_name="Sila Kipngetich",
+        email_verified=True,
+    )
     assert admin_user.is_admin is True
     assert admin_user.initials == "SK"
     assert admin_user.to_dict()["is_admin"] is True
 
-    admin_upper = User(email="SILATANUIKIPNGETICH@GMAIL.COM ")
+    admin_upper = User(email="SILATANUIKIPNGETICH@GMAIL.COM ", email_verified=True)
     assert admin_upper.is_admin is True
+
+    admin_google = User(email="silatanuikipngetich@gmail.com", google_id="google-sub-1")
+    assert admin_google.is_admin is True
 
     # No display name, email with dots
     u3 = User(email="sila.kipngetich@tanuisila.dev")
@@ -78,10 +88,54 @@ def test_logout_routes_and_normal_user_ui(client, app):
         assert logout_res.headers["Location"].endswith("/")
 
 
+def test_registering_admin_email_requires_activation(client, app, monkeypatch):
+    """Knowing the admin address must not skip inbox verification."""
+    from app.models.user import ADMIN_EMAIL
+
+    sent = {}
+
+    def _fake_send(email, display_name, activation_url):
+        sent["email"] = email
+        sent["url"] = activation_url
+        return True
+
+    monkeypatch.setattr("app.routes.auth.send_activation_email", _fake_send)
+
+    with app.app_context():
+        existing = db.session.query(User).filter_by(email=ADMIN_EMAIL).first()
+        if existing:
+            db.session.delete(existing)
+            db.session.commit()
+
+        res = client.post("/api/auth/register", json={
+            "email": ADMIN_EMAIL,
+            "password": "HackerPass1!",
+            "display_name": "Intruder",
+        })
+        assert res.status_code == 201
+        body = res.get_json()
+        assert body["needs_activation"] is True
+        assert "user" not in body or body.get("user") is None
+
+        user = db.session.query(User).filter_by(email=ADMIN_EMAIL).first()
+        assert user is not None
+        assert user.email_verified is False
+        assert user.is_admin is False
+        assert sent.get("email") == ADMIN_EMAIL
+
+        blocked = client.post("/api/auth/login", json={
+            "email": ADMIN_EMAIL,
+            "password": "HackerPass1!",
+        })
+        assert blocked.status_code == 403
+        assert blocked.get_json()["error"]["code"] == "EMAIL_NOT_VERIFIED"
+
+
 def test_admin_user_technicalities_access(client, app):
     with app.app_context():
         admin = User(email="silatanuikipngetich@gmail.com", display_name="Sila Tanui")
         admin.set_password("AdminPass123!")
+        admin.email_verified = True
         db.session.add(admin)
         db.session.commit()
 

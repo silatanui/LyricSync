@@ -266,11 +266,25 @@ const LyricSyncAPI = {
         return await response.json();
     },
 
+    async getMediaLibrary() {
+        const response = await fetch(lyricSyncApiUrl('/media/library'), { cache: 'no-store' });
+        return await response.json();
+    },
+
     async applyProjectFile(projectId, assetId) {
         const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}/files/${assetId}/apply`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({}),
+        });
+        return await response.json();
+    },
+
+    async useLibraryFile(projectId, libraryAssetId, applyAs = 'background') {
+        const response = await fetch(lyricSyncApiUrl(`/media/library/${libraryAssetId}/use`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ project_id: projectId, apply_as: applyAs }),
         });
         return await response.json();
     },

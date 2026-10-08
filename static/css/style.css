@@ -3716,6 +3716,58 @@ html[data-theme="dark"] .ai-busy-skeleton span {
     grid-template-columns: 1fr 1fr;
     gap: 0.55rem;
 }
+.library-audio-picker {
+    border: 1px solid var(--border-color);
+    border-radius: 0.65rem;
+    padding: 0.85rem 1rem;
+    background: var(--surface-card);
+}
+.library-audio-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    max-height: 180px;
+    overflow-y: auto;
+}
+.library-audio-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    border: 1px solid var(--border-color);
+    background: var(--surface-bg);
+    border-radius: 0.5rem;
+    padding: 0.55rem 0.75rem;
+    text-align: left;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+.library-audio-item i {
+    color: var(--brand-burgundy);
+    font-size: 1.1rem;
+}
+.library-audio-item .library-audio-meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.library-audio-item .library-audio-meta strong {
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.library-audio-item .library-audio-meta small {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+}
+.library-audio-item:hover,
+.library-audio-item.is-selected {
+    border-color: var(--brand-burgundy);
+    background: var(--brand-burgundy-light);
+}
+
 .files-row {
     display: flex;
     align-items: center;
@@ -3857,6 +3909,14 @@ html[data-theme="dark"] .ai-busy-skeleton span {
     margin: 0 4px;
     transition: color 0.06s linear, transform 0.12s ease, text-shadow 0.12s ease, background-color 0.12s ease;
     transform-origin: center bottom;
+}
+
+/* Typewriter glyphs stay tight so letters type in place. */
+.karaoke-word.karaoke-letter {
+    margin: 0;
+}
+.karaoke-word.karaoke-letter.tw-space {
+    white-space: pre;
 }
 
 .karaoke-word.active {
@@ -5233,7 +5293,20 @@ html[data-theme="dark"] .active-lyric-text {
         overflow: visible !important;
     }
 
+    /* Canvas first; Type / Themes / Format / etc. sit below on phones */
+    .preview-stage {
+        order: 1;
+        min-height: min(72vh, 640px);
+        flex: 0 0 auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--border-color);
+        padding: 0.75rem !important;
+        align-items: center;
+        justify-content: center;
+    }
+
     .studio-left-dock {
+        order: 2;
         width: 100%;
         min-width: 100%;
         max-width: none;
@@ -5244,7 +5317,8 @@ html[data-theme="dark"] .active-lyric-text {
         height: auto;
         max-height: none;
         border-right: 0;
-        border-bottom: 1px solid var(--border-color);
+        border-bottom: 0;
+        border-top: 1px solid var(--border-color);
     }
 
     .dock-tab-stack {
@@ -5257,25 +5331,41 @@ html[data-theme="dark"] .active-lyric-text {
     .dock-tab-btn {
         flex: 1 0 82px;
         min-height: 64px;
+        border-left: none;
+        border-top: 3px solid transparent;
+    }
+
+    .dock-tab-btn.active {
+        border-left-color: transparent;
+        border-top-color: var(--brand-burgundy);
     }
 
     .studio-left-drawer {
+        order: 3;
         width: 100%;
         min-width: 100%;
         max-width: none;
         max-height: 45vh;
         border-right: 0;
-        border-bottom: 1px solid var(--border-color);
+        border-bottom: 0;
+        border-top: 1px solid var(--border-color);
     }
 
-    .preview-stage {
-        min-height: min(60vw, 460px);
-        flex: 0 0 auto;
-        border-right: 0;
-        border-bottom: 1px solid var(--border-color);
+    /* Phone / tablet studio canvas: always 9:16 working area */
+    .preview-stage .video-container,
+    .preview-stage .video-container.ratio-16-9,
+    .preview-stage .video-container.ratio-1-1,
+    .preview-stage .video-container.ratio-4-5,
+    .preview-stage .video-container.ratio-9-16 {
+        aspect-ratio: 9 / 16 !important;
+        width: min(100%, 400px) !important;
+        height: auto !important;
+        max-width: 100% !important;
+        max-height: calc(100dvh - 300px);
     }
 
     .lyrics-sheet-sidebar {
+        order: 4;
         width: 100% !important;
         height: min(38vh, 300px) !important;
         min-height: 220px;
