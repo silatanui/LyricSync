@@ -4,7 +4,14 @@ from flask_login import login_user, logout_user, login_required, current_user
 from app.extensions import db, oauth
 from app.models import User
 from app.models.user import ADMIN_EMAIL
-from app.services.email_service import generate_activation_token, verify_activation_token, send_activation_email
+from app.services.email_service import (
+    generate_activation_token,
+    verify_activation_token,
+    send_activation_email,
+    generate_reset_token,
+    verify_reset_token,
+    send_password_reset_email,
+)
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -167,6 +174,112 @@ def resend_activation():
         "success": True,
         "message": "If an unverified account exists with that email, an activation link has been sent."
     })
+
+
+@auth_bp.route("/forgot-password", methods=["GET"])
+def forgot_password_page():
+    if current_user.is_authenticated:
+        return redirect(url_for("views.dashboard"))
+    return render_template("forgot_password.html")
+
+
+@auth_bp.route("/api/auth/forgot-password", methods=["POST"])
+def forgot_password():
+    """Email a password-reset link. Always returns a generic success message."""
+    data = request.get_json(silent=True) or request.form
+    email = (data.get("email") or "").strip().lower()
+    if not email or not EMAIL_RE.match(email):
+        return jsonify({
+            "success": False,
+            "error": {"code": "INVALID_EMAIL", "message": "A valid email address is required.", "retryable": False},
+        }), 400
+
+    user = db.session.query(User).filter_by(email=email).first()
+    if user:
+        token = generate_reset_token(user.id, user.email)
+        reset_url = url_for("auth.reset_password_page", token=token, _external=True)
+        send_password_reset_email(user.email, user.display_name, reset_url)
+
+    message = (
+        "If an account exists for that email, a password reset link has been sent. "
+        "Check your inbox (and spam). The link expires in 1 hour."
+    )
+    if _wants_json():
+        return jsonify({"success": True, "message": message})
+    flash(message, "info")
+    return redirect(url_for("auth.login_page"))
+
+
+@auth_bp.route("/reset-password/<token>", methods=["GET"])
+@auth_bp.route("/auth/reset-password/<token>", methods=["GET"])
+def reset_password_page(token: str):
+    if current_user.is_authenticated:
+        return redirect(url_for("views.dashboard"))
+    data = verify_reset_token(token)
+    if not data or not data.get("user_id"):
+        flash("That password reset link is invalid or has expired. Request a new one.", "danger")
+        return redirect(url_for("auth.forgot_password_page"))
+    user = db.session.get(User, data["user_id"])
+    if not user or user.email.lower() != data.get("email", "").lower():
+        flash("That password reset link is invalid.", "danger")
+        return redirect(url_for("auth.forgot_password_page"))
+    return render_template("reset_password.html", token=token, email=user.email)
+
+
+@auth_bp.route("/api/auth/reset-password", methods=["POST"])
+def reset_password():
+    data = request.get_json(silent=True) or request.form
+    token = (data.get("token") or "").strip()
+    password = data.get("password") or ""
+    confirm = data.get("confirm_password") or data.get("password_confirm") or ""
+
+    payload = verify_reset_token(token)
+    if not payload or not payload.get("user_id"):
+        return jsonify({
+            "success": False,
+            "error": {
+                "code": "INVALID_TOKEN",
+                "message": "That password reset link is invalid or has expired. Request a new one.",
+                "retryable": False,
+            },
+        }), 400
+
+    valid, password_msg = validate_password_strength(password)
+    if not valid:
+        return jsonify({
+            "success": False,
+            "error": {"code": "WEAK_PASSWORD", "message": password_msg, "retryable": False},
+        }), 400
+
+    if confirm and password != confirm:
+        return jsonify({
+            "success": False,
+            "error": {"code": "PASSWORD_MISMATCH", "message": "Passwords do not match.", "retryable": False},
+        }), 400
+
+    user = db.session.get(User, payload["user_id"])
+    if not user or user.email.lower() != payload.get("email", "").lower():
+        return jsonify({
+            "success": False,
+            "error": {"code": "INVALID_TOKEN", "message": "That password reset link is invalid.", "retryable": False},
+        }), 400
+
+    user.set_password(password)
+    # Proves mailbox ownership via the reset email link.
+    if not user.email_verified:
+        user.email_verified = True
+    db.session.commit()
+
+    login_user(user)
+    if _wants_json():
+        return jsonify({
+            "success": True,
+            "user": user.to_dict(),
+            "message": "Password updated. You are now signed in.",
+            "redirect": url_for("views.dashboard"),
+        })
+    flash("Password updated. You are now signed in.", "success")
+    return redirect(url_for("views.dashboard"))
 
 
 @auth_bp.route("/api/auth/login", methods=["POST"])

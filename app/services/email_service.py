@@ -8,11 +8,14 @@ from flask import current_app
 logger = logging.getLogger(__name__)
 
 ACTIVATION_SALT = "email-activation-salt"
+RESET_SALT = "password-reset-salt"
+
 
 def generate_activation_token(user_id: str, email: str) -> str:
     """Generate a time-limited secure token for email activation."""
     serializer = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
     return serializer.dumps({"user_id": user_id, "email": email.strip().lower()}, salt=ACTIVATION_SALT)
+
 
 def verify_activation_token(token: str, max_age: int = 86400) -> dict | None:
     """Validate activation token within the allowed lifetime (default 24 hours)."""
@@ -23,6 +26,75 @@ def verify_activation_token(token: str, max_age: int = 86400) -> dict | None:
     except Exception as e:
         logger.warning(f"Activation token validation failed: {e}")
         return None
+
+
+def generate_reset_token(user_id: str, email: str) -> str:
+    """Generate a time-limited secure token for password reset (1 hour)."""
+    serializer = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
+    return serializer.dumps({"user_id": user_id, "email": email.strip().lower()}, salt=RESET_SALT)
+
+
+def verify_reset_token(token: str, max_age: int = 3600) -> dict | None:
+    """Validate password-reset token within the allowed lifetime (default 1 hour)."""
+    serializer = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
+    try:
+        data = serializer.loads(token, salt=RESET_SALT, max_age=max_age)
+        return data
+    except Exception as e:
+        logger.warning(f"Password reset token validation failed: {e}")
+        return None
+
+
+def _send_templated_email(
+    to_email: str,
+    subject: str,
+    text_body: str,
+    html_body: str,
+    *,
+    log_label: str,
+    fallback_url: str,
+) -> bool:
+    """Shared SMTP send helper; logs the link when SMTP is not configured."""
+    mail_server = current_app.config.get("MAIL_SERVER")
+    mail_port = int(current_app.config.get("MAIL_PORT", 587))
+    mail_username = current_app.config.get("MAIL_USERNAME")
+    mail_password = current_app.config.get("MAIL_PASSWORD")
+    sender = current_app.config.get("MAIL_DEFAULT_SENDER", "noreply@tanuisila.dev")
+    use_tls = current_app.config.get("MAIL_USE_TLS", True)
+    use_ssl = current_app.config.get("MAIL_USE_SSL", False)
+
+    if not mail_username or not mail_server or mail_server in ("localhost", "127.0.0.1"):
+        logger.info("%s for %s generated (SMTP not configured). Link: %s", log_label, to_email, fallback_url)
+        return False
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = sender
+        msg["To"] = to_email
+        msg.attach(MIMEText(text_body, "plain", "utf-8"))
+        msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+        if use_ssl:
+            with smtplib.SMTP_SSL(mail_server, mail_port, timeout=10) as server:
+                if mail_username and mail_password:
+                    server.login(mail_username, mail_password)
+                server.sendmail(sender, [to_email], msg.as_string())
+        else:
+            with smtplib.SMTP(mail_server, mail_port, timeout=10) as server:
+                if use_tls:
+                    server.starttls()
+                if mail_username and mail_password:
+                    server.login(mail_username, mail_password)
+                server.sendmail(sender, [to_email], msg.as_string())
+
+        logger.info("%s sent successfully to %s", log_label, to_email)
+        return True
+    except Exception as exc:
+        logger.error("Failed to send %s to %s: %s", log_label, to_email, exc)
+        logger.info("%s URL fallback: %s", log_label, fallback_url)
+        return False
+
 
 def send_activation_email(to_email: str, display_name: str, activation_url: str) -> bool:
     """
@@ -76,43 +148,72 @@ The LyricSync Studio Team
 </body>
 </html>"""
 
-    # Check SMTP configuration
-    mail_server = current_app.config.get("MAIL_SERVER")
-    mail_port = int(current_app.config.get("MAIL_PORT", 587))
-    mail_username = current_app.config.get("MAIL_USERNAME")
-    mail_password = current_app.config.get("MAIL_PASSWORD")
-    sender = current_app.config.get("MAIL_DEFAULT_SENDER", "noreply@tanuisila.dev")
-    use_tls = current_app.config.get("MAIL_USE_TLS", True)
-    use_ssl = current_app.config.get("MAIL_USE_SSL", False)
+    return _send_templated_email(
+        to_email,
+        subject,
+        text_body,
+        html_body,
+        log_label="Activation email",
+        fallback_url=activation_url,
+    )
 
-    if not mail_username or not mail_server or mail_server in ("localhost", "127.0.0.1"):
-        logger.info(f"Activation email for {to_email} generated (SMTP not configured). Link: {activation_url}")
-        return False
 
-    try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = sender
-        msg["To"] = to_email
-        msg.attach(MIMEText(text_body, "plain", "utf-8"))
-        msg.attach(MIMEText(html_body, "html", "utf-8"))
+def send_password_reset_email(to_email: str, display_name: str, reset_url: str) -> bool:
+    """
+    Sends a password-reset link. When SMTP is not configured, logs the link for local testing.
+    """
+    subject = "Reset Your LyricSync Studio Password"
+    name = (display_name or "").strip() or to_email.split("@")[0]
 
-        if use_ssl:
-            with smtplib.SMTP_SSL(mail_server, mail_port, timeout=10) as server:
-                if mail_username and mail_password:
-                    server.login(mail_username, mail_password)
-                server.sendmail(sender, [to_email], msg.as_string())
-        else:
-            with smtplib.SMTP(mail_server, mail_port, timeout=10) as server:
-                if use_tls:
-                    server.starttls()
-                if mail_username and mail_password:
-                    server.login(mail_username, mail_password)
-                server.sendmail(sender, [to_email], msg.as_string())
+    text_body = f"""Hello {name},
 
-        logger.info(f"Activation email sent successfully to {to_email}")
-        return True
-    except Exception as exc:
-        logger.error(f"Failed to send activation email to {to_email}: {exc}")
-        logger.info(f"Activation URL fallback: {activation_url}")
-        return False
+We received a request to reset the password for your LyricSync Studio account.
+
+Reset your password using this link (valid for 1 hour):
+{reset_url}
+
+If you did not request a password reset, you can safely ignore this message.
+
+Best regards,
+The LyricSync Studio Team
+"""
+
+    html_body = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #F8FAFC; margin: 0; padding: 24px; color: #1E293B; }}
+    .card {{ max-width: 540px; margin: 0 auto; background: #FFFFFF; border: 1px solid #E2E8F0; padding: 36px; border-radius: 4px; }}
+    .header {{ border-bottom: 2px solid #6b1426; padding-bottom: 16px; margin-bottom: 24px; }}
+    .title {{ font-size: 22px; font-weight: 700; color: #6b1426; margin: 0; }}
+    .btn {{ display: inline-block; background-color: #6b1426; color: #FFFFFF !important; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 4px; margin: 24px 0; font-size: 15px; }}
+    .url {{ font-family: monospace; font-size: 12px; color: #64748B; word-break: break-all; background: #F1F5F9; padding: 8px; border-radius: 4px; }}
+    .footer {{ margin-top: 32px; font-size: 12px; color: #94A3B8; border-top: 1px solid #E2E8F0; padding-top: 16px; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h2 class="title">LyricSync Studio</h2>
+    </div>
+    <p>Hello <strong>{name}</strong>,</p>
+    <p>We received a request to reset your password. Click the button below to choose a new one:</p>
+    <p style="text-align: center;">
+      <a href="{reset_url}" class="btn" target="_blank">Reset Password</a>
+    </p>
+    <p>Or paste this link into your browser:</p>
+    <div class="url">{reset_url}</div>
+    <p class="footer">This reset link expires in 1 hour. If you did not request a reset, no further action is required.</p>
+  </div>
+</body>
+</html>"""
+
+    return _send_templated_email(
+        to_email,
+        subject,
+        text_body,
+        html_body,
+        log_label="Password reset email",
+        fallback_url=reset_url,
+    )

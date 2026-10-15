@@ -131,6 +131,71 @@ def test_registering_admin_email_requires_activation(client, app, monkeypatch):
         assert blocked.get_json()["error"]["code"] == "EMAIL_NOT_VERIFIED"
 
 
+def test_password_reset_flow(client, app, monkeypatch):
+    """Forgot-password emails a reset link; submitting it updates the password."""
+    sent = {}
+
+    def _fake_send(email, display_name, reset_url):
+        sent["email"] = email
+        sent["url"] = reset_url
+        return True
+
+    monkeypatch.setattr("app.routes.auth.send_password_reset_email", _fake_send)
+
+    with app.app_context():
+        user = User(email="reset.me@lyricsync.studio", display_name="Reset Me")
+        user.set_password("OldPass123!")
+        user.email_verified = True
+        db.session.add(user)
+        db.session.commit()
+
+        page = client.get("/forgot-password")
+        assert page.status_code == 200
+        assert b"Reset password" in page.data
+
+        req = client.post("/api/auth/forgot-password", json={"email": "reset.me@lyricsync.studio"})
+        assert req.status_code == 200
+        assert req.get_json()["success"] is True
+        assert sent.get("email") == "reset.me@lyricsync.studio"
+        assert "/reset-password/" in (sent.get("url") or "")
+
+        token = (sent["url"] or "").rstrip("/").split("/")[-1]
+        reset_page = client.get(f"/reset-password/{token}")
+        assert reset_page.status_code == 200
+        assert b"Choose a new password" in reset_page.data
+
+        done = client.post("/api/auth/reset-password", json={
+            "token": token,
+            "password": "NewPass456!",
+            "confirm_password": "NewPass456!",
+        })
+        assert done.status_code == 200
+        body = done.get_json()
+        assert body["success"] is True
+        assert body["user"]["email"] == "reset.me@lyricsync.studio"
+
+        # Old password no longer works after logout.
+        client.get("/logout")
+        old_login = client.post("/api/auth/login", json={
+            "email": "reset.me@lyricsync.studio",
+            "password": "OldPass123!",
+        })
+        assert old_login.status_code == 401
+
+        new_login = client.post("/api/auth/login", json={
+            "email": "reset.me@lyricsync.studio",
+            "password": "NewPass456!",
+        })
+        assert new_login.status_code == 200
+
+
+def test_forgot_password_does_not_reveal_missing_accounts(client, app, monkeypatch):
+    monkeypatch.setattr("app.routes.auth.send_password_reset_email", lambda *a, **k: True)
+    res = client.post("/api/auth/forgot-password", json={"email": "nobody@example.com"})
+    assert res.status_code == 200
+    assert res.get_json()["success"] is True
+
+
 def test_admin_user_technicalities_access(client, app):
     with app.app_context():
         admin = User(email="silatanuikipngetich@gmail.com", display_name="Sila Tanui")
