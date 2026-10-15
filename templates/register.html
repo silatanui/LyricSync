@@ -31,7 +31,12 @@
                     </div>
                     <div class="mb-3">
                         <label for="password" class="form-label fw-semibold text-dark">Password</label>
-                        <input type="password" class="form-control" id="password" name="password" required minlength="8" autocomplete="new-password" placeholder="Create a secure password">
+                        <div class="password-field">
+                            <input type="password" class="form-control" id="password" name="password" required minlength="8" autocomplete="new-password" placeholder="Create a secure password">
+                            <button type="button" class="password-toggle-btn" data-password-toggle="password" aria-label="Show password" title="Show password">
+                                <i class="bi bi-eye" aria-hidden="true"></i>
+                            </button>
+                        </div>
                         <div class="p-2.5 mt-2 rounded bg-light border" style="font-size: 0.78rem;">
                             <div class="fw-semibold text-secondary mb-1">Password Requirements:</div>
                             <ul class="list-unstyled mb-0 d-flex flex-column gap-1 text-secondary" id="passwordChecklist">

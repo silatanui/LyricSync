@@ -1443,6 +1443,43 @@ input[type="file"].form-control::-webkit-file-upload-button:hover,
     color: var(--text-secondary);
 }
 
+/* Password show / hide */
+.password-field {
+    position: relative;
+    display: block;
+}
+.password-field .form-control {
+    padding-right: 2.75rem;
+}
+.password-toggle-btn {
+    position: absolute;
+    top: 50%;
+    right: 0.35rem;
+    transform: translateY(-50%);
+    width: 2.25rem;
+    height: 2.25rem;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.4rem;
+    cursor: pointer;
+    padding: 0;
+    z-index: 2;
+}
+.password-toggle-btn:hover,
+.password-toggle-btn:focus-visible {
+    color: var(--brand-burgundy);
+    background: var(--brand-burgundy-light);
+    outline: none;
+}
+.password-toggle-btn i {
+    font-size: 1.05rem;
+    line-height: 1;
+}
+
 /* Public homepage */
 .home-page {
     background: var(--home-band-soft);
