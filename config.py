@@ -36,14 +36,22 @@ class Config:
     MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
     MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "lyricsync_studio")
 
-    raw_db_url = os.getenv("DATABASE_URL", "")
+    raw_db_url = os.getenv("DATABASE_URL", "").strip()
     if raw_db_url:
         SQLALCHEMY_DATABASE_URI = raw_db_url
     else:
-        SQLALCHEMY_DATABASE_URI = (
-            f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
-            "?charset=utf8mb4"
+        explicit_mysql = any(
+            os.environ.get(name) is not None
+            for name in ("MYSQL_HOST", "MYSQL_PORT", "MYSQL_USER", "MYSQL_PASSWORD", "MYSQL_DATABASE")
         )
+        if explicit_mysql:
+            SQLALCHEMY_DATABASE_URI = (
+                f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
+                "?charset=utf8mb4"
+            )
+        else:
+            sqlite_db_path = (BASE_DIR / "data" / "lyricsync.db").resolve()
+            SQLALCHEMY_DATABASE_URI = f"sqlite:///{sqlite_db_path.as_posix()}"
 
     DATABASE_URL = SQLALCHEMY_DATABASE_URI
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -70,6 +78,15 @@ class Config:
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
     GOOGLE_DISCOVERY_URL = "https://accounts.google.com/.well-known/openid-configuration"
+
+    # Outbound email (activation + password reset). Leave blank to log links in the console.
+    MAIL_SERVER = os.getenv("MAIL_SERVER", "")
+    MAIL_PORT = int(os.getenv("MAIL_PORT", "587"))
+    MAIL_USERNAME = os.getenv("MAIL_USERNAME", "")
+    MAIL_PASSWORD = os.getenv("MAIL_PASSWORD", "")
+    MAIL_DEFAULT_SENDER = os.getenv("MAIL_DEFAULT_SENDER", "") or os.getenv("MAIL_USERNAME", "") or "noreply@tanuisila.dev"
+    MAIL_USE_TLS = os.getenv("MAIL_USE_TLS", "True").lower() in ("true", "1", "yes")
+    MAIL_USE_SSL = os.getenv("MAIL_USE_SSL", "False").lower() in ("true", "1", "yes")
 
     # Administrator identity (keep out of public docs; override via .env)
     ADMIN_EMAIL = (os.getenv("ADMIN_EMAIL") or "silatanuikipngetich@gmail.com").strip().lower()
