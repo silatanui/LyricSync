@@ -13,6 +13,58 @@ def test_custom_lines_align_to_transcript_words():
     assert aligned[0]["end"] == 9.5
     assert aligned[0]["confidence"] >= 0.9
 
+
+def test_unmatched_lines_are_interpolated_between_anchors():
+    lines = [
+        {"id": "line_0", "text": "First anchor line here", "start": 1.0, "end": 2.0, "words": []},
+        {"id": "line_1", "text": "Mystery middle line", "start": 10.0, "end": 12.0, "words": []},
+        {"id": "line_2", "text": "Second anchor line here", "start": 20.0, "end": 22.0, "words": []},
+    ]
+    transcript = [
+        {"text": "First", "start": 5.0, "end": 5.3},
+        {"text": "anchor", "start": 5.4, "end": 5.8},
+        {"text": "line", "start": 5.9, "end": 6.2},
+        {"text": "here", "start": 6.3, "end": 6.7},
+        {"text": "Second", "start": 14.0, "end": 14.4},
+        {"text": "anchor", "start": 14.5, "end": 14.9},
+        {"text": "line", "start": 15.0, "end": 15.3},
+        {"text": "here", "start": 15.4, "end": 15.8},
+    ]
+    aligned = AlignmentEngine.align_custom_lines(lines, transcript, 30.0)
+    assert aligned[0]["start"] == 5.0
+    assert aligned[2]["start"] == 14.0
+    # Middle line should land between the two anchors, not steal the second anchor.
+    assert aligned[0]["end"] <= aligned[1]["start"] <= aligned[2]["start"]
+    assert aligned[1]["confidence"] < aligned[0]["confidence"]
+
+
+def test_alignment_skips_instrumental_intro_hallucinations():
+    """Whisper often invents a few words during the bed; first lyrics must wait for vocals."""
+    lines = [
+        {"id": "line_0", "text": "Desert blooms again tonight", "start": 1.0, "end": 3.0, "words": []},
+        {"id": "line_1", "text": "Under quiet silver light", "start": 4.0, "end": 6.0, "words": []},
+    ]
+    transcript = [
+        # Sparse instrumental hallucinations
+        {"text": "the", "start": 0.4, "end": 0.6},
+        {"text": "desert", "start": 1.0, "end": 1.3},
+        {"text": "oh", "start": 2.2, "end": 2.4},
+        # Gap, then real singing
+        {"text": "Desert", "start": 14.0, "end": 14.4},
+        {"text": "blooms", "start": 14.5, "end": 14.9},
+        {"text": "again", "start": 15.0, "end": 15.3},
+        {"text": "tonight", "start": 15.4, "end": 15.9},
+        {"text": "Under", "start": 16.5, "end": 16.9},
+        {"text": "quiet", "start": 17.0, "end": 17.4},
+        {"text": "silver", "start": 17.5, "end": 17.9},
+        {"text": "light", "start": 18.0, "end": 18.4},
+    ]
+    onset = AlignmentEngine.estimate_vocal_onset(transcript, 40.0)
+    assert onset >= 12.0
+    aligned = AlignmentEngine.align_custom_lines(lines, transcript, 40.0)
+    assert aligned[0]["start"] >= 13.5
+    assert aligned[1]["start"] >= aligned[0]["start"]
+
 def test_word_normalization():
     raw_words = [
         {"text": "  Hello  ", "start": -0.5, "end": 1.2},
