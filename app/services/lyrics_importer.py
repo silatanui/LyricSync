@@ -8,6 +8,54 @@ class LyricsImporter:
     """
 
     LRC_TIMESTAMP_REGEX = re.compile(r'\[(\d{1,3}):(\d{1,2}(?:\.\d{1,3})?)\]')
+    # Paste markers like ") *2", "*2", "x2", "×3" mean the preceding chorus block repeats.
+    REPEAT_MARKER_RE = re.compile(r"[\)\]\}]?\s*[\*x×]\s*(\d+)\s*$", re.IGNORECASE)
+    SEPARATOR_LINE_RE = re.compile(r"^[\*\-=_~.]{3,}$")
+
+    @classmethod
+    def normalize_pasted_lyrics(cls, text: str) -> str:
+        """
+        Clean common paste markup before sync:
+        - drop **** / ---- separator lines
+        - strip { } section braces
+        - expand *2 / x2 chorus repeat markers
+        """
+        if not text:
+            return ""
+        raw = text.replace("\r\n", "\n").replace("\r", "\n")
+        out: List[str] = []
+        block_start = 0
+
+        for line in raw.split("\n"):
+            stripped = line.strip()
+            if not stripped or cls.SEPARATOR_LINE_RE.match(stripped):
+                continue
+
+            if "{" in stripped:
+                block_start = len(out)
+                stripped = stripped.replace("{", "").strip()
+            stripped = stripped.replace("}", "").strip()
+
+            repeat = cls.REPEAT_MARKER_RE.search(stripped)
+            if repeat:
+                count = max(1, int(repeat.group(1)))
+                cleaned = cls.REPEAT_MARKER_RE.sub("", stripped).rstrip(")]").strip(" ,;")
+                if cleaned:
+                    out.append(cleaned)
+                block = out[block_start:]
+                if block and count > 1:
+                    for _ in range(count - 1):
+                        out.extend(block)
+                block_start = len(out)
+                continue
+
+            cleaned = stripped.rstrip(")]").strip(" ,;")
+            # Keep natural commas inside the line; only trim dangling edges.
+            cleaned = cleaned.strip()
+            if cleaned:
+                out.append(cleaned)
+
+        return "\n".join(out)
 
     @classmethod
     def is_lrc(cls, text: str) -> bool:
@@ -111,8 +159,10 @@ class LyricsImporter:
 
         num_lines = len(raw_lines)
         total_duration = max(10.0, total_duration)
-        lead_in = min(1.5, total_duration * 0.05)
-        end_margin = min(2.0, total_duration * 0.05)
+        # Most tracks have an instrumental / title bed before vocals. A 1.5s lead-in
+        # made evenly-spaced lyrics appear long before anyone sings.
+        lead_in = min(16.0, max(4.0, total_duration * 0.10))
+        end_margin = min(4.0, max(2.0, total_duration * 0.05))
         usable_time = max(5.0, total_duration - lead_in - end_margin)
 
         # Spread every line across the full song. A hard ceiling used to leave
@@ -156,10 +206,14 @@ class LyricsImporter:
         """
         Auto-detects format (LRC vs Plain text) and parses into canonical lyrics.
         """
-        cleaned = text_or_content.strip()
+        cleaned = (text_or_content or "").strip()
         if not cleaned:
             raise ValueError("Lyric content cannot be empty.")
 
         if cls.is_lrc(cleaned):
             return cls.parse_lrc(cleaned, total_duration)
-        return cls.parse_plain_text(cleaned, total_duration)
+
+        normalized = cls.normalize_pasted_lyrics(cleaned)
+        if not normalized.strip():
+            raise ValueError("No lyric lines found in provided text.")
+        return cls.parse_plain_text(normalized, total_duration)

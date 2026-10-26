@@ -27,7 +27,8 @@ def test_plain_text_spans_full_song_duration():
     text = "\n".join(f"Line {i}" for i in range(1, 9))
     lines = LyricsImporter.import_lyrics(text, total_duration=240.0)
     assert len(lines) == 8
-    assert lines[0]["start"] < 5.0
+    # Leave room for a typical instrumental intro before the first line.
+    assert 3.0 <= lines[0]["start"] <= 20.0
     # Late verses must not pile near the start of a long track.
     assert lines[-1]["start"] > 180.0
     assert lines[-1]["end"] <= 240.0
@@ -53,6 +54,29 @@ def test_lyrics_importer_lrc_format():
 def test_lyrics_importer_empty_raises():
     with pytest.raises(ValueError):
         LyricsImporter.import_lyrics("   \n\n  ")
+
+
+def test_normalize_pasted_lyrics_expands_chorus_repeat():
+    pasted = """
+    *************************
+    Siku tuliyoingoja mimi na wewe,
+    Popote uendapo tutakuwa pamoja
+    {Mungu ametuunganisha mimi nawe,
+    wewe ni wangu kweli
+    I love you mpenzi wangu
+    I need you siku zote I love you) *2
+    Kwa maombezi yake mama yetu maria,
+    """
+    cleaned = LyricsImporter.normalize_pasted_lyrics(pasted)
+    lines = [ln for ln in cleaned.splitlines() if ln.strip()]
+    assert "*************************" not in cleaned
+    assert not any("{" in ln or "}" in ln or "*2" in ln for ln in lines)
+    # Chorus block (4 lines) is sung twice → appears twice before the verse after it.
+    chorus_hits = [i for i, ln in enumerate(lines) if "Mungu ametuunganisha" in ln]
+    assert len(chorus_hits) == 2
+    assert "Kwa maombezi yake mama yetu maria" in lines[-1]
+    imported = LyricsImporter.import_lyrics(pasted, total_duration=120.0)
+    assert len(imported) == len(lines)
 
 def test_api_custom_lyrics_endpoint(client, app):
     with app.app_context():
