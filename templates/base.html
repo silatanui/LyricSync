@@ -261,18 +261,12 @@
         {% block content %}{% endblock %}
     </main>
 
-    <div class="cookie-consent d-none" id="cookieConsent" role="dialog" aria-label="Cookie notice">
-        <div><strong>Privacy first.</strong><span>LyricSync uses essential browser storage for preferences and cookie consent. Your projects are private unless you explicitly publish them.</span></div>
-        <button class="btn btn-green btn-sm" id="acceptCookies" type="button">Accept</button>
-    </div>
-
     <footer class="site-legal-footer">
         {% if request.endpoint == 'views.home' %}
         <a href="{{ url_for('views.docs_page') }}">Documentation</a>
         {% endif %}
         <a href="{{ url_for('views.privacy_page') }}">Privacy</a>
         <a href="{{ url_for('views.terms_page') }}">Terms</a>
-        <button type="button" id="cookieSettingsBtn">Cookie settings</button>
     </footer>
 
     <!-- Bootstrap JS Bundle -->
@@ -297,15 +291,6 @@
             toggleBtn?.addEventListener('click', () => {
                 applyTheme(root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
             });
-
-            const banner = document.getElementById('cookieConsent');
-            const show = () => banner?.classList.remove('d-none');
-            if (!localStorage.getItem('lyricsync-cookie-consent')) show();
-            document.getElementById('acceptCookies')?.addEventListener('click', () => {
-                localStorage.setItem('lyricsync-cookie-consent', 'accepted');
-                banner?.classList.add('d-none');
-            });
-            document.getElementById('cookieSettingsBtn')?.addEventListener('click', show);
         })();
     </script>
     {% block scripts %}{% endblock %}

@@ -1847,10 +1847,7 @@ html[data-theme="dark"] .home-roadmap-status.is-test {
 }
 
 .site-legal-footer { display: flex; justify-content: center; gap: 1rem; padding: 0.7rem 1rem; background: #14050C; color: #BFAEB4; font-size: 0.72rem; }
-.site-legal-footer a, .site-legal-footer button { color: #A7EFCB; background: transparent; border: 0; text-decoration: none; cursor: pointer; }
-.cookie-consent { position: fixed; z-index: 200; left: 1rem; right: 1rem; bottom: 1rem; display: flex; justify-content: space-between; gap: 1rem; align-items: center; padding: 1rem 1.2rem; background: #210914; color: #FFFFFF; border: 1px solid #8B3B55; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
-.cookie-consent strong, .cookie-consent span { display: block; }
-.cookie-consent span { color: #D7C9CE; font-size: 0.8rem; margin-top: 0.2rem; }
+.site-legal-footer a { color: #A7EFCB; background: transparent; border: 0; text-decoration: none; cursor: pointer; }
 .legal-page { max-width: 820px; padding: 6rem 1rem; color: var(--text-primary); }
 .legal-page h1 { font: 600 clamp(2.8rem, 6vw, 5rem)/1 'DM Sans', sans-serif; letter-spacing: -0.05em; margin: 1rem 0; color: var(--text-primary); }
 .legal-page h2 { font-size: 1.3rem; margin-top: 2.5rem; color: var(--text-primary); }
@@ -5518,11 +5515,6 @@ html[data-theme="dark"] .active-lyric-text {
     .site-legal-footer {
         flex-wrap: wrap;
         row-gap: 0.35rem;
-    }
-
-    .cookie-consent {
-        align-items: stretch;
-        flex-direction: column;
     }
 }
 
