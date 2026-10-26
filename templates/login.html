@@ -83,10 +83,17 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     try {
         const res = await fetch("{{ url_for('auth.login') }}", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "Accept": "application/json" },
             body: JSON.stringify(payload)
         });
-        const data = await res.json();
+        let data = null;
+        try {
+            data = await res.json();
+        } catch (_) {
+            throw new Error(res.ok
+                ? "The server returned an unexpected response."
+                : `Sign-in failed (HTTP ${res.status}). Is the Lyric Studio server running?`);
+        }
         if (data.success) {
             window.location.href = "{{ url_for('views.dashboard') }}";
         } else if (data.error?.code === "EMAIL_NOT_VERIFIED") {
@@ -124,7 +131,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
             alertBox.classList.remove('d-none');
         }
     } catch (err) {
-        alertBox.textContent = "Network error. Please try again.";
+        alertBox.textContent = err?.message || "Cannot reach the server. Start Lyric Studio (python app.py) and try again.";
         alertBox.classList.remove('d-none');
     }
 });

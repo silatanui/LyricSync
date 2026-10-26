@@ -59,52 +59,39 @@ def create_app(config_class=Config):
             inspector = db.inspect(db.engine)
             if "users" in inspector.get_table_names():
                 user_cols = [c["name"] for c in inspector.get_columns("users")]
-                if "email_verified" not in user_cols:
-                    db.session.execute(db.text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT 0"))
-                    db.session.commit()
                 daily_credits = int(
                     flask_app.config.get("IMAGE_DAILY_CREDITS")
                     or flask_app.config.get("IMAGE_FREE_CREDITS")
                     or 2
                 )
-                if "image_credits" not in user_cols:
-                    db.session.execute(db.text(
-                        f"ALTER TABLE users ADD COLUMN image_credits INTEGER NOT NULL DEFAULT {daily_credits}"
-                    ))
-                    db.session.commit()
-                    user_cols.append("image_credits")
-                if "image_credits_reset_on" not in user_cols:
-                    db.session.execute(db.text(
-                        "ALTER TABLE users ADD COLUMN image_credits_reset_on DATE NULL"
-                    ))
-                    db.session.commit()
-                    user_cols.append("image_credits_reset_on")
-                if "bonus_image_credits" not in user_cols:
-                    db.session.execute(db.text(
-                        "ALTER TABLE users ADD COLUMN bonus_image_credits INTEGER NOT NULL DEFAULT 0"
-                    ))
-                    db.session.commit()
-                    user_cols.append("bonus_image_credits")
-                if "is_premium" not in user_cols:
-                    db.session.execute(db.text(
-                        "ALTER TABLE users ADD COLUMN is_premium BOOLEAN NOT NULL DEFAULT 0"
-                    ))
-                    db.session.commit()
-                if "stripe_customer_id" not in user_cols:
-                    db.session.execute(db.text(
-                        "ALTER TABLE users ADD COLUMN stripe_customer_id VARCHAR(128) NULL"
-                    ))
-                    db.session.commit()
+                # Keep older SQLite/MySQL schemas compatible with the current User model.
+                user_column_alters = [
+                    ("display_name", "ALTER TABLE users ADD COLUMN display_name VARCHAR(120) NULL"),
+                    ("google_id", "ALTER TABLE users ADD COLUMN google_id VARCHAR(64) NULL"),
+                    ("avatar_url", "ALTER TABLE users ADD COLUMN avatar_url VARCHAR(1024) NULL"),
+                    ("email_verified", "ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT 0"),
+                    ("image_credits", f"ALTER TABLE users ADD COLUMN image_credits INTEGER NOT NULL DEFAULT {daily_credits}"),
+                    ("image_credits_reset_on", "ALTER TABLE users ADD COLUMN image_credits_reset_on DATE NULL"),
+                    ("bonus_image_credits", "ALTER TABLE users ADD COLUMN bonus_image_credits INTEGER NOT NULL DEFAULT 0"),
+                    ("is_premium", "ALTER TABLE users ADD COLUMN is_premium BOOLEAN NOT NULL DEFAULT 0"),
+                    ("stripe_customer_id", "ALTER TABLE users ADD COLUMN stripe_customer_id VARCHAR(128) NULL"),
+                ]
+                for col_name, alter_sql in user_column_alters:
+                    if col_name not in user_cols:
+                        db.session.execute(db.text(alter_sql))
+                        db.session.commit()
+                        user_cols.append(col_name)
                 from app.models.user import ADMIN_EMAIL as _ADMIN_EMAIL
                 # Google-linked accounts are verified by Google; do not auto-verify by email alone.
-                db.session.execute(db.text("UPDATE users SET email_verified = 1 WHERE google_id IS NOT NULL"))
-                db.session.commit()
-                # Keep the existing admin mailbox verified once linked (does not grant access without login).
-                db.session.execute(
-                    db.text("UPDATE users SET email_verified = 1 WHERE lower(email) = :admin AND google_id IS NOT NULL"),
-                    {"admin": _ADMIN_EMAIL.lower()},
-                )
-                db.session.commit()
+                if "google_id" in user_cols:
+                    db.session.execute(db.text("UPDATE users SET email_verified = 1 WHERE google_id IS NOT NULL"))
+                    db.session.commit()
+                    # Keep the existing admin mailbox verified once linked (does not grant access without login).
+                    db.session.execute(
+                        db.text("UPDATE users SET email_verified = 1 WHERE lower(email) = :admin AND google_id IS NOT NULL"),
+                        {"admin": _ADMIN_EMAIL.lower()},
+                    )
+                    db.session.commit()
                 # One-shot: clear Premium for the KYU student test account (once per host).
                 try:
                     from pathlib import Path as _Path

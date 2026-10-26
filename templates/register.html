@@ -141,10 +141,17 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
     try {
         const res = await fetch("{{ url_for('auth.register') }}", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "Accept": "application/json" },
             body: JSON.stringify({ email: email, password: password, display_name: displayName })
         });
-        const data = await res.json();
+        let data = null;
+        try {
+            data = await res.json();
+        } catch (_) {
+            throw new Error(res.ok
+                ? "The server returned an unexpected response."
+                : `Sign-up failed (HTTP ${res.status}). Is the Lyric Studio server running?`);
+        }
         submitBtn.disabled = false;
         submitBtn.textContent = "Create Account";
 
@@ -167,7 +174,7 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
     } catch (err) {
         submitBtn.disabled = false;
         submitBtn.textContent = "Create Account";
-        alertBox.textContent = "Network error. Please try again.";
+        alertBox.textContent = err?.message || "Cannot reach the server. Start Lyric Studio (python app.py) and try again.";
         alertBox.classList.remove('d-none');
     }
 });
