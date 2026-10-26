@@ -29,6 +29,8 @@ class SynchronizedPlayer {
         this._fallbackDuration = 0;
         this._effectPlayKey = null;
         this._lastChunkKey = null;
+        this._lastWallpaperSyncAt = 0;
+        this._userVolume = null;
         this._EFFECT_CLASSES = [
             'lyric-effect-fade',
             'lyric-effect-bounce',
@@ -204,28 +206,46 @@ class SynchronizedPlayer {
         if (!this.video) return;
         this.video.loop = true;
         this.video.muted = true;
+        this.video.volume = 0;
+        this.video.defaultMuted = true;
         this.video.playsInline = true;
         this.video.setAttribute('playsinline', '');
         this.video.setAttribute('muted', '');
         this.video.setAttribute('loop', '');
+        // Theme beds are decorative — never let them steal the audio clock.
+        try { this.video.removeAttribute('audio'); } catch (_) { /* ignore */ }
     }
 
-    _syncWallpaperToAudio(audioTime = null) {
+    /**
+     * Align looping theme wallpaper to the song clock.
+     * During playback, avoid frequent seeks — they stall the main thread and make
+     * the master audio stutter / jump on many laptops.
+     */
+    _syncWallpaperToAudio(audioTime = null, { force = false } = {}) {
         if (!this.hasVideo || !this.video || !this.audio) return;
         // Never seek theme video before it has metadata — that fires media errors
         // and used to reveal an empty <img> fallback after reload.
         if (this.video.readyState < 1 || this.video.error) return;
+        this._configureThemeVideoElement();
         const dur = this.video.duration;
         if (!dur || isNaN(dur) || dur <= 0) return;
         const t = audioTime != null ? audioTime : (this.audio.currentTime || 0);
         const target = ((t % dur) + dur) % dur;
-        // Wider threshold so wallpaper looping does not thrash seeks / timeupdates.
-        if (Math.abs((this.video.currentTime || 0) - target) > 0.85) {
-            try {
-                this.video.currentTime = target;
-            } catch (_) {
-                /* ignore seek race before metadata */
-            }
+        const drift = Math.abs((this.video.currentTime || 0) - target);
+        const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        const playing = this.usesAudioClock && !this.audio.paused;
+
+        // Free-run while playing unless drift is severe; hard-sync on seek/play/pause.
+        const threshold = force ? 0.35 : (playing ? 2.5 : 0.85);
+        const minGapMs = force ? 0 : (playing ? 2500 : 400);
+        if (drift <= threshold) return;
+        if (!force && (now - (this._lastWallpaperSyncAt || 0)) < minGapMs) return;
+
+        try {
+            this.video.currentTime = target;
+            this._lastWallpaperSyncAt = now;
+        } catch (_) {
+            /* ignore seek race before metadata */
         }
     }
 
@@ -313,7 +333,7 @@ class SynchronizedPlayer {
                             this._showImageFallback(this.video.error);
                             return;
                         }
-                        this._syncWallpaperToAudio(keepTime);
+                        this._syncWallpaperToAudio(keepTime, { force: true });
                         if (this.audio && Math.abs((this.audio.currentTime || 0) - keepTime) > 0.05) {
                             try { this.audio.currentTime = keepTime; } catch (_) { /* ignore */ }
                         }
@@ -500,8 +520,8 @@ class SynchronizedPlayer {
 
         const notifyTimeUpdate = () => {
             const t = this.currentTime;
-            // Wallpaper follows the song; never yank master audio back to the short theme loop.
-            this._syncWallpaperToAudio(t);
+            // Soft wallpaper follow only — never yank master audio to the theme loop.
+            this._syncWallpaperToAudio(t, { force: false });
             if (this.isPaused) {
                 this.seekToWordIndex(t);
                 this.renderActiveFrame(t);
@@ -518,7 +538,13 @@ class SynchronizedPlayer {
                 this._showImageFallback(this.video?.error || 'media error');
             });
             this.video.addEventListener('loadedmetadata', () => {
-                this._syncWallpaperToAudio();
+                this._syncWallpaperToAudio(null, { force: true });
+            });
+            // If a theme bed somehow un-mutes, force silence so only master audio is heard.
+            this.video.addEventListener('volumechange', () => {
+                if (!this.video.muted || this.video.volume > 0) {
+                    this._configureThemeVideoElement();
+                }
             });
         }
 
@@ -526,7 +552,7 @@ class SynchronizedPlayer {
             this.audio.addEventListener('play', () => {
                 if (this.hasVideo && this.video) {
                     this._configureThemeVideoElement();
-                    this._syncWallpaperToAudio();
+                    this._syncWallpaperToAudio(null, { force: true });
                     this.video.play().catch(() => {});
                 }
                 notifyPlay();
@@ -538,7 +564,13 @@ class SynchronizedPlayer {
             this.audio.addEventListener('timeupdate', notifyTimeUpdate);
             this.audio.addEventListener('seeking', () => {
                 const t = this.audio.currentTime;
-                this._syncWallpaperToAudio(t);
+                this._syncWallpaperToAudio(t, { force: true });
+                this.seekToWordIndex(t);
+                this.renderActiveFrame(t);
+            });
+            this.audio.addEventListener('seeked', () => {
+                const t = this.audio.currentTime;
+                this._syncWallpaperToAudio(t, { force: true });
                 this.seekToWordIndex(t);
                 this.renderActiveFrame(t);
             });
@@ -563,6 +595,11 @@ class SynchronizedPlayer {
                     window.dispatchEvent(new CustomEvent('player-buffering', { detail: { buffering: false, reason: 'canplay' } }));
                 }
             });
+            this.audio.addEventListener('volumechange', () => {
+                if (!this.audio.muted) {
+                    this._userVolume = this.audio.volume;
+                }
+            });
         }
 
     }
@@ -573,7 +610,8 @@ class SynchronizedPlayer {
         const loop = () => {
             if (this.isPlaying) {
                 const t = this.currentTime;
-                this._syncWallpaperToAudio(t);
+                // Lyrics follow the audio clock every frame; wallpaper is NOT seeked here
+                // (seeking video every frame causes audible glitches on many laptops).
                 this.update(t);
                 this.animationFrameId = requestAnimationFrame(loop);
             }
@@ -947,7 +985,7 @@ class SynchronizedPlayer {
         if (this.audio) {
             try { this.audio.currentTime = t; } catch (_) { /* ignore */ }
         }
-        this._syncWallpaperToAudio(t);
+        this._syncWallpaperToAudio(t, { force: true });
         this.seekToWordIndex(t);
         this.renderActiveFrame(t);
     }
@@ -955,7 +993,14 @@ class SynchronizedPlayer {
     play() {
         if (this.audio) {
             this.audio.muted = false;
-            this.audio.volume = 1.0;
+            // Keep the user's volume — never slam back to 100% on play.
+            if (this._userVolume != null && !isNaN(this._userVolume)) {
+                this.audio.volume = Math.min(1, Math.max(0, this._userVolume));
+            }
+            // Prefer pitch-preserving rate changes when the browser supports it.
+            if ('preservesPitch' in this.audio) this.audio.preservesPitch = true;
+            if ('mozPreservesPitch' in this.audio) this.audio.mozPreservesPitch = true;
+            if ('webkitPreservesPitch' in this.audio) this.audio.webkitPreservesPitch = true;
             this.audio.play().catch(err => {
                 console.warn("Audio play note:", err);
             });
@@ -963,7 +1008,7 @@ class SynchronizedPlayer {
 
         if (this.hasVideo && this.video) {
             this._configureThemeVideoElement();
-            this._syncWallpaperToAudio();
+            this._syncWallpaperToAudio(null, { force: true });
             const vPromise = this.video.play();
             if (vPromise && typeof vPromise.catch === 'function') {
                 vPromise.catch(e => {
@@ -972,8 +1017,9 @@ class SynchronizedPlayer {
                 });
             }
         } else if (!this.audio && this.video) {
+            // Song-only video path (rare): allow audible playback.
             this.video.muted = false;
-            this.video.volume = 1.0;
+            this.video.volume = (this._userVolume != null) ? this._userVolume : 1.0;
             this.video.play().catch(err => console.warn("Video play note:", err));
         }
         this._startRenderLoop();

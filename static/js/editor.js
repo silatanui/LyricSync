@@ -546,11 +546,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (audioVolume) {
-        audioVolume.addEventListener('input', (event) => {
-            const value = parseFloat(event.target.value);
+        const applyVolume = (raw) => {
+            const value = Math.min(1, Math.max(0, parseFloat(raw)));
+            if (isNaN(value)) return;
             audioEl.volume = value;
+            audioEl.muted = value <= 0.001;
+            if (player) player._userVolume = value;
             if (audioVolumeDisplay) audioVolumeDisplay.textContent = `${Math.round(value * 100)}%`;
-        });
+        };
+        applyVolume(audioVolume.value);
+        audioVolume.addEventListener('input', (event) => applyVolume(event.target.value));
+    } else if (audioEl) {
+        if (player) player._userVolume = audioEl.volume;
     }
 
     const resolveMasterDuration = () => {
@@ -574,6 +581,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Playback time tracking — audio / player clock only (theme video is wallpaper).
+    let lastFrontierPauseAt = 0;
     const onTimeTick = (cur, dur) => {
         const master = resolveMasterDuration();
         let safeDur = master > 0 ? master : (dur > 0 ? dur : 0);
@@ -583,13 +591,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const frontier = streamFrontierSeconds();
-        if (frontier != null && cur >= frontier - 0.08) {
-            if (!player.isPaused) {
+        // Only pause for live lyric streaming when we are clearly past the synced edge.
+        // Ignore tiny timing jitter near the frontier so playback does not stutter.
+        if (frontier != null && safeDur > 0 && frontier < safeDur - 0.75 && cur >= frontier - 0.02) {
+            const now = Date.now();
+            if (!player.isPaused && (now - lastFrontierPauseAt) > 600) {
+                lastFrontierPauseAt = now;
                 resumeWhenStreamAdvances = true;
                 player.pause();
+                setStreamBanner('waiting');
+                setCanvasBuffering(true, 'Syncing…');
             }
-            setStreamBanner('waiting');
-            setCanvasBuffering(true, 'Syncing…');
             cur = Math.min(cur, Math.max(0, frontier - 0.05));
         }
         if (safeDur > 0) {
@@ -605,10 +617,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
+    // Single clock path via the player (avoids double scrubber updates / jitter).
     window.addEventListener('player-timeupdate', (e) => {
         onTimeTick(e.detail?.currentTime ?? player.currentTime, resolveMasterDuration());
     });
-    audioEl.addEventListener('timeupdate', () => {
+    // RAF loop already drives lyrics; keep scrubber smooth when paused/seeking only.
+    audioEl.addEventListener('seeked', () => {
         onTimeTick(audioEl.currentTime, resolveMasterDuration());
     });
 
@@ -728,11 +742,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         seekWithinStream(player.currentTime + 5);
     });
 
-    // Playback Speed
+    // Playback Speed — keep pitch stable so laptop audio does not suddenly “chipmunk”.
     speedSelect.addEventListener('change', (e) => {
-        const rate = parseFloat(e.target.value);
-        if (videoEl) videoEl.playbackRate = rate;
-        if (audioEl) audioEl.playbackRate = rate;
+        const rate = parseFloat(e.target.value) || 1;
+        if (audioEl) {
+            audioEl.playbackRate = rate;
+            if ('preservesPitch' in audioEl) audioEl.preservesPitch = true;
+            if ('mozPreservesPitch' in audioEl) audioEl.mozPreservesPitch = true;
+            if ('webkitPreservesPitch' in audioEl) audioEl.webkitPreservesPitch = true;
+        }
+        if (videoEl) {
+            videoEl.playbackRate = rate;
+            // Theme bed stays muted; rate only keeps visual motion roughly matched.
+        }
     });
 
     // Add Line
@@ -2103,6 +2125,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             drawerImportLyricsBtn.innerHTML = '<span class="ai-busy-skeleton-inline" role="status" aria-hidden="true"></span><span>Importing…</span>';
 
             try {
+                const languageSelect = document.getElementById('transcribeLanguage');
+                const language = (languageSelect && languageSelect.value && languageSelect.value !== 'auto')
+                    ? languageSelect.value
+                    : null;
                 let payload;
                 if (file) {
                     const fd = new FormData();
@@ -2113,7 +2139,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     payload = textVal;
                 }
 
-                const res = await LyricSyncAPI.importCustomLyrics(projectId, payload);
+                const res = await LyricSyncAPI.importCustomLyrics(projectId, payload, language);
                 if (res.success && res.lyrics) {
                     timeline.setLines(res.lyrics);
                     player.setLyrics(res.lyrics);
@@ -2122,7 +2148,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                     showLyricsImportStatus(
                         'success',
-                        `Imported ${res.lyrics.length} custom lyric line${res.lyrics.length === 1 ? '' : 's'} successfully.`
+                        res.message || `Imported ${res.lyrics.length} custom lyric line${res.lyrics.length === 1 ? '' : 's'} successfully.`
                     );
                     if (drawerLyricsTextarea) drawerLyricsTextarea.value = '';
                     if (drawerLyricsFileInput) drawerLyricsFileInput.value = '';

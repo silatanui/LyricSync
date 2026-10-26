@@ -1037,7 +1037,7 @@
                        {% if project.is_video_background %}src="{{ bg_stream }}"{% endif %}>
                 </video>
                 <!-- Master Audio Track (Streamed with byte-ranges & caching) -->
-                <audio id="mainAudio" preload="metadata">
+                <audio id="mainAudio" preload="auto" playsinline>
                     <source src="{{ url_for('projects.stream_project_media', project_id=project.id, kind='audio') }}">
                 </audio>
                 <!-- Synced DOM Lyrics Overlay -->
@@ -1187,7 +1187,7 @@
         <!-- Interactive Lyric Timeline List (Compact, Scrollable) -->
         <div class="timeline-scroll-container p-3 overflow-y-auto" id="timelineContainer">
             <div class="confidence-heatmap-wrap">
-                <div class="confidence-heatmap-legend"><span><i class="heatmap-dot high"></i> High confidence</span><span><i class="heatmap-dot edited"></i> Review</span><span><i class="heatmap-dot low"></i> Low confidence</span></div>
+                <div class="confidence-heatmap-legend" title="Green: timed to audio. Orange: lyrics found but timings need a check. Red: weak match."><span><i class="heatmap-dot high"></i> High confidence</span><span><i class="heatmap-dot edited"></i> Review</span><span><i class="heatmap-dot low"></i> Low confidence</span></div>
                 <div id="confidenceHeatmap" class="confidence-heatmap" role="button" title="Click a confidence section to seek"></div>
             </div>
             <div id="lyricLinesList" class="d-none flex-column gap-2.5">
