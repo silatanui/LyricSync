@@ -331,26 +331,51 @@ def import_custom_lyrics_route(project_id: str):
         }), 400
 
     total_dur = project.audio_duration or 180.0
+    form_language = None
+    if request.is_json:
+        form_language = (request.get_json(silent=True) or {}).get("language")
+    else:
+        form_language = request.form.get("language")
+
+    matched_ratio = 0.0
+    is_lrc = LyricsImporter.is_lrc(content)
     try:
-        new_lyrics = LyricsImporter.import_lyrics(content, total_duration=total_dur)
-        if not LyricsImporter.is_lrc(content) and project.audio_path:
+        # Normalize paste markup (*2, braces) before spacing / alignment.
+        working_text = content if is_lrc else LyricsImporter.normalize_pasted_lyrics(content)
+        new_lyrics = LyricsImporter.import_lyrics(working_text if working_text else content, total_duration=total_dur)
+        if not is_lrc and project.audio_path:
             try:
                 from app.services.openai_transcription import OpenAITranscriber
                 from app.services.alignment import AlignmentEngine
                 transcriber = OpenAITranscriber()
                 preferred = normalize_language_code(
-                    (request.get_json(silent=True) or {}).get("language")
+                    form_language
                     or (project.get_canonical_json().get("meta") or {}).get("preferred_language")
                 )
-                transcript = transcriber.transcribe_word_timestamps(project.audio_path, language=preferred)
-                ordered_text = transcriber.order_uploaded_lyrics(content, transcript.get("text", ""))
-                if ordered_text.strip() != content.strip():
-                    new_lyrics = LyricsImporter.import_lyrics(ordered_text, total_duration=total_dur)
-                new_lyrics = AlignmentEngine.align_custom_lines(new_lyrics, transcript.get("words", []), total_dur)
+                transcript = transcriber.transcribe_for_lyric_alignment(
+                    project.audio_path,
+                    working_text or content,
+                    language=preferred,
+                )
+                # Re-order only when Whisper heard a dense enough transcript.
+                if len(transcript.get("words") or []) >= 20:
+                    ordered_text = transcriber.order_uploaded_lyrics(working_text or content, transcript.get("text", ""))
+                    if ordered_text.strip() and ordered_text.strip() != (working_text or content).strip():
+                        new_lyrics = LyricsImporter.import_lyrics(ordered_text, total_duration=total_dur)
+                new_lyrics = AlignmentEngine.align_custom_lines(
+                    new_lyrics,
+                    transcript.get("words", []),
+                    total_dur,
+                )
+                matched = sum(1 for line in new_lyrics if float(line.get("confidence") or 0) >= 0.5)
+                matched_ratio = (matched / len(new_lyrics)) if new_lyrics else 0.0
             except Exception as alignment_error:
-                current_app.logger.warning("Audio alignment unavailable; retaining evenly spaced custom lyrics: %s", alignment_error)
+                current_app.logger.warning(
+                    "Audio alignment unavailable; retaining evenly spaced custom lyrics: %s",
+                    alignment_error,
+                )
         for line in new_lyrics:
-            line.setdefault("confidence", 0.85 if LyricsImporter.is_lrc(content) else 0.55)
+            line.setdefault("confidence", 0.85 if is_lrc else 0.55)
     except Exception as e:
         return jsonify({
             "success": False,
@@ -358,11 +383,22 @@ def import_custom_lyrics_route(project_id: str):
         }), 400
 
     new_rev = save_lyrics_revision(project, new_lyrics)
+    quality_note = ""
+    if not is_lrc:
+        if matched_ratio >= 0.55:
+            quality_note = " Timed to the audio."
+        elif matched_ratio > 0:
+            quality_note = " Partially timed to the audio — nudge lines in the timeline if needed."
+        else:
+            quality_note = " Could not lock timings to this recording; lines are spaced across the song."
     return jsonify({
         "success": True,
         "revision": new_rev,
         "lyrics": new_lyrics,
-        "message": f"Successfully imported {len(new_lyrics)} custom lyric lines."
+        "message": f"Successfully imported {len(new_lyrics)} custom lyric lines.{quality_note}",
+        "alignment": {
+            "matched_ratio": round(matched_ratio, 3),
+        },
     })
 
 

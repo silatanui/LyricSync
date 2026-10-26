@@ -125,17 +125,47 @@ def _persist_known_lyrics(project_id: str, job_id: str, match: dict, language: s
         logger.warning("Could not parse catalog lyrics: %s", exc)
         return False
 
-    # Optional: snap known plain lyrics onto a timing transcript without trusting ASR text.
-    align_words = match.get("align_words") or []
+    # Plain (unsynced) catalog lyrics have no timestamps — snap them to the audio clock.
+    align_words = list(match.get("align_words") or [])
+    if not match.get("synced") and not align_words and project.audio_path:
+        try:
+            from app.services.openai_transcription import OpenAITranscriber
+            transcriber = OpenAITranscriber()
+            transcript = transcriber.transcribe_for_lyric_alignment(
+                project.audio_path,
+                lyrics_text,
+                language=language or match.get("language"),
+            )
+            align_words = transcript.get("words") or []
+            if align_words:
+                match = {**match, "align_words": align_words}
+                logger.info(
+                    "Timed unsynced catalog lyrics for project %s using %s alignment words",
+                    project_id,
+                    len(align_words),
+                )
+        except Exception as exc:
+            logger.warning("Could not build alignment words for catalog lyrics: %s", exc)
+
     if align_words and not match.get("synced"):
         try:
-            segmented_lines = AlignmentEngine.align_custom_lines(segmented_lines, align_words, duration or 180.0)
+            segmented_lines = AlignmentEngine.align_custom_lines(
+                segmented_lines,
+                align_words,
+                duration or 180.0,
+            )
         except Exception as exc:
             logger.warning("Could not align known lyrics to audio timings: %s", exc)
 
-    confidence = 0.97 if match.get("synced") else (0.9 if match.get("source") == "local-pack" else 0.78)
+    # Synced LRC → high confidence. Untimed catalog text keeps per-line aligner scores
+    # when available; otherwise a mid "review" default (heatmap orange).
+    default_confidence = (
+        0.97 if match.get("synced")
+        else (0.9 if match.get("source") == "local-pack" else 0.78)
+    )
     for line in segmented_lines:
-        line["confidence"] = line.get("confidence") or confidence
+        if line.get("confidence") is None:
+            line["confidence"] = default_confidence
         line["text"] = AlignmentEngine.polish_lyric_text(line.get("text", ""))
         if line.get("words"):
             line["words"][0]["text"] = AlignmentEngine.polish_lyric_text(line["words"][0].get("text", ""))
@@ -427,7 +457,12 @@ def _persist_transcription_snapshot(project_id: str, job_id: str, snapshot: dict
     language_value = snapshot.get("language") or ""
     language_name = snapshot.get("language_name") or ""
     normalized_words = AlignmentEngine.normalize_words(raw_words)
-    segmented_lines = AlignmentEngine.segment_lines(normalized_words, language=language_value)
+    duration_hint = float(snapshot.get("duration") or project.audio_duration or 0)
+    segmented_lines = AlignmentEngine.segment_lines(
+        normalized_words,
+        language=language_value,
+        total_duration=duration_hint,
+    )
     for line in segmented_lines:
         line["confidence"] = 0.95
         line["text"] = AlignmentEngine.polish_lyric_text(line.get("text", ""))

@@ -228,20 +228,39 @@ def sanitize_continuity_prompt(continuity: str) -> str:
 
 
 def collapse_repetitive_words(words: List[Dict[str, Any]], max_run: int = 2) -> List[Dict[str, Any]]:
-    """Collapse Whisper loops like 'kwa kwa kwa…' while keeping short legitimate repeats."""
+    """Collapse Whisper loops like 'kwa kwa kwa…' or 'kwa hiyo kwa hiyo' while keeping short legitimate repeats."""
     if not words:
         return []
     limit = max(1, int(max_run))
     collapsed: List[Dict[str, Any]] = []
     run_token = None
     run_count = 0
+    pattern_tokens = []  # Track recent tokens to detect alternating patterns
+    pattern_limit = 4    # Look at last 4 tokens for patterns
+    
     for word in words:
         token = _normalize_lyric_token(word.get("text", ""))
+        if token:
+            pattern_tokens.append(token)
+        if len(pattern_tokens) > pattern_limit:
+            pattern_tokens.pop(0)
+        
+        # Check for obvious repetitive single token
         if token and token == run_token:
             run_count += 1
             if run_count <= limit:
                 collapsed.append(word)
             continue
+        
+        # Check for alternating pattern (e.g., [kwa, hiyo, kwa, hiyo])
+        if len(pattern_tokens) == pattern_limit and len(set(pattern_tokens)) <= 2:
+            # Only 1-2 unique tokens in last 4 positions = suspicious pattern
+            if len(collapsed) > 0:
+                # Drop this word if it looks like part of a repetitive cycle
+                run_token = token or None
+                run_count = 0
+                continue
+        
         run_token = token or None
         run_count = 1 if token else 0
         collapsed.append(word)
@@ -249,13 +268,37 @@ def collapse_repetitive_words(words: List[Dict[str, Any]], max_run: int = 2) -> 
 
 
 def words_look_repetition_locked(words: List[Dict[str, Any]], min_words: int = 8, ratio: float = 0.55) -> bool:
-    """True when one token dominates a chunk — typical Whisper hallucination."""
+    """True when output looks like a Whisper hallucination (low diversity, high repetition).
+    Detects:
+      - Single token dominating (e.g., 'kwa kwa kwa…') 
+      - Alternating low-diversity patterns (e.g., 'kwa hiyo kwa hiyo…')
+      - Generally too few unique tokens for a natural utterance
+    """
     tokens = [_normalize_lyric_token(word.get("text", "")) for word in (words or [])]
     tokens = [token for token in tokens if token]
     if len(tokens) < min_words:
         return False
+    
+    # Check if one token dominates (original logic)
     top_count = Counter(tokens).most_common(1)[0][1]
-    return (top_count / len(tokens)) >= ratio
+    if (top_count / len(tokens)) >= ratio:
+        return True
+    
+    # Check for low diversity (alternating patterns like 'kwa hiyo kwa hiyo')
+    # Natural speech typically has many unique words. Hallucinations cycle through few.
+    unique_tokens = len(set(tokens))
+    diversity_ratio = unique_tokens / len(tokens)
+    # If only 2-4 unique tokens in a long sequence, it's likely a loop
+    if unique_tokens <= 4 and diversity_ratio <= 0.25:
+        return True
+    
+    # If only 1-3 unique tokens and they fill > 60% together (alternating case)
+    if unique_tokens <= 3:
+        top_k_count = sum(count for _, count in Counter(tokens).most_common(unique_tokens))
+        if top_k_count / len(tokens) >= 0.9:  # Almost all tokens are from a tiny set
+            return True
+    
+    return False
 
 
 def plan_audio_chunks(duration: float, first_seconds: float = 12.0, chunk_seconds: float = 20.0, overlap_seconds: float = 1.5) -> List[Tuple[float, float | None]]:
@@ -457,7 +500,13 @@ class OpenAITranscriber:
                     })
                 # Whisper sometimes locks onto one syllable (e.g. Swahili "kwa") when the
                 # continuity prompt feeds the loop back. Retry the slice once clean.
-                if continuity and words_look_repetition_locked(shifted):
+                # Trigger retry if: (1) we have continuity AND detected repetition, OR
+                # (2) no continuity but the raw output itself is heavily repetitive (hallucination).
+                should_retry = (
+                    (continuity and words_look_repetition_locked(shifted)) or
+                    (not continuity and len(shifted) >= 8 and words_look_repetition_locked(shifted))
+                )
+                if should_retry:
                     clean = self._request_transcript(
                         piece_path,
                         language=locked_language,
@@ -473,7 +522,30 @@ class OpenAITranscriber:
                     if clean_shifted and not words_look_repetition_locked(clean_shifted):
                         shifted = clean_shifted
                         piece = clean
+                
                 shifted = collapse_repetitive_words(shifted)
+                
+                # Extra safety: if collapse didn't help and we still have obvious repetition,
+                # log a warning and try to use only the non-repetitive tail
+                if words_look_repetition_locked(shifted) and len(shifted) > 8:
+                    logger.warning(
+                        f"Chunk {index} still has repetition after retry and collapse. "
+                        f"Language={locked_language}, duration={length}s. "
+                        f"Keeping only initial words to avoid feedback loop."
+                    )
+                    # Keep only the first few distinct words as a failsafe
+                    seen = set()
+                    safe_words = []
+                    for w in shifted[:20]:
+                        tok = _normalize_lyric_token(w.get("text", ""))
+                        if tok and tok not in seen:
+                            seen.add(tok)
+                            safe_words.append(w)
+                        if len(safe_words) >= 6:
+                            break
+                    if safe_words:
+                        shifted = safe_words
+                
                 accumulated = collapse_repetitive_words(
                     merge_chunk_words(accumulated, shifted, piece_start, 1.5)
                 )
@@ -562,6 +634,80 @@ class OpenAITranscriber:
         except Exception as error:
             logger.warning("Could not order uploaded lyrics with AI: %s", error)
             return lyrics_text
+
+    @staticmethod
+    def _lyrics_seed_prompt(lyrics_text: str, max_chars: int = 220) -> str | None:
+        """Build a Whisper vocabulary seed from real lyric text (never English instructions)."""
+        cleaned = re.sub(r"\s+", " ", (lyrics_text or "").strip())
+        cleaned = re.sub(r"[\{\}\(\)\[\]\*×xX]?\s*\d+\s*$", "", cleaned)
+        cleaned = cleaned.strip(" ,;.-")
+        if len(cleaned) < 12:
+            return None
+        return cleaned[:max_chars]
+
+    def transcribe_for_lyric_alignment(
+        self,
+        audio_path: str,
+        lyrics_text: str,
+        language: str | None = None,
+    ) -> Dict[str, Any]:
+        """
+        Transcribe audio specifically to time-align known pasted lyrics.
+
+        Choir / worship tracks often return almost no words with a bare Whisper call.
+        Seeding Whisper with the supplied lyric text recovers usable word timings.
+        """
+        lang = normalize_language_code(language)
+        seed = self._lyrics_seed_prompt(lyrics_text)
+        expected_words = max(8, len(re.findall(r"\S+", lyrics_text or "")))
+        sparse_limit = max(12, int(expected_words * 0.18))
+
+        attempts: list[tuple[str | None, str | None]] = [
+            (lang, seed),
+            (lang, None),
+            (None, seed),
+        ]
+        # Deduplicate while preserving order
+        seen = set()
+        unique_attempts = []
+        for item in attempts:
+            if item in seen:
+                continue
+            seen.add(item)
+            unique_attempts.append(item)
+
+        best: Dict[str, Any] = {"text": "", "language": lang or "", "words": []}
+        upload_path, is_temp = optimize_audio_for_whisper(audio_path)
+        try:
+            for attempt_lang, attempt_prompt in unique_attempts:
+                try:
+                    result = self._request_transcript(
+                        upload_path,
+                        language=attempt_lang,
+                        prompt=attempt_prompt,
+                    )
+                except Exception as exc:
+                    logger.warning("Lyric-alignment transcription attempt failed: %s", exc)
+                    continue
+                words = result.get("words") or []
+                if len(words) > len(best.get("words") or []):
+                    best = result
+                if len(words) >= sparse_limit:
+                    break
+        finally:
+            if is_temp and Path(upload_path).exists():
+                try:
+                    os.unlink(upload_path)
+                except OSError:
+                    pass
+
+        if len(best.get("words") or []) < sparse_limit:
+            logger.warning(
+                "Lyric-alignment transcript still sparse (%s words; need ~%s)",
+                len(best.get("words") or []),
+                sparse_limit,
+            )
+        return best
 
     def _mock_transcription(self, audio_path: str) -> Dict[str, Any]:
         """Deterministic mock transcription for offline testing, demos, or CI runs."""

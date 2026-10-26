@@ -299,13 +299,16 @@ const LyricSyncAPI = {
         return await response.json();
     },
 
-    async importCustomLyrics(projectId, input) {
+    async importCustomLyrics(projectId, input, language = null) {
         let options = { method: 'POST' };
         if (input instanceof FormData) {
+            if (language) input.append('language', language);
             options.body = input;
         } else {
             options.headers = { 'Content-Type': 'application/json' };
-            options.body = JSON.stringify({ lyrics_text: input });
+            const payload = { lyrics_text: input };
+            if (language) payload.language = language;
+            options.body = JSON.stringify(payload);
         }
         const response = await fetch(`${lyricSyncProjectsUrl}/${projectId}/lyrics/custom`, options);
         return await response.json();
